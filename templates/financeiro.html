@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Financeiro - Sistema Autopeças{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-chart-line text-success me-2"></i>
+            Módulo Financeiro
+        </h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal">
+            <i class="fas fa-plus me-2"></i>Novo Lançamento
+        </button>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-arrow-up me-2"></i>
+                        Receitas Pendentes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="text-success mb-0">
+                                R$ {{ "%.2f"|format(receitas|sum(attribute='valor') if receitas else 0) }}
+                            </h4>
+                            <small class="text-muted">{{ receitas|length }} lançamento(s)</small>
+                        </div>
+                        <i class="fas fa-money-bill-wave fa-2x text-success opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-arrow-down me-2"></i>
+                        Despesas Pendentes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="text-danger mb-0">
+                                R$ {{ "%.2f"|format(despesas|sum(attribute='valor') if despesas else 0) }}
+                            </h4>
+                            <small class="text-muted">{{ despesas|length }} lançamento(s)</small>
+                        </div>
+                        <i class="fas fa-receipt fa-2x text-danger opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="financeiro-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="receitas-tab" data-bs-toggle="tab" href="#receitas">
+                        <i class="fas fa-plus-circle text-success me-2"></i>Receitas
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="despesas-tab" data-bs-toggle="tab" href="#despesas">
+                        <i class="fas fa-minus-circle text-danger me-2"></i>Despesas
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content">
+                <!-- Tab Receitas -->
+                <div class="tab-pane fade show active" id="receitas">
+                    {% if receitas %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data Lançamento</th>
+                                    <th>Vencimento</th>
+                                    <th>Categoria</th>
+                                    <th>Descrição</th>
+                                    <th>Fornecedor/Cliente</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for receita in receitas %}
+                                <tr>
+                                    <td>{{ receita.data_lancamento[:10] }}</td>
+                                    <td>
+                                        {% if receita.data_vencimento %}
+                                            {{ receita.data_vencimento[:10] }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ receita.categoria }}</td>
+                                    <td>{{ receita.descricao }}</td>
+                                    <td>{{ receita.fornecedor_cliente or '-' }}</td>
+                                    <td class="text-end">
+                                        <span class="text-success fw-bold">R$ {{ "%.2f"|format(receita.valor) }}</span>
+                                    </td>
+                                    <td>
+                                        {% if receita.status == 'pendente' %}
+                                            <span class="badge bg-warning">Pendente</span>
+                                        {% elif receita.status == 'pago' %}
+                                            <span class="badge bg-success">Recebido</span>
+                                        {% elif receita.status == 'cancelado' %}
+                                            <span class="badge bg-danger">Cancelado</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" title="Marcar como Recebido">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nenhuma receita pendente</h5>
+                        <p class="text-muted">Clique em "Novo Lançamento" para adicionar uma receita.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Tab Despesas -->
+                <div class="tab-pane fade" id="despesas">
+                    {% if despesas %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data Lançamento</th>
+                                    <th>Vencimento</th>
+                                    <th>Categoria</th>
+                                    <th>Descrição</th>
+                                    <th>Fornecedor/Cliente</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in despesas %}
+                                <tr>
+                                    <td>{{ despesa.data_lancamento[:10] }}</td>
+                                    <td>
+                                        {% if despesa.data_vencimento %}
+                                            {{ despesa.data_vencimento[:10] }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ despesa.categoria }}</td>
+                                    <td>{{ despesa.descricao }}</td>
+                                    <td>{{ despesa.fornecedor_cliente or '-' }}</td>
+                                    <td class="text-end">
+                                        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(despesa.valor) }}</span>
+                                    </td>
+                                    <td>
+                                        {% if despesa.status == 'pendente' %}
+                                            <span class="badge bg-warning">Pendente</span>
+                                        {% elif despesa.status == 'pago' %}
+                                            <span class="badge bg-success">Pago</span>
+                                        {% elif despesa.status == 'cancelado' %}
+                                            <span class="badge bg-danger">Cancelado</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" title="Marcar como Pago">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nenhuma despesa pendente</h5>
+                        <p class="text-muted">Clique em "Novo Lançamento" para adicionar uma despesa.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Lançamento -->
+<div class="modal fade" id="novoLancamentoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('novo_lancamento_financeiro') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2 text-primary"></i>
+                        Novo Lançamento Financeiro
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tipo" class="form-label">Tipo *</label>
+                                <select class="form-select" id="tipo" name="tipo" required>
+                                    <option value="">Selecione</option>
+                                    <option value="receita">Receita</option>
+                                    <option value="despesa">Despesa</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="categoria" class="form-label">Categoria *</label>
+                                <select class="form-select" id="categoria" name="categoria" required>
+                                    <option value="">Selecione</option>
+                                    <option value="vendas">Vendas</option>
+                                    <option value="servicos">Serviços</option>
+                                    <option value="aluguel">Aluguel</option>
+                                    <option value="funcionarios">Funcionários</option>
+                                    <option value="fornecedores">Fornecedores</option>
+                                    <option value="impostos">Impostos</option>
+                                    <option value="marketing">Marketing</option>
+                                    <option value="outros">Outros</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição *</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="valor" class="form-label">Valor *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="number" class="form-control" id="valor" name="valor" 
+                                           step="0.01" min="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="data_lancamento" class="form-label">Data Lançamento *</label>
+                                <input type="date" class="form-control" id="data_lancamento" name="data_lancamento" 
+                                       value="{{ today }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="data_vencimento" class="form-label">Data Vencimento</label>
+                                <input type="date" class="form-control" id="data_vencimento" name="data_vencimento">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="fornecedor_cliente" class="form-label">Fornecedor/Cliente</label>
+                                <input type="text" class="form-control" id="fornecedor_cliente" name="fornecedor_cliente">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="numero_documento" class="form-label">Nº Documento</label>
+                                <input type="text" class="form-control" id="numero_documento" name="numero_documento">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Salvar Lançamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Definir data de hoje
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('data_lancamento').value = today;
+});
+</script>
+{% endblock %}

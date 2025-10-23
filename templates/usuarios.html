@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Usuários - Sistema de Autopeças{% endblock %}
+{% block page_title %}Gerenciamento de Usuários{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-users"></i> Usuários do Sistema
+                </h5>
+                <span class="badge bg-primary">{{ usuarios|length }} usuários</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Nome Completo</th>
+                                <th>Usuário</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Permissões</th>
+                                <th>Criado em</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usuario in usuarios %}
+                            <tr class="{{ 'table-danger' if not usuario.ativo }}">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-2 {{ 'bg-success' if usuario.ativo else 'bg-secondary' }}">
+                                            {{ usuario.nome_completo[:2].upper() if usuario.nome_completo else usuario.username[:2].upper() }}
+                                        </div>
+                                        <div>
+                                            <strong>{{ usuario.nome_completo or 'Nome não informado' }}</strong>
+                                            {% if usuario.permissao_admin %}
+                                                <span class="badge bg-danger ms-1">
+                                                    <i class="fas fa-crown"></i> Admin
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><code>{{ usuario.username }}</code></td>
+                                <td>{{ usuario.email }}</td>
+                                <td>
+                                    {% if usuario.ativo %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Ativo
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-times"></i> Inativo
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% if usuario.permissao_vendas %}
+                                            <span class="badge bg-primary" title="Vendas">
+                                                <i class="fas fa-cash-register"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_estoque %}
+                                            <span class="badge bg-success" title="Estoque">
+                                                <i class="fas fa-boxes"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_clientes %}
+                                            <span class="badge bg-info" title="Clientes">
+                                                <i class="fas fa-users"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_financeiro %}
+                                            <span class="badge bg-warning" title="Financeiro">
+                                                <i class="fas fa-coins"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_caixa %}
+                                            <span class="badge bg-primary" title="Caixa">
+                                                <i class="fas fa-cash-register"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_relatorios %}
+                                            <span class="badge bg-secondary" title="Relatórios">
+                                                <i class="fas fa-chart-bar"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_admin %}
+                                            <span class="badge bg-danger" title="Administrador">
+                                                <i class="fas fa-crown"></i>
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>{{ usuario.created_at[:10] if usuario.created_at else 'N/A' }}</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                onclick="editarUsuario({{ usuario.id }})" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        {% if usuario.id != current_user.id %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                onclick="confirmarDesativar({{ usuario.id }}, '{{ usuario.nome_completo or usuario.username }}')" title="Desativar">
+                                            <i class="fas fa-user-slash"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Editar Usuário -->
+<div class="modal fade" id="editarUsuarioModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-edit"></i> Editar Usuário
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarUsuario" method="POST">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_nome_completo" class="form-label">Nome Completo</label>
+                            <input type="text" class="form-control" id="edit_nome_completo" name="nome_completo" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="edit_email" name="email" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="edit_ativo" name="ativo" value="1">
+                            <label class="form-check-label" for="edit_ativo">
+                                Usuário Ativo
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Permissões</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_vendas" name="permissao_vendas">
+                                    <label class="form-check-label" for="edit_permissao_vendas">
+                                        <i class="fas fa-cash-register me-1 text-primary"></i>Vendas
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_estoque" name="permissao_estoque">
+                                    <label class="form-check-label" for="edit_permissao_estoque">
+                                        <i class="fas fa-boxes me-1 text-success"></i>Estoque
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_clientes" name="permissao_clientes">
+                                    <label class="form-check-label" for="edit_permissao_clientes">
+                                        <i class="fas fa-users me-1 text-info"></i>Clientes
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_financeiro" name="permissao_financeiro">
+                                    <label class="form-check-label" for="edit_permissao_financeiro">
+                                        <i class="fas fa-coins me-1 text-warning"></i>Financeiro
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_caixa" name="permissao_caixa">
+                                    <label class="form-check-label" for="edit_permissao_caixa">
+                                        <i class="fas fa-cash-register me-1 text-primary"></i>Caixa
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_relatorios" name="permissao_relatorios">
+                                    <label class="form-check-label" for="edit_permissao_relatorios">
+                                        <i class="fas fa-chart-bar me-1 text-secondary"></i>Relatórios
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_admin" name="permissao_admin">
+                                    <label class="form-check-label" for="edit_permissao_admin">
+                                        <i class="fas fa-crown me-1 text-danger"></i>Administrador
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação para Desativar -->
+<div class="modal fade" id="confirmarDesativarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Confirmar Desativação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja desativar o usuário <strong id="nomeUsuarioDesativar"></strong>?</p>
+                <p class="text-muted">O usuário não poderá mais acessar o sistema.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formDesativarUsuario" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Desativar Usuário</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+</style>
+
+<script>
+function editarUsuario(userId) {
+    // Buscar dados do usuário na tabela
+    const row = document.querySelector(`tr[data-user-id="${userId}"]`) || 
+                document.querySelector(`button[onclick="editarUsuario(${userId})"]`).closest('tr');
+    
+    // Encontrar o usuário nos dados da página
+    const usuarios = {{ usuarios | tojson }};
+    const usuario = usuarios.find(u => u.id === userId);
+    
+    if (usuario) {
+        // Preencher o formulário
+        document.getElementById('edit_nome_completo').value = usuario.nome_completo || '';
+        document.getElementById('edit_email').value = usuario.email || '';
+        document.getElementById('edit_ativo').checked = usuario.ativo;
+        
+        // Permissões
+        document.getElementById('edit_permissao_vendas').checked = usuario.permissao_vendas;
+        document.getElementById('edit_permissao_estoque').checked = usuario.permissao_estoque;
+        document.getElementById('edit_permissao_clientes').checked = usuario.permissao_clientes;
+        document.getElementById('edit_permissao_financeiro').checked = usuario.permissao_financeiro;
+        document.getElementById('edit_permissao_caixa').checked = usuario.permissao_caixa;
+        document.getElementById('edit_permissao_relatorios').checked = usuario.permissao_relatorios;
+        document.getElementById('edit_permissao_admin').checked = usuario.permissao_admin;
+        
+        // Configurar ação do formulário
+        document.getElementById('formEditarUsuario').action = `/usuarios/editar/${userId}`;
+        
+        // Mostrar modal
+        new bootstrap.Modal(document.getElementById('editarUsuarioModal')).show();
+    }
+}
+
+function confirmarDesativar(userId, nomeUsuario) {
+    document.getElementById('nomeUsuarioDesativar').textContent = nomeUsuario;
+    document.getElementById('formDesativarUsuario').action = `/usuarios/deletar/${userId}`;
+    new bootstrap.Modal(document.getElementById('confirmarDesativarModal')).show();
+}
+</script>
+{% endblock %}

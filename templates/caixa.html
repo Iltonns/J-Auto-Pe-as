@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}Caixa - Sistema Autopeças{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-cash-register text-primary me-2"></i>
+            Gerenciamento de Caixa
+        </h1>
+    </div>
+
+    <!-- Status do Caixa -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            {% if status_caixa %}
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Caixa Aberto
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <strong>Abertura:</strong><br>
+                            {{ status_caixa.data_abertura[:16] }}<br>
+                            <small class="text-muted">{{ status_caixa.usuario_abertura }}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Saldo Inicial:</strong><br>
+                            <span class="h6 text-info">R$ {{ "%.2f"|format(status_caixa.saldo_inicial) }}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Entradas:</strong><br>
+                            <span class="h6 text-success">+ R$ {{ "%.2f"|format(status_caixa.total_entradas) }}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Saídas:</strong><br>
+                            <span class="h6 text-danger">- R$ {{ "%.2f"|format(status_caixa.total_saidas) }}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Movimentações:</strong><br>
+                            <span class="h6 text-secondary">{{ status_caixa.total_movimentacoes }}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Saldo Atual:</strong><br>
+                            <span class="h5 text-success">R$ {{ "%.2f"|format(status_caixa.saldo_atual) }}</span>
+                        </div>
+                    </div>
+                    {% if status_caixa.observacoes %}
+                    <div class="mt-2">
+                        <strong>Observações:</strong> {{ status_caixa.observacoes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Caixa Fechado
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <p class="mb-3">O caixa está fechado. Abra o caixa para começar as operações.</p>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#abrirCaixaModal">
+                        <i class="fas fa-play me-2"></i>Abrir Caixa
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Resumo Financeiro do Dia -->
+            {% if status_caixa %}
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>
+                        Resumo Financeiro do Dia
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Entradas:</span>
+                        <strong class="text-success">R$ {{ "%.2f"|format(status_caixa.total_entradas) }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Saídas:</span>
+                        <strong class="text-danger">R$ {{ "%.2f"|format(status_caixa.total_saidas) }}</strong>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><strong>Saldo do Dia:</strong></span>
+                        <strong class="text-primary">R$ {{ "%.2f"|format((status_caixa.total_entradas - status_caixa.total_saidas)) }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Movimentações:</span>
+                        <strong>{{ status_caixa.total_movimentacoes }}</strong>
+                    </div>
+                    <hr>
+                    <small class="text-muted"><i class="fas fa-shopping-cart me-1"></i><strong>Vendas Hoje:</strong></small>
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Valor das Vendas:</small>
+                        <small class="text-success"><strong>R$ {{ "%.2f"|format(resumo_vendas.valor_vendas or 0) }}</strong></small>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Nº de Vendas:</small>
+                        <small><strong>{{ resumo_vendas.total_vendas or 0 }}</strong></small>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small>Itens Vendidos:</small>
+                        <small><strong>{{ resumo_vendas.itens_vendidos or 0 }}</strong></small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if status_caixa %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Ações do Caixa</h6>
+                </div>
+                <div class="card-body">
+                    <button type="button" class="btn btn-primary btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#movimentacaoModal">
+                        <i class="fas fa-plus me-2"></i>Nova Movimentação
+                    </button>
+                    <form method="POST" action="{{ url_for('sincronizar_vendas_caixa') }}" class="mb-2">
+                        <button type="submit" class="btn btn-warning btn-sm w-100">
+                            <i class="fas fa-sync me-2"></i>Sincronizar Vendas
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-danger btn-sm w-100" data-bs-toggle="modal" data-bs-target="#fecharCaixaModal">
+                        <i class="fas fa-stop me-2"></i>Fechar Caixa
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Movimentações do Dia -->
+    {% if movimentacoes %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Movimentações do Dia
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hora</th>
+                            <th>Tipo</th>
+                            <th>Categoria</th>
+                            <th>Descrição</th>
+                            <th class="text-end">Valor</th>
+                            <th>Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimentacoes %}
+                        <tr>
+                            <td>{{ mov.data_movimentacao[11:16] }}</td>
+                            <td>
+                                {% if mov.tipo == 'entrada' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-arrow-up"></i> Entrada
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-arrow-down"></i> Saída
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.categoria }}</td>
+                            <td>{{ mov.descricao }}</td>
+                            <td class="text-end">
+                                {% if mov.tipo == 'entrada' %}
+                                    <span class="text-success">+ R$ {{ "%.2f"|format(mov.valor) }}</span>
+                                {% else %}
+                                    <span class="text-danger">- R$ {{ "%.2f"|format(mov.valor) }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.usuario_nome }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Abrir Caixa -->
+<div class="modal fade" id="abrirCaixaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('abrir_caixa_route') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-play me-2 text-success"></i>
+                        Abrir Caixa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="saldo_inicial" class="form-label">Saldo Inicial</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="number" class="form-control" id="saldo_inicial" name="saldo_inicial" 
+                                   step="0.01" min="0" value="0.00" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes_abertura" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes_abertura" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-play me-2"></i>Abrir Caixa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Fechar Caixa -->
+<div class="modal fade" id="fecharCaixaModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('fechar_caixa_route') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-stop me-2 text-danger"></i>
+                        Fechar Caixa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Atenção!</strong> Ao fechar o caixa, não será possível adicionar mais movimentações para esta sessão.
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes_fechamento" class="form-label">Observações do Fechamento</label>
+                        <textarea class="form-control" id="observacoes_fechamento" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-stop me-2"></i>Fechar Caixa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Movimentação -->
+<div class="modal fade" id="movimentacaoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('nova_movimentacao_caixa') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2 text-primary"></i>
+                        Nova Movimentação
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tipo" class="form-label">Tipo</label>
+                                <select class="form-select" id="tipo" name="tipo" required>
+                                    <option value="">Selecione</option>
+                                    <option value="entrada">Entrada</option>
+                                    <option value="saida">Saída</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="categoria" class="form-label">Categoria</label>
+                                <select class="form-select" id="categoria" name="categoria" required>
+                                    <option value="">Selecione</option>
+                                    <option value="venda">Venda</option>
+                                    <option value="compra">Compra</option>
+                                    <option value="despesa">Despesa</option>
+                                    <option value="receita">Receita</option>
+                                    <option value="sangria">Sangria</option>
+                                    <option value="suprimento">Suprimento</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valor" class="form-label">Valor</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="number" class="form-control" id="valor" name="valor" 
+                                   step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes_mov" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes_mov" name="observacoes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Registrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

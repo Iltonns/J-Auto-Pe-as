@@ -340,11 +340,23 @@
             <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 sidebar">
                 <div class="brand-section">
+                    <!-- Logo da Loja -->
+                    <div class="mb-3">
+                        <img src="{{ url_for('static', filename='logo.jpg') }}" 
+                             alt="Logo da Loja" 
+                             class="sidebar-logo img-fluid"
+                             style="max-height: 80px; max-width: 150px; filter: brightness(1.1);"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none;" class="logo-fallback text-center">
+                            <i class="fas fa-store" style="font-size: 2.5rem; color: var(--accent-orange);"></i>
+                        </div>
+                    </div>
+                    
                     <div class="brand-icon">
                         <i class="fas fa-tools"></i>
                     </div>
                     <h4 class="text-white mb-3 fw-bold">
-                        AutoPeças Pro
+                        FG Auto Peças
                     </h4>
                     <div class="text-white-50 small">Sistema Profissional</div>
                     
@@ -366,12 +378,24 @@
                     <a class="nav-link" href="{{ url_for('produtos') }}">
                         <i class="fas fa-car-battery"></i> Peças & Produtos
                     </a>
+                    <a class="nav-link" href="{{ url_for('orcamentos') }}">
+                        <i class="fas fa-file-invoice"></i> Orçamento Rápido
+                    </a>
                     <a class="nav-link" href="{{ url_for('vendas') }}">
-                        <i class="fas fa-cash-register"></i> Vendas & Caixa
+                        <i class="fas fa-shopping-cart"></i> Vendas
                     </a>
                     
                     <hr class="section-divider">
                     <div class="section-title px-3 mb-2">💰 FINANCEIRO</div>
+                    
+                    {% if has_permission('caixa') %}
+                    <a class="nav-link" href="{{ url_for('caixa') }}">
+                        <i class="fas fa-cash-register"></i> Caixa
+                    </a>
+                    <a class="nav-link" href="{{ url_for('financeiro') }}">
+                        <i class="fas fa-chart-line"></i> Controle Financeiro
+                    </a>
+                    {% endif %}
                     
                     <a class="nav-link" href="{{ url_for('contas_a_pagar_hoje') }}">
                         <i class="fas fa-credit-card"></i> Contas a Pagar
@@ -391,6 +415,15 @@
                     <a class="nav-link" href="{{ url_for('relatorios') }}">
                         <i class="fas fa-chart-line"></i> Relatórios
                     </a>
+                    
+                    {% if has_permission('admin') %}
+                    <hr class="section-divider">
+                    <div class="section-title px-3 mb-2">⚙️ ADMINISTRAÇÃO</div>
+                    
+                    <a class="nav-link" href="{{ url_for('usuarios') }}">
+                        <i class="fas fa-users-cog"></i> Gerenciar Usuários
+                    </a>
+                    {% endif %}
                     
                     <hr class="section-divider">
                     <div class="section-title px-3 mb-2">🎨 NOVO TEMA 2025</div>

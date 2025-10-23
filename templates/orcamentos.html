@@ -1,0 +1,666 @@
+{% extends "base.html" %}
+
+{% block title %}Orçamento Rápido - Sistema de Autopeças{% endblock %}
+
+{% block content %}
+<style>
+/* Estilos específicos para a página de orçamentos */
+.produto-row:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+.orcamento-card {
+    border-left: 4px solid #007bff;
+}
+
+.btn-add-item {
+    transition: all 0.3s ease;
+}
+
+.btn-add-item:hover {
+    transform: scale(1.1);
+}
+
+.total-display {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #28a745;
+}
+
+.search-highlight {
+    background-color: #fff3cd;
+}
+
+.item-counter {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+#itensOrcamento tr {
+    animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.loading-spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-primary">
+                    <i class="fas fa-file-invoice me-2"></i>
+                    Orçamento Rápido
+                </h2>
+                <small class="text-muted">* Serão exibidos apenas os produtos e serviços ativos e com preço</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Formulário de Busca e Seleção de Produtos -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-search me-2"></i>
+                        Busca de Produtos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Pesquisa:</label>
+                            <select class="form-select" id="tipoPesquisa">
+                                <option value="produtos" selected>Produtos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Buscar:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="campoBusca" 
+                                       placeholder="Código / Descrição / Aplicação / Ref. Fab / Código de Barras">
+                                <button class="btn btn-success" type="button" id="btnBuscar">
+                                    <span class="loading-spinner" id="loadingSpinner"></span>
+                                    <span id="btnBuscarTexto">Busca Avançada</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Produtos -->
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descrição</th>
+                                    <th>Tipo</th>
+                                    <th>Estoque</th>
+                                    <th>Custo</th>
+                                    <th>Venda</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaProdutos">
+                                {% for produto in produtos %}
+                                <tr class="produto-row">
+                                    <td>{{ produto.id }}</td>
+                                    <td>{{ produto.nome }}</td>
+                                    <td>P</td>
+                                    <td>
+                                        <span class="badge bg-{% if produto.estoque <= produto.estoque_minimo %}danger{% elif produto.estoque <= produto.estoque_minimo * 2 %}warning{% else %}success{% endif %}">
+                                            {{ produto.estoque }}
+                                        </span>
+                                    </td>
+                                    <td>R$ {{ "%.2f"|format(produto.preco * 0.7)|replace('.', ',') }}</td>
+                                    <td><strong>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</strong></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary btn-add-item" 
+                                                onclick="adicionarItem({{ produto.id }}, '{{ produto.nome|replace("'", "\\'") }}', {{ produto.preco }}, {{ produto.estoque }})"
+                                                title="Adicionar ao orçamento">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginação -->
+                    <nav aria-label="Navegação da página">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item disabled">
+                                <span class="page-link">Anterior</span>
+                            </li>
+                            <li class="page-item active">
+                                <span class="page-link">1 <span class="sr-only">(atual)</span></span>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="#">Próximo</a>
+                            </li>
+                        </ul>
+                    </nav>
+
+                    <!-- Botão para Cadastrar Novo Produto -->
+                    <div class="text-center mt-3">
+                        <button class="btn btn-success" onclick="$('#modalNovoProduto').modal('show')">
+                            <i class="fas fa-plus me-2"></i>
+                            Cadastrar Novo Produto
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumo do Orçamento -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calculator me-2"></i>
+                        Resumo do Orçamento
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="formOrcamento" method="POST" action="{{ url_for('criar_orcamento_route') }}">
+                        <!-- Seleção de Cliente -->
+                        <div class="mb-3">
+                            <label class="form-label">Cliente (Opcional):</label>
+                            <select class="form-select" name="cliente_id" id="clienteSelect">
+                                <option value="">Selecionar Cliente</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Itens do Orçamento -->
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm">
+                                <thead class="table-secondary">
+                                    <tr>
+                                        <th>Descrição</th>
+                                        <th>Qtde.</th>
+                                        <th>R$ Unit.</th>
+                                        <th>R$ Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="itensOrcamento">
+                                    <!-- Itens serão adicionados aqui via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Resumo de Valores -->
+                        <div class="bg-light p-3 rounded mb-3 orcamento-card">
+                            <div class="row align-items-center">
+                                <div class="col-6">
+                                    <strong>
+                                        <span class="item-counter" id="contadorItens">0</span>
+                                        Itens: <span id="totalItens">0</span>
+                                    </strong>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <div class="total-display">
+                                        Valor Total: R$ <span id="valorTotal">0,00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Desconto -->
+                        <div class="mb-3">
+                            <label class="form-label">Desconto (R$):</label>
+                            <input type="number" step="0.01" min="0" class="form-control" 
+                                   name="desconto" id="desconto" value="0" onchange="calcularTotal()">
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="mb-3">
+                            <label class="form-label">Observações:</label>
+                            <textarea class="form-control" name="observacoes" rows="3" 
+                                      placeholder="Observações do orçamento..."></textarea>
+                        </div>
+
+                        <!-- Botões de Ação -->
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-info" onclick="consultarOrcamentos()">
+                                <i class="fas fa-search me-2"></i>
+                                Consulta Orçamentos Rápidos
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="salvarOrcamento()">
+                                <i class="fas fa-save me-2"></i>
+                                Salvar Orçamento Rápido
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="cancelarOrcamento()">
+                                <i class="fas fa-times me-2"></i>
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="limparItens()">
+                                <i class="fas fa-trash me-2"></i>
+                                Limpar Itens
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="iniciarVenda()" id="btnIniciarVenda" disabled>
+                                <i class="fas fa-shopping-cart me-2"></i>
+                                Iniciar Venda
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Orçamentos Salvos -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        Orçamentos Salvos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Cliente</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for orcamento in orcamentos %}
+                                <tr>
+                                    <td>{{ orcamento.numero_orcamento }}</td>
+                                    <td>{{ orcamento.cliente_nome }}</td>
+                                    <td>{{ orcamento.total|format_currency }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if orcamento.status == 'pendente' %}warning{% elif orcamento.status == 'convertido' %}success{% else %}secondary{% endif %}">
+                                            {{ orcamento.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>{{ orcamento.created_at|format_date }}</td>
+                                    <td>
+                                        <a href="{{ url_for('visualizar_orcamento', id=orcamento.id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let itensOrcamento = [];
+let contadorItens = 0;
+
+function adicionarItem(produtoId, produtoNome, preco, estoque) {
+    // Verificar se o item já existe
+    const itemExistente = itensOrcamento.find(item => item.produto_id === produtoId);
+    
+    if (itemExistente) {
+        if (itemExistente.quantidade < estoque) {
+            itemExistente.quantidade++;
+            atualizarTabelaItens();
+            calcularTotal();
+            mostrarFeedback(`Quantidade de "${produtoNome}" aumentada para ${itemExistente.quantidade}`, 'info');
+        } else {
+            mostrarFeedback('Estoque insuficiente!', 'warning');
+        }
+    } else {
+        const novoItem = {
+            id: ++contadorItens,
+            produto_id: produtoId,
+            nome: produtoNome,
+            quantidade: 1,
+            preco_unitario: preco,
+            estoque: estoque
+        };
+        
+        itensOrcamento.push(novoItem);
+        atualizarTabelaItens();
+        calcularTotal();
+        mostrarFeedback(`"${produtoNome}" adicionado ao orçamento`, 'success');
+    }
+}
+
+function removerItem(itemId) {
+    itensOrcamento = itensOrcamento.filter(item => item.id !== itemId);
+    atualizarTabelaItens();
+    calcularTotal();
+}
+
+function alterarQuantidade(itemId, novaQuantidade) {
+    const item = itensOrcamento.find(item => item.id === itemId);
+    if (item) {
+        if (novaQuantidade <= item.estoque && novaQuantidade > 0) {
+            item.quantidade = parseInt(novaQuantidade);
+            atualizarTabelaItens();
+            calcularTotal();
+        } else {
+            alert('Quantidade inválida ou estoque insuficiente!');
+            atualizarTabelaItens(); // Restaurar valor anterior
+        }
+    }
+}
+
+function atualizarTabelaItens() {
+    const tbody = document.getElementById('itensOrcamento');
+    tbody.innerHTML = '';
+    
+    itensOrcamento.forEach(item => {
+        const subtotal = item.quantidade * item.preco_unitario;
+        const row = `
+            <tr>
+                <td>${item.nome}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" 
+                           value="${item.quantidade}" min="1" max="${item.estoque}"
+                           onchange="alterarQuantidade(${item.id}, this.value)"
+                           style="width: 60px;">
+                    <input type="hidden" name="produto_id[]" value="${item.produto_id}">
+                    <input type="hidden" name="quantidade[]" value="${item.quantidade}">
+                    <input type="hidden" name="preco[]" value="${item.preco_unitario}">
+                </td>
+                <td>R$ ${item.preco_unitario.toFixed(2).replace('.', ',')}</td>
+                <td>R$ ${subtotal.toFixed(2).replace('.', ',')}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger" 
+                            onclick="removerItem(${item.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+    
+    // Atualizar inputs hidden do formulário
+    const form = document.getElementById('formOrcamento');
+    // Remove inputs hidden antigos
+    const oldInputs = form.querySelectorAll('input[name^="produto_id"], input[name^="quantidade"], input[name^="preco"]');
+    oldInputs.forEach(input => {
+        if (!input.closest('#itensOrcamento')) {
+            input.remove();
+        }
+    });
+}
+
+function calcularTotal() {
+    const total = itensOrcamento.reduce((sum, item) => 
+        sum + (item.quantidade * item.preco_unitario), 0);
+    
+    const desconto = parseFloat(document.getElementById('desconto').value) || 0;
+    const totalComDesconto = total - desconto;
+    
+    const quantidadeItens = itensOrcamento.length;
+    
+    document.getElementById('totalItens').textContent = quantidadeItens;
+    document.getElementById('contadorItens').textContent = quantidadeItens;
+    document.getElementById('valorTotal').textContent = totalComDesconto.toFixed(2).replace('.', ',');
+    
+    // Habilitar/desabilitar botão de iniciar venda
+    document.getElementById('btnIniciarVenda').disabled = quantidadeItens === 0;
+    
+    // Atualizar cor do contador
+    const contador = document.getElementById('contadorItens');
+    if (quantidadeItens === 0) {
+        contador.style.background = '#6c757d';
+    } else if (quantidadeItens <= 3) {
+        contador.style.background = 'linear-gradient(45deg, #007bff, #0056b3)';
+    } else if (quantidadeItens <= 6) {
+        contador.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
+    } else {
+        contador.style.background = 'linear-gradient(45deg, #ffc107, #e0a800)';
+    }
+}
+
+function salvarOrcamento() {
+    if (itensOrcamento.length === 0) {
+        alert('Adicione pelo menos um item ao orçamento!');
+        return;
+    }
+    
+    document.getElementById('formOrcamento').submit();
+}
+
+function limparItens() {
+    if (confirm('Deseja limpar todos os itens do orçamento?')) {
+        itensOrcamento = [];
+        contadorItens = 0;
+        atualizarTabelaItens();
+        calcularTotal();
+    }
+}
+
+function cancelarOrcamento() {
+    if (confirm('Deseja cancelar o orçamento atual?')) {
+        limparItens();
+        document.getElementById('clienteSelect').value = '';
+        document.getElementById('desconto').value = '0';
+        document.querySelector('textarea[name="observacoes"]').value = '';
+    }
+}
+
+function iniciarVenda() {
+    if (itensOrcamento.length === 0) {
+        alert('Adicione itens ao orçamento antes de iniciar a venda!');
+        return;
+    }
+    
+    // Redirecionar para a página de vendas com os itens
+    window.location.href = "{{ url_for('vendas') }}";
+}
+
+function consultarOrcamentos() {
+    // Scroll para a seção de orçamentos salvos
+    document.querySelector('.card-header .fa-list').closest('.card').scrollIntoView({
+        behavior: 'smooth'
+    });
+}
+
+// Busca de produtos
+let timeoutBusca = null;
+
+document.getElementById('campoBusca').addEventListener('keyup', function(e) {
+    clearTimeout(timeoutBusca);
+    timeoutBusca = setTimeout(() => {
+        buscarProdutos();
+    }, 300); // Aguarda 300ms após parar de digitar
+});
+
+document.getElementById('btnBuscar').addEventListener('click', buscarProdutos);
+
+function buscarProdutos() {
+    const termo = document.getElementById('campoBusca').value.trim();
+    
+    if (termo.length < 2 && termo.length > 0) {
+        return; // Só busca com 2 ou mais caracteres
+    }
+    
+    // Mostrar loading
+    mostrarLoading(true);
+    
+    // Se termo vazio, mostrar todos os produtos
+    if (termo === '') {
+        const linhas = document.querySelectorAll('#tabelaProdutos tr');
+        linhas.forEach(linha => {
+            linha.style.display = '';
+        });
+        mostrarLoading(false);
+        return;
+    }
+    
+    // Busca AJAX
+    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+        .then(response => response.json())
+        .then(produtos => {
+            atualizarTabelaProdutos(produtos);
+            mostrarLoading(false);
+        })
+        .catch(error => {
+            console.error('Erro na busca:', error);
+            // Fallback para busca local
+            buscarProdutosLocal(termo);
+            mostrarLoading(false);
+        });
+}
+
+function mostrarLoading(mostrar) {
+    const spinner = document.getElementById('loadingSpinner');
+    const texto = document.getElementById('btnBuscarTexto');
+    
+    if (mostrar) {
+        spinner.style.display = 'inline-block';
+        texto.textContent = 'Buscando...';
+    } else {
+        spinner.style.display = 'none';
+        texto.textContent = 'Busca Avançada';
+    }
+}
+
+function atualizarTabelaProdutos(produtos) {
+    const tbody = document.getElementById('tabelaProdutos');
+    tbody.innerHTML = '';
+    
+    produtos.forEach(produto => {
+        const preco = parseFloat(produto.preco);
+        const custoEstimado = preco * 0.7;
+        const estoque = produto.estoque || 0;
+        const estoqueMinimo = produto.estoque_minimo || 5;
+        
+        // Definir cor do badge de estoque
+        let badgeClass = 'success';
+        if (estoque <= estoqueMinimo) {
+            badgeClass = 'danger';
+        } else if (estoque <= estoqueMinimo * 2) {
+            badgeClass = 'warning';
+        }
+        
+        const row = `
+            <tr class="produto-row">
+                <td>${produto.id}</td>
+                <td>${produto.nome}</td>
+                <td>P</td>
+                <td>
+                    <span class="badge bg-${badgeClass}">${estoque}</span>
+                </td>
+                <td>R$ ${custoEstimado.toFixed(2).replace('.', ',')}</td>
+                <td><strong>R$ ${preco.toFixed(2).replace('.', ',')}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-primary btn-add-item" 
+                            onclick="adicionarItem(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${preco}, ${estoque})"
+                            title="Adicionar ao orçamento">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+    
+    if (produtos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum produto encontrado</td></tr>';
+    }
+}
+
+function buscarProdutosLocal(termo) {
+    const termoLower = termo.toLowerCase();
+    const linhas = document.querySelectorAll('#tabelaProdutos tr');
+    
+    linhas.forEach(linha => {
+        const textoLinha = linha.textContent.toLowerCase();
+        if (textoLinha.includes(termoLower)) {
+            linha.style.display = '';
+        } else {
+            linha.style.display = 'none';
+        }
+    });
+}
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', function() {
+    calcularTotal();
+});
+
+// Função para mostrar feedback visual
+function mostrarFeedback(mensagem, tipo = 'info') {
+    // Remover alertas anteriores
+    const alertaAnterior = document.querySelector('.alert-feedback');
+    if (alertaAnterior) {
+        alertaAnterior.remove();
+    }
+    
+    // Criar novo alerta
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo} alert-dismissible fade show alert-feedback`;
+    alerta.style.position = 'fixed';
+    alerta.style.top = '20px';
+    alerta.style.right = '20px';
+    alerta.style.zIndex = '9999';
+    alerta.style.minWidth = '300px';
+    
+    alerta.innerHTML = `
+        ${mensagem}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(alerta);
+    
+    // Remover automaticamente após 3 segundos
+    setTimeout(() => {
+        if (alerta.parentNode) {
+            alerta.remove();
+        }
+    }, 3000);
+}
+</script>
+{% endblock %}
