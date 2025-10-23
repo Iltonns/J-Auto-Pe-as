@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Tema Demo - Sistema de Autopeças{% endblock %}
+{% block page_title %}🎨 Demonstração do Novo Tema Automotivo{% endblock %}
+
+{% block content %}
+<!-- Seção de Apresentação do Tema -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card" style="background: linear-gradient(135deg, #1a237e 0%, #37474f 100%); color: white;">
+            <div class="card-body text-center py-5">
+                <div class="automotive-icon large mb-3" style="margin: 0 auto;">
+                    <i class="fas fa-tools"></i>
+                </div>
+                <h1 class="mb-3">🔧 AutoPeças Pro 2025</h1>
+                <p class="lead">Layout Profissional Inspirado no Setor Automotivo</p>
+                <p>Design moderno com paleta de cores específica para o mercado de autopeças</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cards de Demonstração -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card dashboard-card dashboard-card-primary">
+            <div class="card-body text-center">
+                <div class="automotive-icon mb-3" style="margin: 0 auto;">
+                    <i class="fas fa-car-battery"></i>
+                </div>
+                <h4>1.250</h4>
+                <p class="mb-0">Peças em Estoque</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card dashboard-card dashboard-card-success">
+            <div class="card-body text-center">
+                <div class="automotive-icon mb-3" style="margin: 0 auto;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h4>540</h4>
+                <p class="mb-0">Clientes Ativos</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card dashboard-card dashboard-card-info">
+            <div class="card-body text-center">
+                <div class="automotive-icon mb-3" style="margin: 0 auto;">
+                    <i class="fas fa-cash-register"></i>
+                </div>
+                <h4>R$ 85.900</h4>
+                <p class="mb-0">Vendas do Mês</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card dashboard-card dashboard-card-warning">
+            <div class="card-body text-center">
+                <div class="automotive-icon mb-3" style="margin: 0 auto;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h4>23</h4>
+                <p class="mb-0">Estoque Baixo</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Seção de Botões -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🎨 Galeria de Botões Automotivos</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-primary w-100">
+                            <i class="fas fa-plus"></i><br>
+                            <small>Primário</small>
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-success w-100">
+                            <i class="fas fa-check"></i><br>
+                            <small>Sucesso</small>
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-warning w-100">
+                            <i class="fas fa-warning"></i><br>
+                            <small>Atenção</small>
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-danger w-100">
+                            <i class="fas fa-times"></i><br>
+                            <small>Perigo</small>
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-secondary w-100">
+                            <i class="fas fa-cog"></i><br>
+                            <small>Secundário</small>
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <button class="btn btn-info w-100">
+                            <i class="fas fa-info"></i><br>
+                            <small>Informação</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Seção de Badges -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🏷️ Badges de Categoria</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-3">
+                    <span class="automotive-badge badge-motor">
+                        <i class="fas fa-engine me-2"></i>Motor
+                    </span>
+                    <span class="automotive-badge badge-freios">
+                        <i class="fas fa-circle me-2"></i>Freios
+                    </span>
+                    <span class="automotive-badge badge-suspensao">
+                        <i class="fas fa-car-side me-2"></i>Suspensão
+                    </span>
+                    <span class="automotive-badge badge-eletrica">
+                        <i class="fas fa-bolt me-2"></i>Elétrica
+                    </span>
+                    <span class="automotive-badge badge-pneus">
+                        <i class="fas fa-circle me-2"></i>Pneus
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Seção de Status -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📊 Status de Estoque</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-3">
+                    <span class="badge-status status-pago">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Estoque Alto
+                    </span>
+                    <span class="badge-status status-recebido">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Estoque Médio
+                    </span>
+                    <span class="badge-status status-pendente">
+                        <i class="fas fa-exclamation-circle me-1"></i>
+                        Estoque Baixo
+                    </span>
+                    <span class="badge-status status-vencido">
+                        <i class="fas fa-times-circle me-1"></i>
+                        Sem Estoque
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alertas Demonstrativos -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🔔 Sistema de Alertas</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-success automotive-alert automotive-alert-success" role="alert">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Sucesso!</strong> Produto adicionado com sucesso ao catálogo.
+                </div>
+                <div class="alert alert-warning automotive-alert automotive-alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Atenção!</strong> Alguns produtos estão com estoque baixo.
+                </div>
+                <div class="alert alert-danger automotive-alert automotive-alert-danger" role="alert">
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>Erro!</strong> Falha ao conectar com o servidor de pagamentos.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Demonstração de Tabela -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📋 Tabela de Produtos</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table automotive-table">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Categoria</th>
+                                <th>Preço</th>
+                                <th>Estoque</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="automotive-icon small">
+                                            <i class="fas fa-car-battery"></i>
+                                        </div>
+                                        Bateria 60Ah
+                                    </div>
+                                </td>
+                                <td><span class="automotive-badge badge-eletrica">Elétrica</span></td>
+                                <td class="fw-bold text-success">R$ 350,00</td>
+                                <td><span class="stock-indicator stock-high">25 unidades</span></td>
+                                <td><span class="badge-status status-pago">Em Estoque</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="automotive-icon small">
+                                            <i class="fas fa-circle"></i>
+                                        </div>
+                                        Pastilha de Freio
+                                    </div>
+                                </td>
+                                <td><span class="automotive-badge badge-freios">Freios</span></td>
+                                <td class="fw-bold text-success">R$ 85,00</td>
+                                <td><span class="stock-indicator stock-medium">8 unidades</span></td>
+                                <td><span class="badge-status status-pendente">Estoque Baixo</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="automotive-icon small">
+                                            <i class="fas fa-engine"></i>
+                                        </div>
+                                        Filtro de Óleo
+                                    </div>
+                                </td>
+                                <td><span class="automotive-badge badge-motor">Motor</span></td>
+                                <td class="fw-bold text-success">R$ 25,00</td>
+                                <td><span class="stock-indicator stock-low">2 unidades</span></td>
+                                <td><span class="badge-status status-vencido">Crítico</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Paleta de Cores -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🎨 Paleta de Cores Automotiva</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #1a237e; color: white;">
+                            <strong>Azul Escuro</strong><br>
+                            <small>#1a237e</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #2962ff; color: white;">
+                            <strong>Azul Vibrante</strong><br>
+                            <small>#2962ff</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #ff6d00; color: white;">
+                            <strong>Laranja Energia</strong><br>
+                            <small>#ff6d00</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #d32f2f; color: white;">
+                            <strong>Vermelho Intenso</strong><br>
+                            <small>#d32f2f</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #37474f; color: white;">
+                            <strong>Cinza Metal</strong><br>
+                            <small>#37474f</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center mb-3">
+                        <div class="p-4 rounded" style="background: #546e7a; color: white;">
+                            <strong>Cinza Médio</strong><br>
+                            <small>#546e7a</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Demonstração de Toast
+    setTimeout(() => {
+        showToast('Bem-vindo ao novo tema AutoPeças Pro! 🔧', 'success');
+    }, 1000);
+    
+    // Animação dos cards na entrada
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.6s ease-out';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 200);
+    });
+});
+</script>
+{% endblock %}

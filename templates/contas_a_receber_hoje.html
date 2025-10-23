@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Contas a Receber Hoje - Sistema de Autopeças{% endblock %}
+{% block page_title %}Contas a Receber - {{ hoje.strftime('%d/%m/%Y') if hoje else 'Hoje' }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-hand-holding-usd"></i> 
+                    Contas a Receber com Vencimento Hoje
+                    {% if contas %}
+                        <span class="badge bg-info ms-2">{{ contas|length }}</span>
+                    {% endif %}
+                </h5>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaConta">
+                    <i class="fas fa-plus"></i> Nova Conta
+                </button>
+            </div>
+            <div class="card-body">
+                {% if contas %}
+                <!-- Resumo -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h4>{{ contas|length }}</h4>
+                                <small>Contas Pendentes</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h4>R$ {{ "%.2f"|format(contas|sum(attribute='valor')) }}</h4>
+                                <small>Total a Receber</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h4>R$ {{ "%.2f"|format((contas|sum(attribute='valor')) / (contas|length)) }}</h4>
+                                <small>Valor Médio</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                                <th>Vencimento</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for conta in contas %}
+                            <tr>
+                                <td>{{ conta.cliente_nome }}</td>
+                                <td>{{ conta.descricao }}</td>
+                                <td>
+                                    <strong class="text-success">R$ {{ "%.2f"|format(conta.valor) }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ conta.data_vencimento }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-status status-{{ conta.status }}">
+                                        {% if conta.status == 'pendente' %}
+                                            Pendente
+                                        {% elif conta.status == 'recebido' %}
+                                            Recebido
+                                        {% else %}
+                                            {{ conta.status.title() }}
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if conta.status == 'pendente' %}
+                                    <button class="btn btn-sm btn-success" 
+                                            onclick="marcarComoRecebido({{ conta.id }}, '{{ conta.descricao }}')">
+                                        <i class="fas fa-check"></i> Receber
+                                    </button>
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="verDetalhes({{ conta.id }}, '{{ conta.cliente_nome }}', '{{ conta.descricao }}', {{ conta.valor }}, '{{ conta.data_vencimento }}', '{{ conta.observacoes or '' }}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            onclick="enviarLembrete('{{ conta.cliente_nome }}', {{ conta.valor }})">
+                                        <i class="fas fa-bell"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-smile fa-3x text-success mb-3"></i>
+                    <h5 class="text-success">Nenhuma conta a receber hoje</h5>
+                    <p class="text-muted">Todas as contas do dia já foram recebidas ou não há vencimentos para hoje.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Conta -->
+<div class="modal fade" id="modalNovaConta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus"></i> Nova Conta a Receber
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('adicionar_conta_receber') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cliente_id" class="form-label">Cliente</label>
+                                <select class="form-control" id="cliente_id" name="cliente_id">
+                                    <option value="">Selecione um cliente</option>
+                                    <!-- Clientes serão carregados dinamicamente -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="valor" class="form-label">Valor (R$) *</label>
+                                <input type="number" class="form-control" id="valor" name="valor" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição *</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao" required placeholder="Ex: Venda a prazo, serviços prestados, etc.">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="data_vencimento" class="form-label">Data de Vencimento *</label>
+                        <input type="date" class="form-control" id="data_vencimento" name="data_vencimento" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3" placeholder="Informações adicionais sobre a conta"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Conta
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes da Conta -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye"></i> Detalhes da Conta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalhesConteudo">
+                <!-- Conteúdo será carregado via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function marcarComoRecebido(contaId, descricao) {
+    if (confirm(`Confirmar recebimento da conta "${descricao}"?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("marcar_conta_recebida") }}';
+        
+        const inputId = document.createElement('input');
+        inputId.type = 'hidden';
+        inputId.name = 'conta_id';
+        inputId.value = contaId;
+        
+        const inputData = document.createElement('input');
+        inputData.type = 'hidden';
+        inputData.name = 'data_recebimento';
+        inputData.value = new Date().toISOString().split('T')[0];
+        
+        form.appendChild(inputId);
+        form.appendChild(inputData);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function verDetalhes(id, cliente, descricao, valor, vencimento, observacoes) {
+    const conteudo = `
+        <div class="row">
+            <div class="col-12">
+                <p><strong>Cliente:</strong> ${cliente}</p>
+                <p><strong>Descrição:</strong> ${descricao}</p>
+                <p><strong>Valor:</strong> <span class="text-success">R$ ${valor.toFixed(2)}</span></p>
+                <p><strong>Vencimento:</strong> ${vencimento}</p>
+                ${observacoes ? `<p><strong>Observações:</strong> ${observacoes}</p>` : ''}
+            </div>
+        </div>
+    `;
+    
+    $('#detalhesConteudo').html(conteudo);
+    $('#modalDetalhes').modal('show');
+}
+
+function enviarLembrete(cliente, valor) {
+    // Simular envio de lembrete
+    alert(`Lembrete enviado para ${cliente} sobre a conta de R$ ${valor.toFixed(2)}`);
+    
+    // Aqui você poderia implementar:
+    // - Envio de WhatsApp
+    // - Envio de email
+    // - SMS
+    // - Notificação push
+}
+
+// Definir data padrão como hoje
+$(document).ready(function() {
+    const hoje = new Date().toISOString().split('T')[0];
+    $('#data_vencimento').val(hoje);
+});
+</script>
+{% endblock %}

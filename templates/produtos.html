@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos - Sistema de Autopeças{% endblock %}
+{% block page_title %}🔧 Gerenciamento de Autopeças{% endblock %}
+
+{% block extra_css %}
+<style>
+    .product-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .product-card:hover {
+        border-color: var(--accent-orange);
+        transform: scale(1.02);
+    }
+    
+    .stock-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .stock-high { background: #d4edda; color: #155724; }
+    .stock-medium { background: #fff3cd; color: #856404; }
+    .stock-low { background: #f8d7da; color: #721c24; }
+    
+    .category-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+        color: white;
+        font-size: 1.2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-car-battery"></i> Catálogo de Autopeças
+                </h5>
+                <div>
+                    <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
+                        <i class="fas fa-file-import"></i> Importar XML
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoProduto">
+                        <i class="fas fa-plus-circle"></i> Nova Autopeça
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Busca de produtos -->
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="input-group shadow-sm">
+                            <span class="input-group-text" style="background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%); border: none; color: white;">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" class="form-control border-0" id="buscaProduto" 
+                                   placeholder="🔍 Buscar autopeça por nome, código ou categoria..."
+                                   style="padding: 15px; font-size: 1rem;">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select border-0 shadow-sm" style="padding: 15px; font-size: 1rem;">
+                            <option>🔧 Todas as Categorias</option>
+                            <option>🚗 Motor</option>
+                            <option>⚙️ Transmissão</option>
+                            <option>🛞 Pneus & Rodas</option>
+                            <option>🔋 Bateria & Elétrica</option>
+                            <option>🛡️ Freios</option>
+                        </select>
+                    </div>
+                </div>
+                
+                {% if produtos %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tabelaProdutos">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Preço</th>
+                                <th>Estoque</th>
+                                <th>Código de Barras</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for produto in produtos %}
+                            <tr>
+                                <td>{{ produto.id }}</td>
+                                <td>{{ produto.nome }}</td>
+                                <td>R$ {{ "%.2f"|format(produto.preco) }}</td>
+                                <td>
+                                    <span class="badge {% if produto.quantidade <= 0 %}bg-danger{% elif produto.quantidade <= 5 %}bg-warning{% else %}bg-success{% endif %}">
+                                        {{ produto.quantidade }}
+                                    </span>
+                                </td>
+                                <td>{{ produto.codigo_barras or '-' }}</td>
+                                <td>
+                                    {% if produto.quantidade <= 0 %}
+                                        <span class="badge bg-danger">Sem Estoque</span>
+                                    {% elif produto.quantidade <= 5 %}
+                                        <span class="badge bg-warning">Estoque Baixo</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Disponível</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            onclick="editarProduto({{ produto.id }}, '{{ produto.nome }}', {{ produto.preco }}, {{ produto.quantidade }}, '{{ produto.codigo_barras or '' }}')"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalEditarProduto">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="verDetalhes({{ produto.id }})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            onclick="confirmarExclusao({{ produto.id }}, '{{ produto.nome }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhum produto cadastrado</h5>
+                    <p class="text-muted">Clique em "Novo Produto" ou "Importar XML" para começar.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Produto -->
+<div class="modal fade" id="modalNovoProduto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus"></i> Novo Produto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('adicionar_produto') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="nome" class="form-label">Nome do Produto *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="preco" class="form-label">Preço (R$) *</label>
+                                <input type="number" class="form-control" id="preco" name="preco" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quantidade" class="form-label">Quantidade em Estoque *</label>
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="codigo_barras" class="form-label">Código de Barras</label>
+                                <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="EAN-13 ou código personalizado">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Produto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Produto -->
+<div class="modal fade" id="modalEditarProduto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Editar Produto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('atualizar_produto') }}">
+                <input type="hidden" id="edit_produto_id" name="produto_id">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="edit_nome" class="form-label">Nome do Produto *</label>
+                                <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit_preco" class="form-label">Preço (R$) *</label>
+                                <input type="number" class="form-control" id="edit_preco" name="preco" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_quantidade" class="form-label">Quantidade em Estoque *</label>
+                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_codigo_barras" class="form-label">Código de Barras</label>
+                                <input type="text" class="form-control" id="edit_codigo_barras" name="codigo_barras">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Atualizar Produto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importar XML -->
+<div class="modal fade" id="modalImportarXML" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-import"></i> Importar Produtos via XML
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('importar_produtos_xml') }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="arquivo_xml" class="form-label">Arquivo XML *</label>
+                        <input type="file" class="form-control" id="arquivo_xml" name="arquivo_xml" accept=".xml" required>
+                        <div class="form-text">
+                            Selecione um arquivo XML de Nota Fiscal Eletrônica (NFe) para importar os produtos automaticamente.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Dica:</strong> O sistema irá extrair automaticamente nome, preço, quantidade e código de barras dos produtos do XML.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editarProduto(id, nome, preco, quantidade, codigo_barras) {
+    $('#edit_produto_id').val(id);
+    $('#edit_nome').val(nome);
+    $('#edit_preco').val(preco);
+    $('#edit_quantidade').val(quantidade);
+    $('#edit_codigo_barras').val(codigo_barras);
+}
+
+function confirmarExclusao(id, nome) {
+    if (confirm(`Tem certeza que deseja excluir o produto "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
+        // Criar formulário para exclusão
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("excluir_produto") }}';
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'produto_id';
+        input.value = id;
+        
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function verDetalhes(id) {
+    // Buscar detalhes do produto via AJAX
+    fetch(`/api/produto/${id}`)
+        .then(response => response.json())
+        .then(produto => {
+            if (produto.error) {
+                alert('Produto não encontrado');
+                return;
+            }
+            
+            let statusEstoque = '';
+            if (produto.quantidade <= 0) {
+                statusEstoque = '<span class="badge bg-danger">Sem Estoque</span>';
+            } else if (produto.quantidade <= 5) {
+                statusEstoque = '<span class="badge bg-warning">Estoque Baixo</span>';
+            } else {
+                statusEstoque = '<span class="badge bg-success">Disponível</span>';
+            }
+            
+            const conteudo = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>ID:</strong> ${produto.id}<br>
+                        <strong>Nome:</strong> ${produto.nome}<br>
+                        <strong>Preço:</strong> R$ ${produto.preco.toFixed(2)}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Estoque:</strong> ${produto.quantidade}<br>
+                        <strong>Status:</strong> ${statusEstoque}<br>
+                        <strong>Código:</strong> ${produto.codigo_barras || 'Não informado'}
+                    </div>
+                </div>
+            `;
+            
+            $('#detalhesConteudo').html(conteudo);
+            $('#modalDetalhes').modal('show');
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar detalhes do produto');
+        });
+}
+
+// Busca em tempo real
+$(document).ready(function() {
+    $('#buscaProduto').on('input', function() {
+        const termo = $(this).val().toLowerCase();
+        
+        $('#tabelaProdutos tbody tr').each(function() {
+            const linha = $(this);
+            const textoLinha = linha.text().toLowerCase();
+            
+            if (textoLinha.includes(termo)) {
+                linha.show();
+            } else {
+                linha.hide();
+            }
+        });
+    });
+});
+</script>
+
+<!-- Modal para exibir detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye"></i> Detalhes do Produto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalhesConteudo">
+                <!-- Conteúdo será carregado via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

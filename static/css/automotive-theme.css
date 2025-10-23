@@ -1,0 +1,331 @@
+/* AutoPeças Pro - Tema Automotivo Profissional */
+
+/* Paleta de Cores Automotiva */
+:root {
+    --primary-dark: #1a237e;        /* Azul escuro profissional */
+    --primary-blue: #2962ff;        /* Azul vibrante */
+    --accent-orange: #ff6d00;       /* Laranja energia */
+    --accent-red: #d32f2f;          /* Vermelho intenso */
+    --neutral-dark: #37474f;        /* Cinza escuro metal */
+    --neutral-medium: #546e7a;      /* Cinza médio */
+    --neutral-light: #eceff1;       /* Cinza claro */
+    --success: #2e7d32;            /* Verde sucesso */
+    --warning: #f57c00;            /* Laranja alerta */
+    --danger: #c62828;             /* Vermelho perigo */
+    --gradient-primary: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
+    --gradient-accent: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+    --gradient-neutral: linear-gradient(135deg, var(--neutral-dark) 0%, var(--neutral-medium) 100%);
+}
+
+/* Animações Personalizadas */
+@keyframes slideInFromLeft {
+    from { transform: translateX(-100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeInUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 5px var(--accent-orange); }
+    to { box-shadow: 0 0 20px var(--accent-orange), 0 0 30px var(--accent-orange); }
+}
+
+/* Componentes Específicos de Autopeças */
+
+/* Badge de Categoria de Peça */
+.automotive-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-motor { background: var(--gradient-accent); color: white; }
+.badge-freios { background: var(--gradient-primary); color: white; }
+.badge-suspensao { background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%); color: white; }
+.badge-eletrica { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; }
+.badge-pneus { background: var(--gradient-neutral); color: white; }
+
+/* Cards de Produto Automotivo */
+.automotive-product-card {
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
+    overflow: hidden;
+    position: relative;
+}
+
+.automotive-product-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-accent);
+}
+
+.automotive-product-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+
+.automotive-product-card .card-body {
+    padding: 25px;
+}
+
+.automotive-product-card .product-image {
+    width: 80px;
+    height: 80px;
+    border-radius: 15px;
+    background: var(--gradient-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.automotive-product-card .product-price {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent-orange);
+}
+
+.automotive-product-card .product-stock {
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Indicadores de Status de Estoque */
+.stock-indicator {
+    position: relative;
+    display: inline-block;
+}
+
+.stock-indicator::before {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    top: 50%;
+    left: -15px;
+    transform: translateY(-50%);
+}
+
+.stock-high::before { background-color: var(--success); }
+.stock-medium::before { background-color: var(--warning); }
+.stock-low::before { background-color: var(--danger); animation: pulse 2s infinite; }
+
+/* Botões Especiais Automotivos */
+.btn-automotive {
+    border: none;
+    border-radius: 25px;
+    padding: 12px 30px;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-automotive-primary {
+    background: var(--gradient-primary);
+    color: white;
+}
+
+.btn-automotive-primary:hover {
+    background: var(--gradient-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 109, 0, 0.3);
+    color: white;
+}
+
+.btn-automotive-secondary {
+    background: var(--gradient-neutral);
+    color: white;
+}
+
+.btn-automotive-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(55, 71, 79, 0.3);
+    color: white;
+}
+
+/* Formulários Temáticos */
+.automotive-form-control {
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 15px 20px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.automotive-form-control:focus {
+    border-color: var(--accent-orange);
+    box-shadow: 0 0 0 0.2rem rgba(255, 109, 0, 0.25);
+    transform: scale(1.02);
+}
+
+/* Tabelas Temáticas */
+.automotive-table {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.automotive-table thead {
+    background: var(--gradient-neutral);
+    color: white;
+}
+
+.automotive-table tbody tr {
+    transition: all 0.3s ease;
+    border-bottom: 1px solid rgba(255, 109, 0, 0.1);
+}
+
+.automotive-table tbody tr:hover {
+    background: rgba(255, 109, 0, 0.05);
+    transform: scale(1.01);
+}
+
+/* Alertas Personalizados */
+.automotive-alert {
+    border: none;
+    border-radius: 18px;
+    padding: 20px;
+    border-left: 5px solid;
+}
+
+.automotive-alert-success {
+    background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+    border-left-color: var(--success);
+    color: var(--success);
+}
+
+.automotive-alert-warning {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    border-left-color: var(--warning);
+    color: var(--warning);
+}
+
+.automotive-alert-danger {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    border-left-color: var(--danger);
+    color: var(--danger);
+}
+
+/* Loading Spinner Automotivo */
+.automotive-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 109, 0, 0.1);
+    border-left-color: var(--accent-orange);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Modo Escuro Automotivo */
+@media (prefers-color-scheme: dark) {
+    .automotive-product-card {
+        background: #2d2d2d;
+        color: #f0f0f0;
+    }
+    
+    .automotive-table tbody tr:hover {
+        background: rgba(255, 109, 0, 0.15);
+    }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .automotive-product-card {
+        margin-bottom: 20px;
+    }
+    
+    .automotive-product-card .product-image {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+    
+    .automotive-product-card .product-price {
+        font-size: 1.2rem;
+    }
+    
+    .btn-automotive {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Efeitos Especiais */
+.glow-effect {
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+.slide-in-left {
+    animation: slideInFromLeft 0.5s ease-out;
+}
+
+.slide-in-right {
+    animation: slideInFromRight 0.5s ease-out;
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* Ícones Automotivos Personalizados */
+.automotive-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 15px;
+    background: var(--gradient-accent);
+    color: white;
+    font-size: 1.5rem;
+    margin-right: 15px;
+}
+
+.automotive-icon.large {
+    width: 80px;
+    height: 80px;
+    font-size: 2.5rem;
+}
+
+.automotive-icon.small {
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+    margin-right: 8px;
+}

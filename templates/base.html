@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Autopeças{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Automotivo Personalizado -->
+    <link href="{{ url_for('static', filename='css/automotive-theme.css') }}" rel="stylesheet">
+    
+    <style>
+        /* Paleta de Cores Automotiva */
+        :root {
+            --primary-dark: #1a237e;        /* Azul escuro profissional */
+            --primary-blue: #2962ff;        /* Azul vibrante */
+            --accent-orange: #ff6d00;       /* Laranja energia */
+            --accent-red: #d32f2f;          /* Vermelho intenso */
+            --neutral-dark: #37474f;        /* Cinza escuro metal */
+            --neutral-medium: #546e7a;      /* Cinza médio */
+            --neutral-light: #eceff1;       /* Cinza claro */
+            --success: #2e7d32;            /* Verde sucesso */
+            --warning: #f57c00;            /* Laranja alerta */
+            --danger: #c62828;             /* Vermelho perigo */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+            box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+        }
+
+        .sidebar .brand-section {
+            background: rgba(255, 109, 0, 0.1);
+            border-radius: 15px;
+            margin: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 2px solid rgba(255, 109, 0, 0.2);
+        }
+
+        .sidebar .brand-icon {
+            font-size: 2.5rem;
+            color: var(--accent-orange);
+            margin-bottom: 10px;
+        }
+
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.85);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 3px 15px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(255, 109, 0, 0.15);
+            color: white;
+            transform: translateX(8px);
+            border-left-color: var(--accent-orange);
+        }
+
+        .sidebar .nav-link.active {
+            background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 109, 0, 0.3);
+            border-left-color: white;
+        }
+
+        .sidebar .nav-link i {
+            margin-right: 12px;
+            width: 20px;
+            font-size: 1.1rem;
+        }
+
+        .sidebar .section-divider {
+            margin: 20px 15px;
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .sidebar .section-title {
+            color: var(--accent-orange);
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .main-content {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+        }
+
+        .top-navbar {
+            background: linear-gradient(135deg, white 0%, #f8fafc 100%) !important;
+            border-bottom: 3px solid var(--accent-orange);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-dark) !important;
+            font-size: 1.4rem;
+        }
+
+        .navbar-brand::before {
+            content: '🔧';
+            margin-right: 8px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 18px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            border-top: 4px solid var(--accent-orange);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+            color: white;
+            border-radius: 14px 14px 0 0 !important;
+            border: none;
+            font-weight: 600;
+        }
+
+        /* Botões Automotivos */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(41, 98, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success) 0%, #4caf50 100%);
+            border: none;
+            border-radius: 25px;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #ffa726 100%);
+            border: none;
+            border-radius: 25px;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #e57373 100%);
+            border: none;
+            border-radius: 25px;
+        }
+
+        .alert {
+            border-radius: 18px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+            color: var(--success);
+            border-left: 5px solid var(--success);
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+            color: var(--danger);
+            border-left: 5px solid var(--danger);
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            color: var(--warning);
+            border-left: 5px solid var(--warning);
+        }
+
+        .table {
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .table thead {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+            color: white;
+        }
+
+        .table tbody tr {
+            transition: all 0.3s ease;
+        }
+
+        .table tbody tr:hover {
+            background-color: rgba(255, 109, 0, 0.05);
+            transform: scale(1.01);
+        }
+
+        /* Status Badges Automotivos */
+        .badge-status {
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pendente { 
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            color: #856404;
+            border: 2px solid #f39c12;
+        }
+
+        .status-pago { 
+            background: linear-gradient(135deg, #d4edda 0%, #a3d977 100%);
+            color: #155724;
+            border: 2px solid var(--success);
+        }
+
+        .status-recebido { 
+            background: linear-gradient(135deg, #cce7ff 0%, #74b9ff 100%);
+            color: #004085;
+            border: 2px solid var(--primary-blue);
+        }
+
+        .status-vencido { 
+            background: linear-gradient(135deg, #f8d7da 0%, #ff7675 100%);
+            color: #721c24;
+            border: 2px solid var(--danger);
+        }
+
+        /* Dashboard Cards Especiais */
+        .dashboard-card-primary {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .dashboard-card-success {
+            background: linear-gradient(135deg, var(--success) 0%, #4caf50 100%);
+            color: white;
+        }
+
+        .dashboard-card-info {
+            background: linear-gradient(135deg, var(--accent-orange) 0%, var(--warning) 100%);
+            color: white;
+        }
+
+        .dashboard-card-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #ffa726 100%);
+            color: white;
+        }
+
+        .dashboard-card-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #e57373 100%);
+            color: white;
+        }
+
+        /* Efeitos de Hover para Cards Dashboard */
+        .dashboard-card:hover {
+            transform: translateY(-10px) scale(1.05);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+
+        /* Animações */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .nav-link {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <div class="brand-section">
+                    <div class="brand-icon">
+                        <i class="fas fa-tools"></i>
+                    </div>
+                    <h4 class="text-white mb-3 fw-bold">
+                        AutoPeças Pro
+                    </h4>
+                    <div class="text-white-50 small">Sistema Profissional</div>
+                    
+                    {% if current_user.is_authenticated %}
+                    <div class="mt-3 pt-3 border-top border-secondary">
+                        <div class="text-white-50 small">Logado como:</div>
+                        <div class="text-white fw-bold">{{ current_user.username }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <nav class="nav flex-column">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a class="nav-link" href="{{ url_for('clientes') }}">
+                        <i class="fas fa-users"></i> Clientes
+                    </a>
+                    <a class="nav-link" href="{{ url_for('produtos') }}">
+                        <i class="fas fa-car-battery"></i> Peças & Produtos
+                    </a>
+                    <a class="nav-link" href="{{ url_for('vendas') }}">
+                        <i class="fas fa-cash-register"></i> Vendas & Caixa
+                    </a>
+                    
+                    <hr class="section-divider">
+                    <div class="section-title px-3 mb-2">💰 FINANCEIRO</div>
+                    
+                    <a class="nav-link" href="{{ url_for('contas_a_pagar_hoje') }}">
+                        <i class="fas fa-credit-card"></i> Contas a Pagar
+                    </a>
+                    <a class="nav-link" href="{{ url_for('contas_a_receber_hoje') }}">
+                        <i class="fas fa-coins"></i> Contas a Receber
+                    </a>
+                    <a class="nav-link" href="{{ url_for('pagamentos_em_atraso') }}">
+                        <i class="fas fa-exclamation-triangle"></i> Pagamentos Atrasados
+                    </a>
+                    <a class="nav-link" href="{{ url_for('recebimentos_em_atraso') }}">
+                        <i class="fas fa-clock"></i> Recebimentos Atrasados
+                    </a>
+                    
+                    <hr class="section-divider">
+                    
+                    <a class="nav-link" href="{{ url_for('relatorios') }}">
+                        <i class="fas fa-chart-line"></i> Relatórios
+                    </a>
+                    
+                    <hr class="section-divider">
+                    <div class="section-title px-3 mb-2">🎨 NOVO TEMA 2025</div>
+                    
+                    <a class="nav-link glow-effect" href="{{ url_for('demo_theme') }}">
+                        <i class="fas fa-palette"></i> Demonstração do Tema
+                    </a>
+                    
+                    {% if current_user.is_authenticated %}
+                    <hr class="section-divider">
+                    <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                        <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <!-- Top Navbar -->
+                <nav class="navbar navbar-expand-lg navbar-light top-navbar mb-4">
+                    <div class="container-fluid">
+                        <span class="navbar-brand">
+                            {% block page_title %}Sistema de Autopeças{% endblock %}
+                        </span>
+                        
+                        <div class="navbar-nav ms-auto d-flex align-items-center">
+                            <div class="navbar-text me-4">
+                                <i class="fas fa-calendar-alt text-primary me-2"></i>
+                                <strong>{{ today.strftime('%d/%m/%Y') if today else '' }}</strong>
+                            </div>
+                            {% if current_user.is_authenticated %}
+                            <div class="navbar-text">
+                                <i class="fas fa-user-circle text-success me-2"></i>
+                                <span class="fw-bold">{{ current_user.username }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </nav>
+                
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="container-fluid mb-4">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                    {% if category == 'success' %}
+                                        <i class="fas fa-check-circle me-2"></i>
+                                    {% elif category == 'danger' or category == 'error' %}
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                    {% elif category == 'warning' %}
+                                        <i class="fas fa-exclamation-circle me-2"></i>
+                                    {% else %}
+                                        <i class="fas fa-info-circle me-2"></i>
+                                    {% endif %}
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Page Content -->
+                <div class="container-fluid">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- Tema Automotivo JavaScript -->
+    <script src="{{ url_for('static', filename='js/automotive-theme.js') }}"></script>
+    
+    <script>
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            $('.alert').fadeOut('slow');
+        }, 5000);
+        
+        // Active link highlight
+        $(document).ready(function() {
+            var currentPath = window.location.pathname;
+            $('.nav-link').each(function() {
+                if ($(this).attr('href') === currentPath) {
+                    $(this).addClass('active');
+                }
+            });
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
