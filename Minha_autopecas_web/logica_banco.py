@@ -7,6 +7,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Caminho do banco de dados
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'autopecas.db')
 
+# Configurações SQLite para melhor performance e reduzir locks
+def configure_sqlite_connection(conn):
+    """Configura a conexão SQLite para melhor performance"""
+    conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging para melhor concorrência
+    conn.execute("PRAGMA synchronous=NORMAL")  # Reduz I/O disk
+    conn.execute("PRAGMA cache_size=10000")  # Aumenta cache
+    conn.execute("PRAGMA temp_store=MEMORY")  # Usa memoria para tabelas temporárias
+    conn.execute("PRAGMA busy_timeout=30000")  # 30 segundos de timeout para locks
+
+def get_db_connection(timeout=30.0):
+    """Cria uma conexão configurada com o banco"""
+    conn = sqlite3.connect(DB_PATH, timeout=timeout)
+    configure_sqlite_connection(conn)
+    return conn
+
 def init_db():
     """Inicializa o banco de dados criando todas as tabelas necessárias"""
     conn = sqlite3.connect(DB_PATH)
@@ -1108,7 +1123,7 @@ def deletar_produto(id):
 
 def atualizar_estoque(produto_id, quantidade):
     """Atualiza o estoque de um produto (diminui)"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1123,64 +1138,86 @@ def atualizar_estoque(produto_id, quantidade):
 # FUNÇÕES DE VENDAS
 def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None):
     """Registra uma nova venda com seus itens"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Calcula o total
-    total = sum(item['quantidade'] * item['preco_unitario'] for item in itens) - desconto
-    
-    # Insere a venda
-    cursor.execute('''
-        INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id))
-    
-    venda_id = cursor.lastrowid
-    
-    # Insere os itens da venda
-    for item in itens:
-        cursor.execute('''
-            INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (venda_id, item['produto_id'], item['quantidade'], 
-              item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
+    try:
+        # Verificar estoque antes de processar a venda
+        for item in itens:
+            cursor.execute('SELECT nome, estoque FROM produtos WHERE id = ?', (item['produto_id'],))
+            produto = cursor.fetchone()
+            
+            if not produto:
+                raise Exception(f"Produto com ID {item['produto_id']} não encontrado")
+            
+            nome_produto, estoque_atual = produto
+            if estoque_atual < item['quantidade']:
+                raise Exception(f"Estoque insuficiente para {nome_produto}. Disponível: {estoque_atual}, solicitado: {item['quantidade']}")
         
-        # Atualiza o estoque
-        atualizar_estoque(item['produto_id'], item['quantidade'])
-    
-    # Se for venda a prazo, cria conta a receber
-    if forma_pagamento == 'prazo':
+        # Calcula o total
+        total = sum(item['quantidade'] * item['preco_unitario'] for item in itens) - desconto
+        
+        # Insere a venda
         cursor.execute('''
-            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id)
-            VALUES (?, ?, DATE('now', '+30 days'), ?, ?)
-        ''', (f'Venda #{venda_id}', total, cliente_id, venda_id))
-    else:
-        # Se não for a prazo, registrar entrada no caixa (se houver caixa aberto)
-        try:
-            # Verificar se há caixa aberto
-            cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
-            if cursor.fetchone()[0] > 0:
-                # Registrar movimentação de entrada no caixa
-                cliente_nome = "Cliente Avulso"
-                if cliente_id:
-                    cursor.execute("SELECT nome FROM clientes WHERE id = ?", (cliente_id,))
-                    cliente_result = cursor.fetchone()
-                    if cliente_result:
-                        cliente_nome = cliente_result[0]
-                
-                cursor.execute('''
-                    INSERT INTO caixa_movimentacoes (
-                        tipo, categoria, descricao, valor, usuario_id, venda_id
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
-        except Exception as e:
-            # Se der erro no caixa, não afeta a venda
-            print(f"Aviso: Não foi possível registrar no caixa: {e}")
-    
-    conn.commit()
-    conn.close()
-    return venda_id
+            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id))
+        
+        venda_id = cursor.lastrowid
+        
+        # Insere os itens da venda
+        for item in itens:
+            cursor.execute('''
+                INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (venda_id, item['produto_id'], item['quantidade'], 
+                  item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
+            
+            # Atualiza o estoque diretamente na mesma transação
+            cursor.execute('''
+                UPDATE produtos 
+                SET estoque = estoque - ? 
+                WHERE id = ?
+            ''', (item['quantidade'], item['produto_id']))
+        
+        # Se for venda a prazo, cria conta a receber
+        if forma_pagamento == 'prazo':
+            cursor.execute('''
+                INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id)
+                VALUES (?, ?, DATE('now', '+30 days'), ?, ?)
+            ''', (f'Venda #{venda_id}', total, cliente_id, venda_id))
+        else:
+            # Se não for a prazo, registrar entrada no caixa (se houver caixa aberto)
+            try:
+                # Verificar se há caixa aberto
+                cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+                if cursor.fetchone()[0] > 0:
+                    # Registrar movimentação de entrada no caixa
+                    cliente_nome = "Cliente Avulso"
+                    if cliente_id:
+                        cursor.execute("SELECT nome FROM clientes WHERE id = ?", (cliente_id,))
+                        cliente_result = cursor.fetchone()
+                        if cliente_result:
+                            cliente_nome = cliente_result[0]
+                    
+                    cursor.execute('''
+                        INSERT INTO caixa_movimentacoes (
+                            tipo, categoria, descricao, valor, usuario_id, venda_id
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
+            except Exception as e:
+                # Se der erro no caixa, não afeta a venda
+                print(f"Aviso: Não foi possível registrar no caixa: {e}")
+        
+        conn.commit()
+        return venda_id
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def listar_vendas(limit=50):
     """Lista as vendas mais recentes"""

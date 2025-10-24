@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+simele <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -135,14 +135,8 @@
             border: none;
             border-radius: 18px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             background: white;
             border-top: 4px solid var(--accent-orange);
-        }
-
-        .card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
         }
 
         .card-header {
@@ -224,12 +218,7 @@
         }
 
         .table tbody tr {
-            transition: all 0.3s ease;
-        }
-
-        .table tbody tr:hover {
-            background-color: rgba(255, 109, 0, 0.05);
-            transform: scale(1.01);
+            /* Removido hover desnecessário */
         }
 
         /* Status Badges Automotivos */
@@ -292,13 +281,17 @@
             color: white;
         }
 
-        /* Efeitos de Hover para Cards Dashboard */
+        /* Efeitos de Hover apenas para Cards Dashboard funcionais */
+        .dashboard-card {
+            cursor: pointer; /* Indica que é clicável */
+        }
+        
         .dashboard-card:hover {
-            transform: translateY(-10px) scale(1.05);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(0,0,0,0.15);
         }
 
-        /* Animações */
+        /* Animações apenas no carregamento */
         @keyframes slideInRight {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
@@ -309,11 +302,11 @@
             to { transform: translateY(0); opacity: 1; }
         }
 
-        .card {
+        .card.fade-in {
             animation: fadeInUp 0.6s ease-out;
         }
 
-        .nav-link {
+        .nav-link.slide-in {
             animation: slideInRight 0.3s ease-out;
         }
 

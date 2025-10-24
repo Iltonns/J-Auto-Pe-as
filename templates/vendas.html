@@ -606,10 +606,17 @@ $(document).ready(function() {
         }
         
         // Converter itens para JSON e adicionar ao formulário
+        const itensFormatados = itensVenda.map(item => ({
+            produto_id: item.id,
+            quantidade: item.quantidade,
+            preco_unitario: item.preco,
+            subtotal: item.subtotal
+        }));
+        
         const itensInput = $('<input>').attr({
             type: 'hidden',
             name: 'itens',
-            value: JSON.stringify(itensVenda)
+            value: JSON.stringify(itensFormatados)
         });
         
         $(this).append(itensInput);

@@ -541,6 +541,39 @@ def api_buscar_produtos():
     
     return jsonify(produtos[:50])  # Limitar a 50 resultados
 
+@app.route('/api/produto/<termo>')
+@login_required
+def api_buscar_produto_unico(termo):
+    """Busca um produto específico pelo termo"""
+    produtos = listar_produtos()
+    
+    # Primeiro tenta encontrar por ID exato
+    try:
+        produto_id = int(termo)
+        for produto in produtos:
+            if produto['id'] == produto_id:
+                return jsonify(produto)
+    except ValueError:
+        pass
+    
+    # Depois busca por código de barras exato
+    for produto in produtos:
+        if produto.get('codigo_barras') and produto['codigo_barras'].lower() == termo.lower():
+            return jsonify(produto)
+    
+    # Depois busca por código de fornecedor exato
+    for produto in produtos:
+        if produto.get('codigo_fornecedor') and produto['codigo_fornecedor'].lower() == termo.lower():
+            return jsonify(produto)
+    
+    # Por último, busca por nome (primeiro que contenha o termo)
+    termo_lower = termo.lower()
+    for produto in produtos:
+        if termo_lower in produto['nome'].lower():
+            return jsonify(produto)
+    
+    return jsonify({'error': 'Produto não encontrado'})
+
 @app.route('/produtos/adicionar', methods=['POST'], endpoint='adicionar_produto')
 @login_required
 def adicionar_produto_route():
@@ -754,6 +787,18 @@ def registrar_venda_route():
         if not itens:
             flash('Nenhum item foi adicionado à venda!', 'error')
             return redirect(url_for('vendas'))
+            
+        # Validar se todos os itens têm os campos necessários
+        for i, item in enumerate(itens):
+            if 'produto_id' not in item:
+                flash(f'Item {i+1}: produto_id ausente', 'error')
+                return redirect(url_for('vendas'))
+            if 'quantidade' not in item:
+                flash(f'Item {i+1}: quantidade ausente', 'error')
+                return redirect(url_for('vendas'))
+            if 'preco_unitario' not in item:
+                flash(f'Item {i+1}: preco_unitario ausente', 'error')
+                return redirect(url_for('vendas'))
         
         venda_id = registrar_venda(cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id)
         flash(f'Venda #{venda_id} registrada com sucesso!', 'success')

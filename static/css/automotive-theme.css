@@ -69,7 +69,6 @@
     border: none;
     border-radius: 20px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: white;
     overflow: hidden;
     position: relative;
@@ -85,9 +84,15 @@
     background: var(--gradient-accent);
 }
 
-.automotive-product-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+/* Hover apenas para cards clicáveis/funcionais */
+.automotive-product-card.clickable {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.automotive-product-card.clickable:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
 }
 
 .automotive-product-card .card-body {
@@ -187,7 +192,6 @@
 .automotive-form-control:focus {
     border-color: var(--accent-orange);
     box-shadow: 0 0 0 0.2rem rgba(255, 109, 0, 0.25);
-    transform: scale(1.02);
 }
 
 /* Tabelas Temáticas */
@@ -203,13 +207,8 @@
 }
 
 .automotive-table tbody tr {
-    transition: all 0.3s ease;
     border-bottom: 1px solid rgba(255, 109, 0, 0.1);
-}
-
-.automotive-table tbody tr:hover {
-    background: rgba(255, 109, 0, 0.05);
-    transform: scale(1.01);
+    /* Removido hover desnecessário das linhas da tabela */
 }
 
 /* Alertas Personalizados */
@@ -360,7 +359,7 @@
     left: 100%;
 }
 
-/* Estilos para Logos */
+/* Estilos para Logos - hover apenas funcional */
 .login-logo {
     transition: all 0.3s ease;
     border-radius: 12px;
@@ -370,21 +369,18 @@
 }
 
 .login-logo:hover {
-    transform: scale(1.05);
-    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4)) brightness(1.1);
+    filter: brightness(1.1);
     background: rgba(255, 255, 255, 0.15);
 }
 
 .sidebar-logo {
-    transition: all 0.3s ease;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.1);
     padding: 8px;
 }
 
 .sidebar-logo:hover {
-    transform: scale(1.02);
-    filter: brightness(1.2) drop-shadow(0 2px 8px rgba(255,109,0,0.3));
+    filter: brightness(1.1);
     background: rgba(255, 255, 255, 0.15);
 }
 
