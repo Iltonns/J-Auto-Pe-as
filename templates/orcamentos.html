@@ -111,12 +111,16 @@
                             <label class="form-label">Buscar:</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="campoBusca" 
-                                       placeholder="Código / Descrição / Aplicação / Ref. Fab / Código de Barras">
+                                       placeholder="Nome / Código Fornecedor / Código de Barras / Categoria">
                                 <button class="btn btn-success" type="button" id="btnBuscar">
                                     <span class="loading-spinner" id="loadingSpinner"></span>
                                     <span id="btnBuscarTexto">Busca Avançada</span>
                                 </button>
                             </div>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Busque por nome, código do fornecedor, código de barras ou categoria
+                            </small>
                         </div>
                     </div>
 
@@ -127,7 +131,8 @@
                                 <tr>
                                     <th>Código</th>
                                     <th>Descrição</th>
-                                    <th>Tipo</th>
+                                    <th>Cod. Fornecedor</th>
+                                    <th>Categoria</th>
                                     <th>Estoque</th>
                                     <th>Custo</th>
                                     <th>Venda</th>
@@ -138,14 +143,34 @@
                                 {% for produto in produtos %}
                                 <tr class="produto-row">
                                     <td>{{ produto.id }}</td>
-                                    <td>{{ produto.nome }}</td>
-                                    <td>P</td>
+                                    <td>
+                                        <strong>{{ produto.nome }}</strong>
+                                        {% if produto.codigo_barras %}
+                                        <br><small class="text-muted">
+                                            <i class="fas fa-barcode"></i> {{ produto.codigo_barras }}
+                                        </small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if produto.codigo_fornecedor %}
+                                        <span class="badge bg-info">{{ produto.codigo_fornecedor }}</span>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if produto.categoria %}
+                                        <span class="badge bg-secondary">{{ produto.categoria }}</span>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge bg-{% if produto.estoque <= produto.estoque_minimo %}danger{% elif produto.estoque <= produto.estoque_minimo * 2 %}warning{% else %}success{% endif %}">
                                             {{ produto.estoque }}
                                         </span>
                                     </td>
-                                    <td>R$ {{ "%.2f"|format(produto.preco * 0.7)|replace('.', ',') }}</td>
+                                    <td>R$ {{ "%.2f"|format(produto.preco_custo or produto.preco * 0.7)|replace('.', ',') }}</td>
                                     <td><strong>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</strong></td>
                                     <td>
                                         <button class="btn btn-sm btn-primary btn-add-item" 
@@ -588,8 +613,16 @@ function atualizarTabelaProdutos(produtos) {
         const row = `
             <tr class="produto-row">
                 <td>${produto.id}</td>
-                <td>${produto.nome}</td>
-                <td>P</td>
+                <td>
+                    <strong>${produto.nome}</strong>
+                    ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
+                </td>
+                <td>
+                    ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
+                </td>
+                <td>
+                    ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
+                </td>
                 <td>
                     <span class="badge bg-${badgeClass}">${estoque}</span>
                 </td>
@@ -608,7 +641,7 @@ function atualizarTabelaProdutos(produtos) {
     });
     
     if (produtos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum produto encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum produto encontrado</td></tr>';
     }
 }
 
@@ -626,10 +659,71 @@ function buscarProdutosLocal(termo) {
     });
 }
 
-// Inicializar
+// Inicializar busca em tempo real
 document.addEventListener('DOMContentLoaded', function() {
     calcularTotal();
+    
+    // Busca em tempo real
+    const campoBusca = document.getElementById('campoBusca');
+    if (campoBusca) {
+        campoBusca.addEventListener('input', function() {
+            const termo = this.value.trim();
+            if (termo.length >= 2) {
+                buscarProdutosLocal(termo);
+            } else if (termo.length === 0) {
+                // Mostrar todos os produtos
+                const linhas = document.querySelectorAll('#tabelaProdutos tr');
+                linhas.forEach(linha => {
+                    linha.style.display = '';
+                });
+            }
+        });
+    }
+    
+    // Busca avançada com Enter
+    campoBusca?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            buscarProdutosRemoto();
+        }
+    });
+    
+    // Botão de busca
+    const btnBuscar = document.getElementById('btnBuscar');
+    if (btnBuscar) {
+        btnBuscar.addEventListener('click', buscarProdutosRemoto);
+    }
 });
+
+// Busca remota na API
+function buscarProdutosRemoto() {
+    const termo = document.getElementById('campoBusca').value.trim();
+    if (!termo) return;
+    
+    const btnBuscar = document.getElementById('btnBuscar');
+    const btnTexto = document.getElementById('btnBuscarTexto');
+    const spinner = document.getElementById('loadingSpinner');
+    
+    // Mostrar loading
+    btnBuscar.disabled = true;
+    btnTexto.textContent = 'Buscando...';
+    spinner.style.display = 'inline-block';
+    
+    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+        .then(response => response.json())
+        .then(produtos => {
+            atualizarTabelaProdutos(produtos);
+        })
+        .catch(error => {
+            console.error('Erro na busca:', error);
+            mostrarFeedback('Erro ao buscar produtos', 'danger');
+        })
+        .finally(() => {
+            // Remover loading
+            btnBuscar.disabled = false;
+            btnTexto.textContent = 'Busca Avançada';
+            spinner.style.display = 'none';
+        });
+}
 
 // Função para mostrar feedback visual
 function mostrarFeedback(mensagem, tipo = 'info') {

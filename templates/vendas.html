@@ -44,17 +44,53 @@
                             <label for="busca_produto" class="form-label">Buscar Produto</label>
                             <div class="input-group">
                                 <span class="input-group-text">
-                                    <i class="fas fa-barcode"></i>
-                                </span>
-                                <input type="text" class="form-control" id="busca_produto" placeholder="Digite o código de barras, nome ou ID do produto">
-                                <button type="button" class="btn btn-outline-primary" onclick="buscarProduto()">
                                     <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="busca_produto" 
+                                       placeholder="Nome / Código Fornecedor / Código de Barras / ID" 
+                                       autocomplete="off">
+                                <button type="button" class="btn btn-outline-primary" onclick="buscarProdutoDetalhado()">
+                                    <i class="fas fa-list"></i> Busca Avançada
                                 </button>
                             </div>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Digite para buscar em tempo real ou use Enter para busca rápida
+                            </small>
                         </div>
                         <div class="col-md-4">
                             <label for="quantidade_produto" class="form-label">Quantidade</label>
                             <input type="number" class="form-control" id="quantidade_produto" value="1" min="1">
+                        </div>
+                    </div>
+                    
+                    <!-- Resultado da Busca -->
+                    <div id="resultadoBusca" class="mb-3" style="display: none;">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-search"></i> Resultados da Busca
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Nome</th>
+                                                <th>Cód. Fornecedor</th>
+                                                <th>Categoria</th>
+                                                <th>Estoque</th>
+                                                <th>Preço</th>
+                                                <th>Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabelaBuscaProdutos">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -136,9 +172,14 @@
                                 data-nome="{{ produto.nome }}" 
                                 data-preco="{{ produto.preco }}"
                                 data-estoque="{{ produto.estoque }}"
-                                title="{{ produto.nome }} - R$ {{ '%.2f'|format(produto.preco) }}">
-                            <small>{{ produto.nome[:15] }}{% if produto.nome|length > 15 %}...{% endif %}</small><br>
-                            <strong>R$ {{ "%.2f"|format(produto.preco) }}</strong>
+                                data-codigo-fornecedor="{{ produto.codigo_fornecedor or '' }}"
+                                title="{{ produto.nome }} - R$ {{ '%.2f'|format(produto.preco) }}{% if produto.codigo_fornecedor %} | Cód: {{ produto.codigo_fornecedor }}{% endif %}">
+                            <small><strong>{{ produto.nome[:12] }}{% if produto.nome|length > 12 %}...{% endif %}</strong></small><br>
+                            {% if produto.codigo_fornecedor %}
+                            <small class="text-muted">{{ produto.codigo_fornecedor }}</small><br>
+                            {% endif %}
+                            <strong class="text-success">R$ {{ "%.2f"|format(produto.preco) }}</strong>
+                            <br><small class="text-muted">Est: {{ produto.estoque }}</small>
                         </button>
                     </div>
                     {% endfor %}
@@ -392,12 +433,130 @@ $('.produto-rapido').click(function() {
     atualizarTabelaVenda();
 });
 
+// Busca em tempo real
+function buscarProdutoTempoReal(termo) {
+    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+        .then(response => response.json())
+        .then(produtos => {
+            if (produtos.length > 0) {
+                mostrarResultadosBusca(produtos.slice(0, 5)); // Mostrar apenas os 5 primeiros
+            } else {
+                $('#resultadoBusca').hide();
+            }
+        })
+        .catch(error => {
+            console.error('Erro na busca:', error);
+        });
+}
+
+// Busca detalhada
+function buscarProdutoDetalhado() {
+    const termo = $('#busca_produto').val().trim();
+    if (!termo) return;
+    
+    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+        .then(response => response.json())
+        .then(produtos => {
+            mostrarResultadosBusca(produtos);
+        })
+        .catch(error => {
+            console.error('Erro na busca:', error);
+            alert('Erro ao buscar produtos');
+        });
+}
+
+// Mostrar resultados da busca
+function mostrarResultadosBusca(produtos) {
+    const tbody = $('#tabelaBuscaProdutos');
+    tbody.empty();
+    
+    produtos.forEach(produto => {
+        const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
+                           produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
+        
+        const row = `
+            <tr>
+                <td>${produto.id}</td>
+                <td>
+                    <strong>${produto.nome}</strong>
+                    ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
+                </td>
+                <td>
+                    ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
+                </td>
+                <td>
+                    ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
+                </td>
+                <td>
+                    <span class="badge bg-${estoqueBadge}">${produto.estoque}</span>
+                </td>
+                <td><strong>R$ ${produto.preco.toFixed(2).replace('.', ',')}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="adicionarProdutoVenda(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${produto.preco}, ${produto.estoque})" 
+                            ${produto.estoque <= 0 ? 'disabled title="Sem estoque"' : ''}>
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(row);
+    });
+    
+    $('#resultadoBusca').show();
+}
+
+// Adicionar produto da busca à venda
+function adicionarProdutoVenda(id, nome, preco, estoque) {
+    const quantidade = parseInt($('#quantidade_produto').val()) || 1;
+    
+    if (estoque < quantidade) {
+        alert(`Estoque insuficiente! Disponível: ${estoque}`);
+        return;
+    }
+    
+    // Verificar se produto já está na venda
+    const itemExistente = itensVenda.find(item => item.id === id);
+    
+    if (itemExistente) {
+        const novaQuantidade = itemExistente.quantidade + quantidade;
+        if (novaQuantidade > estoque) {
+            alert(`Estoque insuficiente! Disponível: ${estoque}, já adicionado: ${itemExistente.quantidade}`);
+            return;
+        }
+        itemExistente.quantidade = novaQuantidade;
+        itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
+    } else {
+        itensVenda.push({
+            id: id,
+            nome: nome,
+            preco: preco,
+            quantidade: quantidade,
+            subtotal: preco * quantidade
+        });
+    }
+    
+    atualizarTabelaVenda();
+    $('#busca_produto').val('');
+    $('#quantidade_produto').val(1);
+    $('#resultadoBusca').hide();
+}
+
 // Event listeners
 $(document).ready(function() {
     // Enter na busca
     $('#busca_produto').keypress(function(e) {
         if (e.which === 13) {
             buscarProduto();
+        }
+    });
+    
+    // Busca em tempo real
+    $('#busca_produto').on('input', function() {
+        const termo = $(this).val().trim();
+        if (termo.length >= 2) {
+            buscarProdutoTempoReal(termo);
+        } else {
+            $('#resultadoBusca').hide();
         }
     });
     

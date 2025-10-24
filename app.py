@@ -533,6 +533,8 @@ def api_buscar_produtos():
             if (termo in produto['nome'].lower() or 
                 termo in str(produto['id']) or
                 (produto.get('codigo_barras') and termo in produto['codigo_barras'].lower()) or
+                (produto.get('codigo_fornecedor') and termo in produto['codigo_fornecedor'].lower()) or
+                (produto.get('categoria') and termo in produto['categoria'].lower()) or
                 (produto.get('descricao') and termo in produto['descricao'].lower())):
                 produtos_filtrados.append(produto)
         produtos = produtos_filtrados
