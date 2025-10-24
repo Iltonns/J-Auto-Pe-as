@@ -3,6 +3,29 @@
 {% block title %}Orçamento {{ orcamento.numero_orcamento }} - Sistema de Autopeças{% endblock %}
 
 {% block content %}
+<!-- Cabeçalho para impressão (oculto na tela) -->
+<div class="print-header" style="display: none;">
+    <div class="row align-items-center mb-4">
+        <div class="col-4">
+            <img src="{{ url_for('static', filename=config_empresa.logo_path) }}" alt="Logo da Loja" style="max-height: 80px; max-width: 200px;">
+        </div>
+        <div class="col-8 text-end">
+            <h3 style="margin: 0; color: #007bff;">{{ config_empresa.nome_empresa }}</h3>
+            <p style="margin: 0; font-size: 14px;">
+                {{ config_empresa.endereco }}<br>
+                {% if config_empresa.cidade and config_empresa.estado %}
+                {{ config_empresa.cidade }} - {{ config_empresa.estado }}
+                {% if config_empresa.cep %} - CEP: {{ config_empresa.cep }}{% endif %}<br>
+                {% endif %}
+                Tel: {{ config_empresa.telefone }}<br>
+                Email: {{ config_empresa.email }}
+                {% if config_empresa.cnpj %}<br>CNPJ: {{ config_empresa.cnpj }}{% endif %}
+            </p>
+        </div>
+    </div>
+    <hr style="border-top: 2px solid #007bff;">
+</div>
+
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -92,12 +115,12 @@
                             <tfoot class="table-secondary">
                                 <tr>
                                     <th colspan="3" class="text-end">Subtotal:</th>
-                                    <th class="text-end">{{ (orcamento.total + orcamento.desconto)|format_currency }}</th>
+                                    <th class="text-end">{{ orcamento.subtotal|format_currency }}</th>
                                 </tr>
                                 {% if orcamento.desconto > 0 %}
                                 <tr>
-                                    <th colspan="3" class="text-end">Desconto:</th>
-                                    <th class="text-end text-danger">- {{ orcamento.desconto|format_currency }}</th>
+                                    <th colspan="3" class="text-end">Desconto ({{ orcamento.desconto }}%):</th>
+                                    <th class="text-end text-danger">- {{ orcamento.desconto_valor|format_currency }}</th>
                                 </tr>
                                 {% endif %}
                                 <tr class="table-dark">
@@ -172,6 +195,10 @@
                             <i class="fas fa-edit me-2"></i>
                             Editar Orçamento
                         </button>
+                        <button class="btn btn-danger" onclick="excluirOrcamento()">
+                            <i class="fas fa-trash me-2"></i>
+                            Excluir Orçamento
+                        </button>
                         {% endif %}
                     </div>
 
@@ -201,12 +228,14 @@
                     <div class="row">
                         <div class="col-6">
                             <small class="text-muted">Subtotal:</small>
-                            <br><strong>{{ (orcamento.total + orcamento.desconto)|format_currency }}</strong>
+                            <br><strong>{{ orcamento.subtotal|format_currency }}</strong>
                         </div>
+                        {% if orcamento.desconto > 0 %}
                         <div class="col-6">
-                            <small class="text-muted">Desconto:</small>
-                            <br><strong class="text-danger">{{ orcamento.desconto|format_currency }}</strong>
+                            <small class="text-muted">Desconto ({{ orcamento.desconto }}%):</small>
+                            <br><strong class="text-danger">{{ orcamento.desconto_valor|format_currency }}</strong>
                         </div>
+                        {% endif %}
                     </div>
                     <hr>
                     <div class="text-center">
@@ -244,7 +273,29 @@ function duplicarOrcamento() {
 }
 
 function editarOrcamento() {
-    alert('Funcionalidade de edição em desenvolvimento');
+    window.location.href = "{{ url_for('editar_orcamento_route', id=orcamento.id) }}";
+}
+
+function excluirOrcamento() {
+    if (confirm('Tem certeza que deseja excluir este orçamento?\n\nEsta ação não pode ser desfeita!')) {
+        // Criar formulário para enviar requisição POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('excluir_orcamento_route', id=orcamento.id) }}";
+        
+        // Adicionar token CSRF se necessário
+        const csrfToken = document.querySelector('meta[name=csrf-token]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.getAttribute('content');
+            form.appendChild(csrfInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 
@@ -254,18 +305,24 @@ function editarOrcamento() {
     .card-header.bg-success,
     .btn,
     .navbar,
-    .sidebar {
+    .sidebar,
+    .d-flex.justify-content-between.align-items-center.mb-4 {
         display: none !important;
+    }
+    
+    .print-header {
+        display: block !important;
     }
     
     .container-fluid {
         margin: 0;
-        padding: 0;
+        padding: 15px;
     }
     
     .card {
         border: none !important;
         box-shadow: none !important;
+        margin-bottom: 20px !important;
     }
     
     .col-lg-4 {
@@ -275,6 +332,43 @@ function editarOrcamento() {
     .col-lg-8 {
         width: 100% !important;
         max-width: 100% !important;
+    }
+    
+    /* Estilo para cabeçalho da empresa */
+    .print-header h3 {
+        color: #000 !important;
+        font-weight: bold;
+    }
+    
+    .print-header p {
+        color: #666 !important;
+        line-height: 1.4;
+    }
+    
+    /* Forçar quebra de página após orçamento */
+    .page-break {
+        page-break-after: always;
+    }
+    
+    /* Melhorar formatação da tabela */
+    .table {
+        border-collapse: collapse !important;
+    }
+    
+    .table th,
+    .table td {
+        border: 1px solid #ddd !important;
+        padding: 8px !important;
+    }
+    
+    .table thead th {
+        background-color: #f8f9fa !important;
+        font-weight: bold !important;
+    }
+    
+    /* Ocultar elementos desnecessários na impressão */
+    .card-header {
+        display: none !important;
     }
 }
 </style>

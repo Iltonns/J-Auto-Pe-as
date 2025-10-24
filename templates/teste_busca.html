@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de Busca</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Teste de Busca de Produtos</h1>
+    
+    <input type="text" id="termo_busca" placeholder="Digite para buscar">
+    <button onclick="testarBusca()">Buscar</button>
+    
+    <div id="resultado"></div>
+    
+    <script>
+        function testarBusca() {
+            const termo = $('#termo_busca').val();
+            console.log('Buscando:', termo);
+            
+            fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+                .then(response => {
+                    console.log('Response:', response.status, response.headers.get('content-type'));
+                    return response.json();
+                })
+                .then(produtos => {
+                    console.log('Produtos:', produtos);
+                    $('#resultado').html(`<p>Encontrados ${produtos.length} produtos</p>`);
+                    produtos.forEach(produto => {
+                        $('#resultado').append(`<p>- ${produto.nome} - R$ ${produto.preco}</p>`);
+                    });
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    $('#resultado').html('<p style="color: red;">Erro na busca</p>');
+                });
+        }
+        
+        $('#termo_busca').on('input', function() {
+            if ($(this).val().length >= 2) {
+                testarBusca();
+            }
+        });
+    </script>
+</body>
+</html>

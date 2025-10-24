@@ -4,6 +4,131 @@
 {% block page_title %}Sistema de Vendas e Caixa{% endblock %}
 
 {% block content %}
+<style>
+/* Estilos específicos para a página de vendas */
+.produto-rapido {
+    font-size: 0.7rem;
+    padding: 0.25rem;
+    height: auto;
+    min-height: 60px;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+.produto-rapido:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+#resultadoBusca {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 0.375rem;
+    background: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.lista-produtos-busca {
+    margin: 0;
+}
+
+.lista-produtos-busca .list-group-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.lista-produtos-busca .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Estilos para impressão de recibo */
+.recibo-print {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #000;
+}
+
+/* Estilos para campo de desconto */
+#desconto_percentual {
+    border: 2px solid #28a745;
+}
+
+#desconto_percentual:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+#valorDesconto {
+    font-weight: bold;
+    color: #dc3545 !important;
+}
+
+.recibo-print .header {
+    text-align: center;
+    border-bottom: 2px solid #000;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+}
+
+.recibo-print .logo {
+    max-width: 150px;
+    max-height: 60px;
+    margin-bottom: 10px;
+}
+
+.recibo-print .empresa-info h2 {
+    font-size: 16px;
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+.recibo-print .empresa-info p {
+    font-size: 10px;
+    margin: 2px 0;
+}
+
+.recibo-print .venda-details {
+    margin: 15px 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.recibo-print .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+}
+
+.recibo-print .items-table th,
+.recibo-print .items-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: left;
+}
+
+.recibo-print .items-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+.recibo-print .items-table .text-right {
+    text-align: right;
+}
+
+.recibo-print .totals {
+    margin-top: 15px;
+    text-align: right;
+}
+
+.recibo-print .total-final {
+    font-size: 14px;
+    font-weight: bold;
+    border-top: 2px solid #000;
+    padding-top: 5px;
+}
+</style>
 <div class="row">
     <!-- Área de Vendas -->
     <div class="col-md-8">
@@ -128,8 +253,24 @@
                                     <h5>Resumo da Venda</h5>
                                     <p class="mb-1">Itens: <span id="totalItens">0</span></p>
                                     <p class="mb-1">Subtotal: R$ <span id="subtotalVenda">0,00</span></p>
+                                    
+                                    <!-- Campo de Desconto -->
+                                    <div class="row mb-2">
+                                        <div class="col-6">
+                                            <label for="desconto_percentual" class="form-label small">Desconto (%)</label>
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="desconto_percentual" name="desconto_percentual" 
+                                                   min="0" max="100" step="0.01" value="0" 
+                                                   placeholder="0.00">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small">Valor do Desconto</label>
+                                            <div class="form-control-plaintext small text-danger" id="valorDesconto">R$ 0,00</div>
+                                        </div>
+                                    </div>
+                                    
                                     <hr>
-                                    <h4>Total: R$ <span id="totalVenda">0,00</span></h4>
+                                    <h4 class="text-primary">Total: R$ <span id="totalVenda">0,00</span></h4>
                                 </div>
                             </div>
                         </div>
@@ -187,6 +328,84 @@
                         </button>
                     </div>
                     {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Seção de Vendas Realizadas -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history"></i> Vendas Realizadas Hoje
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Nº Venda</th>
+                                <th>Cliente</th>
+                                <th>Itens</th>
+                                <th>Total</th>
+                                <th>Forma Pagamento</th>
+                                <th>Hora</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if vendas_hoje %}
+                                {% for venda in vendas_hoje %}
+                                <tr>
+                                    <td>
+                                        <strong>#{{ venda.id }}</strong>
+                                    </td>
+                                    <td>
+                                        {{ venda.cliente or 'Cliente Avulso' }}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ venda.total_itens }} itens</span>
+                                    </td>
+                                    <td>
+                                        <strong class="text-success">R$ {{ "%.2f"|format(venda.total)|replace('.', ',') }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if venda.forma_pagamento == 'dinheiro' %}success{% elif venda.forma_pagamento == 'pix' %}primary{% elif venda.forma_pagamento == 'cartao_credito' %}warning{% elif venda.forma_pagamento == 'cartao_debito' %}info{% else %}secondary{% endif %}">
+                                            {{ venda.forma_pagamento|replace('_', ' ')|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if venda.data_venda %}
+                                            {{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}
+                                        {% else %}
+                                            --:--
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-primary" onclick="visualizarVenda({{ venda.id }})" title="Visualizar">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-success" onclick="imprimirRecibo({{ venda.id }})" title="Imprimir Recibo">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        <i class="fas fa-info-circle"></i> Nenhuma venda realizada hoje
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -371,20 +590,31 @@ function removerItem(index) {
 // Atualizar totais
 function atualizarTotais() {
     const totalItens = itensVenda.reduce((sum, item) => sum + item.quantidade, 0);
-    const totalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
     
+    // Calcular desconto
+    const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
+    const valorDesconto = (subtotal * descontoPercentual) / 100;
+    const totalComDesconto = subtotal - valorDesconto;
+    
+    // Atualizar display
     $('#totalItens').text(totalItens);
-    $('#subtotalVenda').text(totalVenda.toFixed(2).replace('.', ','));
-    $('#totalVenda').text(totalVenda.toFixed(2).replace('.', ','));
+    $('#subtotalVenda').text(subtotal.toFixed(2).replace('.', ','));
+    $('#valorDesconto').text(`R$ ${valorDesconto.toFixed(2).replace('.', ',')}`);
+    $('#totalVenda').text(totalComDesconto.toFixed(2).replace('.', ','));
     
     calcularTroco();
 }
 
 // Calcular troco
 function calcularTroco() {
-    const totalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+    const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
+    const valorDesconto = (subtotal * descontoPercentual) / 100;
+    const totalComDesconto = subtotal - valorDesconto;
+    
     const valorPago = parseFloat($('#valor_pago').val()) || 0;
-    const troco = valorPago - totalVenda;
+    const troco = valorPago - totalComDesconto;
     
     $('#troco').text(`R$ ${Math.max(0, troco).toFixed(2).replace('.', ',')}`);
     
@@ -406,6 +636,7 @@ function limparVenda() {
     $('#cliente_id').val('');
     $('#forma_pagamento').val('dinheiro');
     $('#valor_pago').val('');
+    $('#desconto_percentual').val('0');
     $('#busca_produto').val('');
     $('#quantidade_produto').val(1);
 }
@@ -452,7 +683,7 @@ function buscarProdutoTempoReal(termo) {
         .then(response => response.json())
         .then(produtos => {
             if (produtos.length > 0) {
-                mostrarResultadosBusca(produtos.slice(0, 5)); // Mostrar apenas os 5 primeiros
+                mostrarResultadosBusca(produtos.slice(0, 10)); // Mostrar 10 resultados
             } else {
                 $('#resultadoBusca').hide();
             }
@@ -465,12 +696,20 @@ function buscarProdutoTempoReal(termo) {
 // Busca detalhada
 function buscarProdutoDetalhado() {
     const termo = $('#busca_produto').val().trim();
-    if (!termo) return;
+    if (!termo) {
+        alert('Digite um termo para buscar');
+        return;
+    }
     
     fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
         .then(response => response.json())
         .then(produtos => {
-            mostrarResultadosBusca(produtos);
+            if (produtos.length > 0) {
+                mostrarResultadosBusca(produtos);
+            } else {
+                alert('Nenhum produto encontrado');
+                $('#resultadoBusca').hide();
+            }
         })
         .catch(error => {
             console.error('Erro na busca:', error);
@@ -480,14 +719,14 @@ function buscarProdutoDetalhado() {
 
 // Mostrar resultados da busca
 function mostrarResultadosBusca(produtos) {
-    const tbody = $('#tabelaBuscaProdutos');
+    const tbody = $('#tabelaBuscaProdutos tbody');
     tbody.empty();
     
-    produtos.forEach(produto => {
+    produtos.forEach((produto, index) => {
         const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
                            produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
         
-        const row = `
+        const row = $(`
             <tr>
                 <td>${produto.id}</td>
                 <td>
@@ -511,7 +750,7 @@ function mostrarResultadosBusca(produtos) {
                     </button>
                 </td>
             </tr>
-        `;
+        `);
         tbody.append(row);
     });
     
@@ -556,32 +795,49 @@ function adicionarProdutoVenda(id, nome, preco, estoque) {
 
 // Event listeners
 $(document).ready(function() {
-    // Enter na busca
-    $('#busca_produto').keypress(function(e) {
-        if (e.which === 13) {
-            buscarProduto();
-        }
-    });
-    
-    // Busca em tempo real
-    $('#busca_produto').on('input', function() {
-        const termo = $(this).val().trim();
-        if (termo.length >= 2) {
-            buscarProdutoTempoReal(termo);
-        } else {
-            $('#resultadoBusca').hide();
-        }
-    });
+    // Garantir que os elementos existem antes de anexar eventos
+    setTimeout(function() {
+        // Enter na busca
+        $('#busca_produto').keypress(function(e) {
+            if (e.which === 13) {
+                buscarProduto();
+            }
+        });
+        
+        // Busca em tempo real
+        $('#busca_produto').on('input', function() {
+            const termo = $(this).val().trim();
+            if (termo.length >= 2) {
+                buscarProdutoTempoReal(termo);
+            } else {
+                $('#resultadoBusca').hide();
+            }
+        });
+    }, 100);
     
     // Calcular troco quando valor pago muda
     $('#valor_pago').on('input', calcularTroco);
+    
+    // Recalcular totais quando desconto muda
+    $('#desconto_percentual').on('input', function() {
+        const valor = parseFloat($(this).val()) || 0;
+        if (valor > 100) {
+            $(this).val(100);
+        }
+        atualizarTotais();
+    });
     
     // Auto-fill valor pago para forma de pagamento diferente de dinheiro
     $('#forma_pagamento').change(function() {
         const formaPagamento = $(this).val();
         if (formaPagamento !== 'dinheiro') {
-            const totalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
-            $('#valor_pago').val(totalVenda.toFixed(2));
+            // Calcular total com desconto
+            const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+            const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
+            const valorDesconto = (subtotal * descontoPercentual) / 100;
+            const totalComDesconto = subtotal - valorDesconto;
+            
+            $('#valor_pago').val(totalComDesconto.toFixed(2));
             calcularTroco();
         }
     });
@@ -602,9 +858,14 @@ $(document).ready(function() {
         // Verificar se valor pago foi informado para pagamento em dinheiro
         const formaPagamento = $('#forma_pagamento').val();
         const valorPago = parseFloat($('#valor_pago').val()) || 0;
-        const totalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
         
-        if (formaPagamento === 'dinheiro' && valorPago < totalVenda) {
+        // Calcular total com desconto
+        const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+        const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
+        const valorDesconto = (subtotal * descontoPercentual) / 100;
+        const totalComDesconto = subtotal - valorDesconto;
+        
+        if (formaPagamento === 'dinheiro' && valorPago < totalComDesconto) {
             alert('Valor pago é inferior ao total da venda!');
             return false;
         }
@@ -623,11 +884,244 @@ $(document).ready(function() {
             value: JSON.stringify(itensFormatados)
         });
         
+        // Adicionar desconto em valor absoluto
+        const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
+        const subtotalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+        const valorDescontoAbsoluto = (subtotalVenda * descontoPercentual) / 100;
+        
+        const descontoInput = $('<input>').attr({
+            type: 'hidden',
+            name: 'desconto',
+            value: valorDescontoAbsoluto.toFixed(2)
+        });
+        
         $(this).append(itensInput);
+        $(this).append(descontoInput);
         
         // Enviar o formulário
         this.submit();
     });
 });
+
+// Função para visualizar venda
+function visualizarVenda(vendaId) {
+    // Abrir modal ou página com detalhes da venda
+    window.location.href = `/vendas/${vendaId}`;
+}
+
+// Função para imprimir recibo de venda
+function imprimirRecibo(vendaId) {
+    // Buscar dados da venda e configurações da empresa
+    Promise.all([
+        fetch(`/api/venda/${vendaId}`).then(response => response.json()),
+        fetch('/api/configuracoes-empresa').then(response => response.json())
+    ])
+    .then(([venda, config]) => {
+        if (venda.error) {
+            alert('Erro ao carregar dados da venda: ' + venda.error);
+            return;
+        }
+        
+        if (config.error) {
+            // Usar configurações padrão se houver erro
+            config = {
+                nome_empresa: 'FG AUTO PEÇAS',
+                endereco: 'Rua Exemplo, 123 - Centro',
+                cidade: '',
+                estado: '',
+                cep: '',
+                telefone: '(00) 0000-0000',
+                email: 'contato@fgautopecas.com.br',
+                cnpj: '',
+                logo_path: ''
+            };
+        }
+        
+        // Criar conteúdo do recibo
+        const reciboHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Recibo de Venda #${venda.id}</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        font-size: 12px;
+                    }
+                    .header {
+                        text-align: center;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 10px;
+                        margin-bottom: 20px;
+                    }
+                    .logo {
+                        max-height: 60px;
+                        max-width: 150px;
+                        margin-bottom: 10px;
+                    }
+                    .empresa-info {
+                        margin-bottom: 10px;
+                    }
+                    .empresa-info h2 {
+                        margin: 0;
+                        color: #007bff;
+                        font-size: 18px;
+                    }
+                    .empresa-info p {
+                        margin: 2px 0;
+                        font-size: 11px;
+                    }
+                    .venda-info {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 20px;
+                        border-bottom: 1px solid #ddd;
+                        padding-bottom: 10px;
+                    }
+                    .venda-info div {
+                        flex: 1;
+                    }
+                    .items-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 20px;
+                    }
+                    .items-table th,
+                    .items-table td {
+                        border: 1px solid #ddd;
+                        padding: 5px;
+                        text-align: left;
+                    }
+                    .items-table th {
+                        background-color: #f8f9fa;
+                        font-weight: bold;
+                    }
+                    .items-table td.number {
+                        text-align: right;
+                    }
+                    .totals {
+                        float: right;
+                        width: 250px;
+                        border: 1px solid #ddd;
+                        padding: 10px;
+                    }
+                    .totals .total-line {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 5px;
+                    }
+                    .totals .final-total {
+                        border-top: 2px solid #333;
+                        padding-top: 5px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                    .footer {
+                        clear: both;
+                        text-align: center;
+                        margin-top: 40px;
+                        padding-top: 20px;
+                        border-top: 1px solid #ddd;
+                        font-size: 10px;
+                        color: #666;
+                    }
+                    @media print {
+                        body { margin: 0; padding: 10px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    ${config.logo_path ? `<img src="/static/images/${config.logo_path}" alt="Logo" class="logo">` : ''}
+                    <div class="empresa-info">
+                        <h2>${config.nome_empresa}</h2>
+                        <p>${config.endereco}</p>
+                        ${config.cidade && config.estado ? `<p>${config.cidade} - ${config.estado}${config.cep ? ' - CEP: ' + config.cep : ''}</p>` : ''}
+                        <p>Tel: ${config.telefone} | Email: ${config.email}</p>
+                        ${config.cnpj ? `<p>CNPJ: ${config.cnpj}</p>` : ''}
+                    </div>
+                </div>
+                
+                <div class="venda-info">
+                    <div>
+                        <strong>RECIBO DE VENDA #${venda.id}</strong><br>
+                        <strong>Cliente:</strong> ${venda.cliente_nome || 'Cliente Avulso'}<br>
+                        <strong>Data:</strong> ${new Date(venda.created_at).toLocaleDateString('pt-BR')}<br>
+                        <strong>Hora:</strong> ${new Date(venda.created_at).toLocaleTimeString('pt-BR')}
+                    </div>
+                    <div style="text-align: right;">
+                        <strong>Forma de Pagamento:</strong><br>
+                        ${venda.forma_pagamento.replace('_', ' ').toUpperCase()}<br>
+                        ${venda.valor_pago ? `<strong>Valor Pago:</strong> R$ ${venda.valor_pago.toFixed(2).replace('.', ',')}<br>` : ''}
+                        ${venda.troco ? `<strong>Troco:</strong> R$ ${venda.troco.toFixed(2).replace('.', ',')}` : ''}
+                    </div>
+                </div>
+                
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th style="width: 60px;">Qtd</th>
+                            <th style="width: 80px;">Preço Unit.</th>
+                            <th style="width: 80px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${venda.itens.map(item => `
+                            <tr>
+                                <td>${item.produto_nome}</td>
+                                <td class="number">${item.quantidade}</td>
+                                <td class="number">R$ ${item.preco_unitario.toFixed(2).replace('.', ',')}</td>
+                                <td class="number">R$ ${(item.quantidade * item.preco_unitario).toFixed(2).replace('.', ',')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                <div class="totals">
+                    <div class="total-line">
+                        <span>Subtotal:</span>
+                        <span>R$ ${(venda.total + (venda.desconto || 0)).toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    ${venda.desconto > 0 ? `
+                    <div class="total-line" style="color: #dc3545;">
+                        <span>Desconto:</span>
+                        <span>- R$ ${venda.desconto.toFixed(2).replace('.', ',')}</span>
+                    </div>` : ''}
+                    <div class="total-line final-total">
+                        <span>TOTAL GERAL:</span>
+                        <span>R$ ${venda.total.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>Obrigado pela preferência!</p>
+                    <p>Sistema de Autopeças - Recibo gerado em ${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        // Fechar janela após impressão (opcional)
+                        setTimeout(function() { window.close(); }, 1000);
+                    }
+                </script>
+            </body>
+            </html>
+        `;
+        
+        // Abrir nova janela com o recibo
+        const reciboWindow = window.open('', '_blank');
+        reciboWindow.document.write(reciboHTML);
+        reciboWindow.document.close();
+    })
+    .catch(error => {
+        console.error('Erro ao carregar dados:', error);
+        alert('Erro ao carregar dados para impressão: ' + error.message);
+    });
+}
 </script>
 {% endblock %}

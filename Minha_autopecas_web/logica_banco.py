@@ -330,6 +330,33 @@ def init_db():
         )
     ''')
     
+    # Tabela de configurações da empresa
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS configuracoes_empresa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_empresa TEXT NOT NULL DEFAULT 'FG AUTO PEÇAS',
+            cnpj TEXT,
+            endereco TEXT DEFAULT 'Rua Exemplo, 123 - Centro',
+            cidade TEXT,
+            estado TEXT,
+            cep TEXT,
+            telefone TEXT DEFAULT '(00) 0000-0000',
+            email TEXT DEFAULT 'contato@fgautopecas.com.br',
+            website TEXT,
+            logo_path TEXT DEFAULT 'logo.jpg',
+            observacoes TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Inserir configuração padrão se não existir
+    cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+            INSERT INTO configuracoes_empresa (nome_empresa, endereco, telefone, email)
+            VALUES (?, ?, ?, ?)
+        ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
+    
     conn.commit()
     conn.close()
 
@@ -1379,6 +1406,75 @@ def listar_vendas(limit=50):
     conn.close()
     return vendas
 
+def obter_venda_por_id(venda_id):
+    """Obtém os detalhes completos de uma venda específica"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da venda
+        cursor.execute('''
+            SELECT v.id, v.cliente_id, c.nome as cliente_nome, c.telefone as cliente_telefone,
+                   v.total, v.forma_pagamento, v.desconto, v.observacoes, 
+                   v.data_venda as created_at, v.usuario_id,
+                   u.nome_completo as vendedor_nome
+            FROM vendas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            WHERE v.id = ?
+        ''', (venda_id,))
+        
+        venda_data = cursor.fetchone()
+        if not venda_data:
+            return None
+        
+        # Buscar itens da venda
+        cursor.execute('''
+            SELECT iv.produto_id, p.nome as produto_nome, p.codigo_fornecedor, 
+                   p.codigo_barras, iv.quantidade, iv.preco_unitario, iv.subtotal
+            FROM itens_venda iv
+            JOIN produtos p ON iv.produto_id = p.id
+            WHERE iv.venda_id = ?
+        ''', (venda_id,))
+        
+        itens = []
+        for item_row in cursor.fetchall():
+            itens.append({
+                'produto_id': item_row[0],
+                'produto_nome': item_row[1],
+                'codigo_fornecedor': item_row[2],
+                'codigo_barras': item_row[3],
+                'quantidade': item_row[4],
+                'preco_unitario': item_row[5],
+                'subtotal': item_row[6]
+            })
+        
+        # Montar resultado
+        venda = {
+            'id': venda_data[0],
+            'cliente_id': venda_data[1],
+            'cliente_nome': venda_data[2],
+            'cliente_telefone': venda_data[3],
+            'total': venda_data[4],
+            'forma_pagamento': venda_data[5],
+            'desconto': venda_data[6] or 0,
+            'observacoes': venda_data[7],
+            'created_at': venda_data[8],
+            'usuario_id': venda_data[9],
+            'valor_pago': venda_data[4],  # Para compatibilidade, usar o total
+            'troco': 0,  # Para compatibilidade 
+            'vendedor_nome': venda_data[10],
+            'itens': itens
+        }
+        
+        return venda
+        
+    except Exception as e:
+        print(f"Erro ao buscar venda {venda_id}: {e}")
+        return None
+    finally:
+        conn.close()
+
 def sincronizar_vendas_com_caixa():
     """Sincroniza vendas existentes do dia com o caixa (caso não tenham sido registradas)"""
     conn = sqlite3.connect(DB_PATH)
@@ -1856,11 +1952,14 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
         # Gerar número do orçamento
         numero_orcamento = gerar_numero_orcamento()
         
-        # Calcular total
-        total = sum(item['quantidade'] * item['preco_unitario'] for item in itens)
-        total_com_desconto = total - desconto
+        # Calcular total sem desconto
+        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens)
         
-        # Inserir orçamento
+        # Calcular desconto em valor (porcentagem sobre o total)
+        valor_desconto = total_sem_desconto * (desconto / 100)
+        total_com_desconto = total_sem_desconto - valor_desconto
+        
+        # Inserir orçamento (salvar o total final e a porcentagem de desconto)
         cursor.execute('''
             INSERT INTO orcamentos (numero_orcamento, cliente_id, total, desconto, observacoes, usuario_id)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -1949,12 +2048,19 @@ def obter_orcamento(orcamento_id):
             'subtotal': row[5]
         })
     
+    # Calcular totais para exibição
+    subtotal = sum(item['subtotal'] for item in itens)
+    desconto_percentual = orcamento_data[4]  # Desconto em porcentagem
+    valor_desconto = subtotal * (desconto_percentual / 100) if desconto_percentual > 0 else 0
+    
     orcamento = {
         'id': orcamento_data[0],
         'numero_orcamento': orcamento_data[1],
         'cliente_id': orcamento_data[2],
         'total': orcamento_data[3],
-        'desconto': orcamento_data[4],
+        'desconto': orcamento_data[4],  # Porcentagem
+        'desconto_valor': valor_desconto,  # Valor calculado
+        'subtotal': subtotal,  # Subtotal sem desconto
         'observacoes': orcamento_data[5],
         'status': orcamento_data[6],
         'data_validade': orcamento_data[7],
@@ -1968,6 +2074,88 @@ def obter_orcamento(orcamento_id):
     
     conn.close()
     return orcamento
+
+def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observacoes=""):
+    """Atualiza um orçamento existente"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se o orçamento existe e está pendente
+        cursor.execute('SELECT status FROM orcamentos WHERE id = ?', (orcamento_id,))
+        resultado = cursor.fetchone()
+        
+        if not resultado:
+            raise Exception("Orçamento não encontrado")
+        
+        if resultado[0] != 'pendente':
+            raise Exception("Apenas orçamentos pendentes podem ser editados")
+        
+        # Calcular novo total sem desconto
+        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens)
+        
+        # Calcular desconto em valor (porcentagem sobre o total)
+        valor_desconto = total_sem_desconto * (desconto / 100)
+        total_com_desconto = total_sem_desconto - valor_desconto
+        
+        # Atualizar dados principais do orçamento
+        cursor.execute('''
+            UPDATE orcamentos 
+            SET cliente_id = ?, total = ?, desconto = ?, observacoes = ?
+            WHERE id = ?
+        ''', (cliente_id, total_com_desconto, desconto, observacoes, orcamento_id))
+        
+        # Remover itens antigos
+        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = ?', (orcamento_id,))
+        
+        # Inserir novos itens
+        for item in itens:
+            cursor.execute('''
+                INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (orcamento_id, item['produto_id'], item['quantidade'], 
+                  item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def excluir_orcamento(orcamento_id):
+    """Exclui um orçamento e seus itens"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se o orçamento existe
+        cursor.execute('SELECT status FROM orcamentos WHERE id = ?', (orcamento_id,))
+        resultado = cursor.fetchone()
+        
+        if not resultado:
+            raise Exception("Orçamento não encontrado")
+        
+        # Verificar se o orçamento pode ser excluído (apenas pendentes e rejeitados)
+        if resultado[0] not in ['pendente', 'rejeitado']:
+            raise Exception("Apenas orçamentos pendentes ou rejeitados podem ser excluídos")
+        
+        # Excluir itens do orçamento primeiro (devido à foreign key)
+        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = ?', (orcamento_id,))
+        
+        # Excluir o orçamento
+        cursor.execute('DELETE FROM orcamentos WHERE id = ?', (orcamento_id,))
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def converter_orcamento_em_venda(orcamento_id, forma_pagamento):
     """Converte um orçamento aprovado em venda"""
@@ -2798,20 +2986,132 @@ def listar_produtos_por_fornecedor(fornecedor_id):
         
         produtos = []
         for row in cursor.fetchall():
-            produto = {
+            produtos.append({
                 'id': row[0],
                 'nome': row[1],
                 'preco': row[2],
                 'estoque': row[3],
                 'preco_custo': row[4],
                 'codigo_barras': row[5]
-            }
-            produtos.append(produto)
+            })
         
         return produtos
+    
     except Exception as e:
         print(f"Erro ao listar produtos por fornecedor: {e}")
         return []
+    finally:
+        conn.close()
+
+# FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
+def obter_configuracoes_empresa():
+    """Obtém as configurações da empresa"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT nome_empresa, cnpj, endereco, cidade, estado, cep, 
+                   telefone, email, website, logo_path, observacoes
+            FROM configuracoes_empresa 
+            ORDER BY id DESC 
+            LIMIT 1
+        ''')
+        
+        resultado = cursor.fetchone()
+        if resultado:
+            return {
+                'nome_empresa': resultado[0] or 'FG AUTO PEÇAS',
+                'cnpj': resultado[1] or '',
+                'endereco': resultado[2] or 'Rua Exemplo, 123 - Centro',
+                'cidade': resultado[3] or '',
+                'estado': resultado[4] or '',
+                'cep': resultado[5] or '',
+                'telefone': resultado[6] or '(00) 0000-0000',
+                'email': resultado[7] or 'contato@fgautopecas.com.br',
+                'website': resultado[8] or '',
+                'logo_path': resultado[9] or 'logo.jpg',
+                'observacoes': resultado[10] or ''
+            }
+        else:
+            # Retornar configurações padrão se não existir
+            return {
+                'nome_empresa': 'FG AUTO PEÇAS',
+                'cnpj': '',
+                'endereco': 'Rua Exemplo, 123 - Centro',
+                'cidade': '',
+                'estado': '',
+                'cep': '',
+                'telefone': '(00) 0000-0000',
+                'email': 'contato@fgautopecas.com.br',
+                'website': '',
+                'logo_path': 'logo.jpg',
+                'observacoes': ''
+            }
+    except Exception as e:
+        print(f"Erro ao obter configurações da empresa: {e}")
+        # Retornar configurações padrão em caso de erro
+        return {
+            'nome_empresa': 'FG AUTO PEÇAS',
+            'cnpj': '',
+            'endereco': 'Rua Exemplo, 123 - Centro',
+            'cidade': '',
+            'estado': '',
+            'cep': '',
+            'telefone': '(00) 0000-0000',
+            'email': 'contato@fgautopecas.com.br',
+            'website': '',
+            'logo_path': 'logo.jpg',
+            'observacoes': ''
+        }
+    finally:
+        conn.close()
+
+def atualizar_configuracoes_empresa(dados):
+    """Atualiza as configurações da empresa"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se já existe configuração
+        cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa")
+        existe = cursor.fetchone()[0] > 0
+        
+        if existe:
+            # Atualizar existente
+            cursor.execute('''
+                UPDATE configuracoes_empresa SET
+                    nome_empresa = ?, cnpj = ?, endereco = ?, cidade = ?, 
+                    estado = ?, cep = ?, telefone = ?, email = ?, 
+                    website = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = (SELECT id FROM configuracoes_empresa ORDER BY id DESC LIMIT 1)
+            ''', (
+                dados['nome_empresa'], dados['cnpj'], dados['endereco'],
+                dados['cidade'], dados['estado'], dados['cep'],
+                dados['telefone'], dados['email'], dados['website'],
+                dados['observacoes']
+            ))
+        else:
+            # Inserir nova
+            cursor.execute('''
+                INSERT INTO configuracoes_empresa (
+                    nome_empresa, cnpj, endereco, cidade, estado, cep,
+                    telefone, email, website, observacoes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                dados['nome_empresa'], dados['cnpj'], dados['endereco'],
+                dados['cidade'], dados['estado'], dados['cep'],
+                dados['telefone'], dados['email'], dados['website'],
+                dados['observacoes']
+            ))
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        print(f"Erro ao atualizar configurações da empresa: {e}")
+        conn.rollback()
+        return False
     finally:
         conn.close()
 

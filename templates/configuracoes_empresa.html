@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Configurações da Empresa - Sistema de Autopeças{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-primary">
+                    <i class="fas fa-building me-2"></i>
+                    Configurações da Empresa
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-edit me-2"></i>
+                        Dados da Empresa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('atualizar_configuracoes_empresa_route') }}" id="formConfiguracoes">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="nome_empresa" class="form-label">Nome da Empresa *</label>
+                                    <input type="text" class="form-control" id="nome_empresa" name="nome_empresa" 
+                                           value="{{ config.nome_empresa }}" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="cnpj" class="form-label">CNPJ</label>
+                                    <input type="text" class="form-control" id="cnpj" name="cnpj" 
+                                           value="{{ config.cnpj }}" placeholder="00.000.000/0000-00">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="endereco" class="form-label">Endereço Completo *</label>
+                                    <input type="text" class="form-control" id="endereco" name="endereco" 
+                                           value="{{ config.endereco }}" required
+                                           placeholder="Rua, número, bairro">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="cidade" class="form-label">Cidade</label>
+                                    <input type="text" class="form-control" id="cidade" name="cidade" 
+                                           value="{{ config.cidade }}">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="estado" class="form-label">Estado</label>
+                                    <select class="form-control" id="estado" name="estado">
+                                        <option value="">Selecione</option>
+                                        <option value="AC" {% if config.estado == 'AC' %}selected{% endif %}>Acre</option>
+                                        <option value="AL" {% if config.estado == 'AL' %}selected{% endif %}>Alagoas</option>
+                                        <option value="AP" {% if config.estado == 'AP' %}selected{% endif %}>Amapá</option>
+                                        <option value="AM" {% if config.estado == 'AM' %}selected{% endif %}>Amazonas</option>
+                                        <option value="BA" {% if config.estado == 'BA' %}selected{% endif %}>Bahia</option>
+                                        <option value="CE" {% if config.estado == 'CE' %}selected{% endif %}>Ceará</option>
+                                        <option value="DF" {% if config.estado == 'DF' %}selected{% endif %}>Distrito Federal</option>
+                                        <option value="ES" {% if config.estado == 'ES' %}selected{% endif %}>Espírito Santo</option>
+                                        <option value="GO" {% if config.estado == 'GO' %}selected{% endif %}>Goiás</option>
+                                        <option value="MA" {% if config.estado == 'MA' %}selected{% endif %}>Maranhão</option>
+                                        <option value="MT" {% if config.estado == 'MT' %}selected{% endif %}>Mato Grosso</option>
+                                        <option value="MS" {% if config.estado == 'MS' %}selected{% endif %}>Mato Grosso do Sul</option>
+                                        <option value="MG" {% if config.estado == 'MG' %}selected{% endif %}>Minas Gerais</option>
+                                        <option value="PA" {% if config.estado == 'PA' %}selected{% endif %}>Pará</option>
+                                        <option value="PB" {% if config.estado == 'PB' %}selected{% endif %}>Paraíba</option>
+                                        <option value="PR" {% if config.estado == 'PR' %}selected{% endif %}>Paraná</option>
+                                        <option value="PE" {% if config.estado == 'PE' %}selected{% endif %}>Pernambuco</option>
+                                        <option value="PI" {% if config.estado == 'PI' %}selected{% endif %}>Piauí</option>
+                                        <option value="RJ" {% if config.estado == 'RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                                        <option value="RN" {% if config.estado == 'RN' %}selected{% endif %}>Rio Grande do Norte</option>
+                                        <option value="RS" {% if config.estado == 'RS' %}selected{% endif %}>Rio Grande do Sul</option>
+                                        <option value="RO" {% if config.estado == 'RO' %}selected{% endif %}>Rondônia</option>
+                                        <option value="RR" {% if config.estado == 'RR' %}selected{% endif %}>Roraima</option>
+                                        <option value="SC" {% if config.estado == 'SC' %}selected{% endif %}>Santa Catarina</option>
+                                        <option value="SP" {% if config.estado == 'SP' %}selected{% endif %}>São Paulo</option>
+                                        <option value="SE" {% if config.estado == 'SE' %}selected{% endif %}>Sergipe</option>
+                                        <option value="TO" {% if config.estado == 'TO' %}selected{% endif %}>Tocantins</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="cep" class="form-label">CEP</label>
+                                    <input type="text" class="form-control" id="cep" name="cep" 
+                                           value="{{ config.cep }}" placeholder="00000-000">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="telefone" class="form-label">Telefone *</label>
+                                    <input type="text" class="form-control" id="telefone" name="telefone" 
+                                           value="{{ config.telefone }}" required 
+                                           placeholder="(00) 0000-0000">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">E-mail *</label>
+                                    <input type="email" class="form-control" id="email" name="email" 
+                                           value="{{ config.email }}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="website" class="form-label">Website</label>
+                                    <input type="url" class="form-control" id="website" name="website" 
+                                           value="{{ config.website }}" placeholder="https://www.exemplo.com.br">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="observacoes" class="form-label">Observações</label>
+                                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3" 
+                                              placeholder="Informações adicionais da empresa...">{{ config.observacoes }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-secondary me-md-2" onclick="window.history.back()">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                Voltar
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>
+                                Salvar Configurações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Preview das Informações -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-eye me-2"></i>
+                        Prévia na Impressão
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <img src="{{ url_for('static', filename=config.logo_path) }}" 
+                             alt="Logo da Empresa" 
+                             style="max-height: 60px; max-width: 150px;"
+                             onerror="this.style.display='none'">
+                    </div>
+                    
+                    <div class="preview-empresa">
+                        <h6 class="text-center text-primary fw-bold" id="preview-nome">{{ config.nome_empresa }}</h6>
+                        <p class="text-center mb-1 small" id="preview-endereco">{{ config.endereco }}</p>
+                        {% if config.cidade and config.estado %}
+                        <p class="text-center mb-1 small" id="preview-cidade-estado">{{ config.cidade }} - {{ config.estado }}</p>
+                        {% endif %}
+                        {% if config.cep %}
+                        <p class="text-center mb-1 small" id="preview-cep">CEP: {{ config.cep }}</p>
+                        {% endif %}
+                        <p class="text-center mb-1 small" id="preview-telefone">Tel: {{ config.telefone }}</p>
+                        <p class="text-center mb-0 small" id="preview-email">Email: {{ config.email }}</p>
+                        {% if config.cnpj %}
+                        <p class="text-center mb-0 small" id="preview-cnpj">CNPJ: {{ config.cnpj }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <hr>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Esta é uma prévia de como suas informações aparecerão nos orçamentos e recibos de venda.
+                    </small>
+                </div>
+            </div>
+
+            <!-- Instruções de Upload de Logo -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-image me-2"></i>
+                        Logo da Empresa
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">
+                        Para alterar a logo da empresa, substitua o arquivo <code>static/logo.jpg</code> por sua imagem.
+                    </p>
+                    <p class="small mb-0 text-muted">
+                        <strong>Recomendações:</strong><br>
+                        • Formato: JPG, PNG<br>
+                        • Tamanho máximo: 500x200px<br>
+                        • Peso: até 1MB
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Máscaras para os campos
+document.getElementById('cnpj').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    value = value.replace(/(\d{2})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d)/, '$1/$2');
+    value = value.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+    e.target.value = value;
+});
+
+document.getElementById('cep').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    e.target.value = value;
+});
+
+document.getElementById('telefone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length <= 10) {
+        value = value.replace(/(\d{2})(\d)/, '($1) $2');
+        value = value.replace(/(\d{4})(\d)/, '$1-$2');
+    } else {
+        value = value.replace(/(\d{2})(\d)/, '($1) $2');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    e.target.value = value;
+});
+
+// Atualização da prévia em tempo real
+function atualizarPrevia() {
+    document.getElementById('preview-nome').textContent = document.getElementById('nome_empresa').value || 'Nome da Empresa';
+    document.getElementById('preview-endereco').textContent = document.getElementById('endereco').value || 'Endereço';
+    document.getElementById('preview-telefone').textContent = 'Tel: ' + (document.getElementById('telefone').value || '(00) 0000-0000');
+    document.getElementById('preview-email').textContent = 'Email: ' + (document.getElementById('email').value || 'email@empresa.com');
+    
+    const cidade = document.getElementById('cidade').value;
+    const estado = document.getElementById('estado').value;
+    const previewCidadeEstado = document.getElementById('preview-cidade-estado');
+    
+    if (cidade && estado) {
+        if (!previewCidadeEstado) {
+            const p = document.createElement('p');
+            p.id = 'preview-cidade-estado';
+            p.className = 'text-center mb-1 small';
+            document.getElementById('preview-endereco').after(p);
+        }
+        document.getElementById('preview-cidade-estado').textContent = cidade + ' - ' + estado;
+    } else if (previewCidadeEstado) {
+        previewCidadeEstado.style.display = 'none';
+    }
+    
+    const cep = document.getElementById('cep').value;
+    const previewCep = document.getElementById('preview-cep');
+    
+    if (cep) {
+        if (!previewCep) {
+            const p = document.createElement('p');
+            p.id = 'preview-cep';
+            p.className = 'text-center mb-1 small';
+            document.getElementById('preview-telefone').before(p);
+        }
+        document.getElementById('preview-cep').textContent = 'CEP: ' + cep;
+    } else if (previewCep) {
+        previewCep.style.display = 'none';
+    }
+    
+    const cnpj = document.getElementById('cnpj').value;
+    const previewCnpj = document.getElementById('preview-cnpj');
+    
+    if (cnpj) {
+        if (!previewCnpj) {
+            const p = document.createElement('p');
+            p.id = 'preview-cnpj';
+            p.className = 'text-center mb-0 small';
+            document.querySelector('.preview-empresa').appendChild(p);
+        }
+        document.getElementById('preview-cnpj').textContent = 'CNPJ: ' + cnpj;
+    } else if (previewCnpj) {
+        previewCnpj.style.display = 'none';
+    }
+}
+
+// Adicionar eventos para atualizar a prévia
+document.getElementById('nome_empresa').addEventListener('input', atualizarPrevia);
+document.getElementById('endereco').addEventListener('input', atualizarPrevia);
+document.getElementById('cidade').addEventListener('input', atualizarPrevia);
+document.getElementById('estado').addEventListener('change', atualizarPrevia);
+document.getElementById('cep').addEventListener('input', atualizarPrevia);
+document.getElementById('telefone').addEventListener('input', atualizarPrevia);
+document.getElementById('email').addEventListener('input', atualizarPrevia);
+document.getElementById('cnpj').addEventListener('input', atualizarPrevia);
+</script>
+{% endblock %}

@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Venda #{{ venda.id }} - Sistema de Autopeças{% endblock %}
+
+{% block content %}
+<!-- Cabeçalho para impressão (oculto na tela) -->
+<div class="print-header" style="display: none;">
+    <div class="row align-items-center mb-4">
+        <div class="col-4">
+            <img src="{{ url_for('static', filename=config_empresa.logo_path) }}" alt="Logo da Loja" style="max-height: 80px; max-width: 200px;">
+        </div>
+        <div class="col-8 text-end">
+            <h3 style="margin: 0; color: #007bff;">{{ config_empresa.nome_empresa }}</h3>
+            <p style="margin: 0; font-size: 14px;">
+                {{ config_empresa.endereco }}<br>
+                {% if config_empresa.cidade and config_empresa.estado %}
+                {{ config_empresa.cidade }} - {{ config_empresa.estado }}
+                {% if config_empresa.cep %} - CEP: {{ config_empresa.cep }}{% endif %}<br>
+                {% endif %}
+                Tel: {{ config_empresa.telefone }}<br>
+                Email: {{ config_empresa.email }}
+                {% if config_empresa.cnpj %}<br>CNPJ: {{ config_empresa.cnpj }}{% endif %}
+            </p>
+        </div>
+    </div>
+    <hr style="border-top: 2px solid #007bff;">
+</div>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-success">
+                    <i class="fas fa-receipt me-2"></i>
+                    Venda #{{ venda.id }}
+                </h2>
+                <div>
+                    <a href="{{ url_for('vendas') }}" class="btn btn-secondary me-2">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Voltar às Vendas
+                    </a>
+                    <button class="btn btn-primary" onclick="imprimirRecibo()">
+                        <i class="fas fa-print me-2"></i>
+                        Imprimir Recibo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Detalhes da Venda -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Detalhes da Venda
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Número da Venda:</strong> #{{ venda.id }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Data:</strong> {{ venda.created_at|format_date }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Cliente:</strong> {{ venda.cliente_nome or 'Cliente Avulso' }}
+                            {% if venda.cliente_telefone %}
+                                <br><small class="text-muted">Tel: {{ venda.cliente_telefone }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Forma de Pagamento:</strong>
+                            <span class="badge bg-{% if venda.forma_pagamento == 'dinheiro' %}success{% elif venda.forma_pagamento == 'pix' %}primary{% elif venda.forma_pagamento == 'cartao_credito' %}warning{% elif venda.forma_pagamento == 'cartao_debito' %}info{% else %}secondary{% endif %}">
+                                {{ venda.forma_pagamento|replace('_', ' ')|title }}
+                            </span>
+                        </div>
+                    </div>
+
+                    {% if venda.forma_pagamento == 'dinheiro' %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Valor Pago:</strong> {{ venda.valor_pago|format_currency }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Troco:</strong> {{ venda.troco|format_currency }}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Itens da Venda -->
+                    <h6 class="mt-4 mb-3">
+                        <i class="fas fa-list me-2"></i>
+                        Itens da Venda
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Código</th>
+                                    <th>Quantidade</th>
+                                    <th>Preço Unit.</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in venda.itens %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.produto_nome }}</strong>
+                                        {% if item.codigo_fornecedor %}
+                                            <br><small class="text-muted">Cód: {{ item.codigo_fornecedor }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.codigo_barras %}
+                                            <small>{{ item.codigo_barras }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ item.quantidade }}</span>
+                                    </td>
+                                    <td>{{ item.preco_unitario|format_currency }}</td>
+                                    <td><strong>{{ (item.quantidade * item.preco_unitario)|format_currency }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumo Financeiro -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calculator me-2"></i>
+                        Resumo Financeiro
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted">Total de Itens:</small>
+                        </div>
+                        <div class="col-6 text-end">
+                            <strong>{{ venda.itens|length }}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted">Subtotal:</small>
+                        </div>
+                        <div class="col-6 text-end">
+                            <strong>{{ venda.total|format_currency }}</strong>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <strong class="text-success">Total Geral:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            <h4 class="text-success">{{ venda.total|format_currency }}</h4>
+                        </div>
+                    </div>
+
+                    {% if venda.forma_pagamento == 'dinheiro' %}
+                    <hr>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <strong>Valor Pago:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            <strong>{{ venda.valor_pago|format_currency }}</strong>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Troco:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            <strong class="text-warning">{{ venda.troco|format_currency }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Informações Adicionais -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info me-2"></i>
+                        Informações
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled small">
+                        <li><strong>Realizada em:</strong> {{ venda.created_at.strftime('%d/%m/%Y às %H:%M') }}</li>
+                        <li><strong>Vendedor:</strong> {{ venda.vendedor_nome or 'Sistema' }}</li>
+                        <li><strong>Forma de Pagamento:</strong> {{ venda.forma_pagamento|replace('_', ' ')|title }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function imprimirRecibo() {
+    window.print();
+}
+</script>
+
+<!-- Estilos para impressão -->
+<style>
+@media print {
+    .card-header.bg-success,
+    .btn,
+    .navbar,
+    .sidebar,
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        display: none !important;
+    }
+    
+    .print-header {
+        display: block !important;
+    }
+    
+    .container-fluid {
+        margin: 0;
+        padding: 15px;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 20px !important;
+    }
+    
+    .col-lg-4 {
+        display: none !important;
+    }
+    
+    .col-lg-8 {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Estilo para cabeçalho da empresa */
+    .print-header h3 {
+        color: #000 !important;
+        font-weight: bold;
+    }
+    
+    .print-header p {
+        color: #666 !important;
+        line-height: 1.4;
+    }
+    
+    /* Melhorar formatação da tabela */
+    .table {
+        border-collapse: collapse !important;
+    }
+    
+    .table th,
+    .table td {
+        border: 1px solid #ddd !important;
+        padding: 8px !important;
+    }
+    
+    .table thead th {
+        background-color: #f8f9fa !important;
+        font-weight: bold !important;
+    }
+    
+    /* Ocultar elementos desnecessários na impressão */
+    .card-header {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}

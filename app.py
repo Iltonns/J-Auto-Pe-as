@@ -15,11 +15,12 @@ from Minha_autopecas_web.logica_banco import (
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
-    registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa,
+    registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id,
+    obter_configuracoes_empresa, atualizar_configuracoes_empresa,
     listar_contas_pagar_hoje, listar_contas_pagar_em_atraso, adicionar_conta_pagar, pagar_conta,
     listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta, adicionar_conta_receber,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
-    criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda,
+    criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
     popular_dados_exemplo,
     # Novas funções do caixa
     abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa,
@@ -310,6 +311,40 @@ def deletar_usuario_route(user_id):
         flash(f'Erro ao desativar usuário: {str(e)}', 'error')
     
     return redirect(url_for('usuarios'))
+
+# CONFIGURAÇÕES DA EMPRESA
+@app.route('/configuracoes-empresa')
+@required_permission('admin')
+def configuracoes_empresa():
+    config = obter_configuracoes_empresa()
+    return render_template('configuracoes_empresa.html', config=config)
+
+@app.route('/configuracoes-empresa/atualizar', methods=['POST'])
+@required_permission('admin')
+def atualizar_configuracoes_empresa_route():
+    try:
+        dados = {
+            'nome_empresa': request.form['nome_empresa'],
+            'cnpj': request.form['cnpj'],
+            'endereco': request.form['endereco'],
+            'cidade': request.form['cidade'],
+            'estado': request.form['estado'],
+            'cep': request.form['cep'],
+            'telefone': request.form['telefone'],
+            'email': request.form['email'],
+            'website': request.form['website'],
+            'observacoes': request.form['observacoes']
+        }
+        
+        if atualizar_configuracoes_empresa(dados):
+            flash('Configurações da empresa atualizadas com sucesso!', 'success')
+        else:
+            flash('Erro ao atualizar configurações da empresa!', 'error')
+            
+    except Exception as e:
+        flash(f'Erro ao atualizar configurações: {str(e)}', 'error')
+    
+    return redirect(url_for('configuracoes_empresa'))
 
 # DASHBOARD
 @app.route('/dashboard')
@@ -664,6 +699,22 @@ def api_buscar_produtos():
     
     return jsonify(produtos[:50])  # Limitar a 50 resultados
 
+# Rota de teste para desconto
+@app.route('/teste-desconto')
+@login_required
+def teste_desconto():
+    return render_template('teste_desconto.html')
+
+# Rota de teste para busca
+@app.route('/teste-busca')
+@login_required
+def teste_busca():
+    return render_template('teste_busca.html')
+
+@app.route('/api/test')
+def api_test():
+    return jsonify({"status": "ok", "message": "API funcionando"})
+
 @app.route('/api/produto/<termo>')
 @login_required
 def api_buscar_produto_unico(termo):
@@ -946,9 +997,68 @@ def importar_produtos_xml_route():
 @login_required
 def vendas():
     clientes_lista = listar_clientes()
-    vendas_lista = listar_vendas()
+    # Buscar vendas do dia para exibir na lista
+    vendas_hoje = obter_vendas_do_dia()
     produtos_lista = listar_produtos()
-    return render_template('vendas.html', clientes=clientes_lista, vendas=vendas_lista, produtos=produtos_lista)
+    return render_template('vendas.html', 
+                         clientes=clientes_lista, 
+                         vendas_hoje=vendas_hoje.get('vendas', []), 
+                         produtos=produtos_lista)
+
+@app.route('/vendas/<int:venda_id>')
+@login_required
+def visualizar_venda(venda_id):
+    try:
+        venda = obter_venda_por_id(venda_id)
+        if not venda:
+            flash('Venda não encontrada!', 'error')
+            return redirect(url_for('vendas'))
+        config_empresa = obter_configuracoes_empresa()
+        return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa)
+    except Exception as e:
+        flash(f'Erro ao carregar venda: {str(e)}', 'error')
+        return redirect(url_for('vendas'))
+
+@app.route('/api/venda/<int:venda_id>')
+@login_required
+def api_venda(venda_id):
+    try:
+        venda = obter_venda_por_id(venda_id)
+        if not venda:
+            return jsonify({'error': 'Venda não encontrada'}), 404
+        
+        # Converter para formato JSON serializable
+        venda_json = {
+            'id': venda['id'],
+            'cliente_nome': venda.get('cliente_nome'),
+            'forma_pagamento': venda['forma_pagamento'],
+            'total': float(venda['total']),
+            'valor_pago': float(venda.get('valor_pago', 0)),
+            'troco': float(venda.get('troco', 0)),
+            'created_at': venda['created_at'].isoformat() if hasattr(venda['created_at'], 'isoformat') else str(venda['created_at']),
+            'itens': []
+        }
+        
+        # Adicionar itens da venda
+        for item in venda.get('itens', []):
+            venda_json['itens'].append({
+                'produto_nome': item['produto_nome'],
+                'quantidade': item['quantidade'],
+                'preco_unitario': float(item['preco_unitario'])
+            })
+        
+        return jsonify(venda_json)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/configuracoes-empresa')
+@login_required
+def api_configuracoes_empresa():
+    try:
+        config = obter_configuracoes_empresa()
+        return jsonify(config)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/vendas/registrar', methods=['POST'], endpoint='registrar_venda')
 @login_required
@@ -1144,7 +1254,75 @@ def visualizar_orcamento(id):
         flash('Orçamento não encontrado', 'error')
         return redirect(url_for('orcamentos'))
     
-    return render_template('visualizar_orcamento.html', orcamento=orcamento)
+    config_empresa = obter_configuracoes_empresa()
+    return render_template('visualizar_orcamento.html', orcamento=orcamento, config_empresa=config_empresa)
+
+@app.route('/orcamentos/<int:id>/editar')
+@login_required
+def editar_orcamento_route(id):
+    orcamento = obter_orcamento(id)
+    if not orcamento:
+        flash('Orçamento não encontrado!', 'error')
+        return redirect(url_for('orcamentos'))
+    
+    # Verificar se o orçamento pode ser editado
+    if orcamento['status'].lower() != 'pendente':
+        flash('Apenas orçamentos pendentes podem ser editados!', 'error')
+        return redirect(url_for('visualizar_orcamento', id=id))
+    
+    # Obter dados necessários
+    produtos = listar_produtos()
+    clientes = listar_clientes()
+    
+    return render_template('editar_orcamento.html', 
+                         orcamento=orcamento, 
+                         produtos=produtos, 
+                         clientes=clientes)
+
+@app.route('/orcamentos/<int:id>/atualizar', methods=['POST'], endpoint='atualizar_orcamento_route')
+@login_required
+def atualizar_orcamento_route(id):
+    try:
+        # Obter dados do formulário
+        cliente_id = request.form.get('cliente_id')
+        if cliente_id == '':
+            cliente_id = None
+        
+        desconto = float(request.form.get('desconto', 0))
+        observacoes = request.form.get('observacoes', '')
+        
+        # Obter itens do orçamento
+        produtos_ids = request.form.getlist('produto_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        precos_unitarios = request.form.getlist('preco_unitario[]')
+        
+        if not produtos_ids:
+            flash('Adicione pelo menos um produto ao orçamento!', 'error')
+            return redirect(url_for('editar_orcamento_route', id=id))
+        
+        # Preparar itens
+        itens = []
+        for i in range(len(produtos_ids)):
+            item = {
+                'produto_id': int(produtos_ids[i]),
+                'quantidade': int(quantidades[i]),
+                'preco_unitario': float(precos_unitarios[i])
+            }
+            itens.append(item)
+        
+        # Atualizar orçamento
+        sucesso = atualizar_orcamento(id, itens, cliente_id, desconto, observacoes)
+        
+        if sucesso:
+            flash('Orçamento atualizado com sucesso!', 'success')
+            return redirect(url_for('visualizar_orcamento', id=id))
+        else:
+            flash('Erro ao atualizar orçamento!', 'error')
+            return redirect(url_for('editar_orcamento_route', id=id))
+            
+    except Exception as e:
+        flash(f'Erro ao atualizar orçamento: {str(e)}', 'error')
+        return redirect(url_for('editar_orcamento_route', id=id))
 
 @app.route('/orcamentos/<int:id>/converter', methods=['POST'])
 @login_required
@@ -1162,6 +1340,20 @@ def converter_orcamento_route(id):
     except Exception as e:
         flash(f'Erro ao converter orçamento: {str(e)}', 'error')
         return redirect(url_for('visualizar_orcamento', id=id))
+
+@app.route('/orcamentos/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_orcamento_route(id):
+    try:
+        sucesso = excluir_orcamento(id)
+        if sucesso:
+            flash('Orçamento excluído com sucesso!', 'success')
+        else:
+            flash('Erro ao excluir orçamento!', 'error')
+    except Exception as e:
+        flash(f'Erro ao excluir orçamento: {str(e)}', 'error')
+    
+    return redirect(url_for('orcamentos'))
 
 # RELATÓRIOS
 @app.route('/relatorios')
