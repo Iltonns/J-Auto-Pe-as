@@ -711,6 +711,24 @@ def teste_desconto():
 def teste_busca():
     return render_template('teste_busca.html')
 
+# Rota de teste para debug de vendas
+@app.route('/teste-vendas-debug')
+@login_required
+def teste_vendas_debug():
+    return render_template('teste_vendas_debug.html')
+
+# Rota de teste simples para vendas
+@app.route('/teste-vendas-simples')
+@login_required
+def teste_vendas_simples():
+    return render_template('teste_vendas_simples.html')
+
+# Rota de teste direto
+@app.route('/teste-direto')
+@login_required
+def teste_direto():
+    return render_template('teste_direto.html')
+
 @app.route('/api/test')
 def api_test():
     return jsonify({"status": "ok", "message": "API funcionando"})
@@ -1033,6 +1051,7 @@ def api_venda(venda_id):
             'cliente_nome': venda.get('cliente_nome'),
             'forma_pagamento': venda['forma_pagamento'],
             'total': float(venda['total']),
+            'desconto': float(venda.get('desconto', 0)),
             'valor_pago': float(venda.get('valor_pago', 0)),
             'troco': float(venda.get('troco', 0)),
             'created_at': venda['created_at'].isoformat() if hasattr(venda['created_at'], 'isoformat') else str(venda['created_at']),

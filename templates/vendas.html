@@ -679,9 +679,18 @@ $('.produto-rapido').click(function() {
 
 // Busca em tempo real
 function buscarProdutoTempoReal(termo) {
+    console.log('Busca em tempo real para:', termo);
+    
     fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
         .then(produtos => {
+            console.log('Produtos encontrados:', produtos.length);
             if (produtos.length > 0) {
                 mostrarResultadosBusca(produtos.slice(0, 10)); // Mostrar 10 resultados
             } else {
@@ -689,21 +698,30 @@ function buscarProdutoTempoReal(termo) {
             }
         })
         .catch(error => {
-            console.error('Erro na busca:', error);
+            console.error('Erro na busca em tempo real:', error);
         });
 }
 
 // Busca detalhada
 function buscarProdutoDetalhado() {
     const termo = $('#busca_produto').val().trim();
+    console.log('Busca detalhada para:', termo);
+    
     if (!termo) {
         alert('Digite um termo para buscar');
         return;
     }
     
     fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status busca detalhada:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
         .then(produtos => {
+            console.log('Produtos encontrados na busca detalhada:', produtos.length);
             if (produtos.length > 0) {
                 mostrarResultadosBusca(produtos);
             } else {
@@ -712,17 +730,28 @@ function buscarProdutoDetalhado() {
             }
         })
         .catch(error => {
-            console.error('Erro na busca:', error);
-            alert('Erro ao buscar produtos');
+            console.error('Erro na busca detalhada:', error);
+            alert('Erro ao buscar produtos: ' + error.message);
         });
 }
 
 // Mostrar resultados da busca
 function mostrarResultadosBusca(produtos) {
+    console.log('Mostrando resultados da busca:', produtos.length, 'produtos');
+    
     const tbody = $('#tabelaBuscaProdutos tbody');
+    console.log('Tabela tbody encontrada:', tbody.length > 0);
+    
+    if (tbody.length === 0) {
+        console.error('Tabela tbody não encontrada!');
+        return;
+    }
+    
     tbody.empty();
     
     produtos.forEach((produto, index) => {
+        console.log(`Adicionando produto ${index + 1}:`, produto.nome);
+        
         const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
                            produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
         
@@ -754,6 +783,7 @@ function mostrarResultadosBusca(produtos) {
         tbody.append(row);
     });
     
+    console.log('Exibindo div de resultados');
     $('#resultadoBusca').show();
 }
 
@@ -795,31 +825,46 @@ function adicionarProdutoVenda(id, nome, preco, estoque) {
 
 // Event listeners
 $(document).ready(function() {
-    // Garantir que os elementos existem antes de anexar eventos
+    console.log('Página de vendas carregada');
+    
+    // Aguardar um pouco mais para garantir que todos os elementos estão prontos
     setTimeout(function() {
+        console.log('Configurando event listeners...');
+        
+        // Verificar se os elementos existem
+        if ($('#busca_produto').length === 0) {
+            console.error('Campo de busca não encontrado!');
+            return;
+        }
+        
         // Enter na busca
-        $('#busca_produto').keypress(function(e) {
+        $('#busca_produto').off('keypress').keypress(function(e) {
+            console.log('Tecla pressionada:', e.which);
             if (e.which === 13) {
-                buscarProduto();
+                e.preventDefault();
+                buscarProdutoDetalhado();
             }
         });
         
         // Busca em tempo real
-        $('#busca_produto').on('input', function() {
+        $('#busca_produto').off('input').on('input', function() {
             const termo = $(this).val().trim();
+            console.log('Input mudou:', termo);
             if (termo.length >= 2) {
                 buscarProdutoTempoReal(termo);
             } else {
                 $('#resultadoBusca').hide();
             }
         });
-    }, 100);
+        
+        console.log('Event listeners configurados com sucesso');
+    }, 500); // Aumentar timeout para 500ms
     
     // Calcular troco quando valor pago muda
-    $('#valor_pago').on('input', calcularTroco);
+    $('#valor_pago').off('input').on('input', calcularTroco);
     
     // Recalcular totais quando desconto muda
-    $('#desconto_percentual').on('input', function() {
+    $('#desconto_percentual').off('input').on('input', function() {
         const valor = parseFloat($(this).val()) || 0;
         if (valor > 100) {
             $(this).val(100);
@@ -828,7 +873,7 @@ $(document).ready(function() {
     });
     
     // Auto-fill valor pago para forma de pagamento diferente de dinheiro
-    $('#forma_pagamento').change(function() {
+    $('#forma_pagamento').off('change').change(function() {
         const formaPagamento = $(this).val();
         if (formaPagamento !== 'dinheiro') {
             // Calcular total com desconto
@@ -842,11 +887,8 @@ $(document).ready(function() {
         }
     });
     
-    // Focus no campo de busca
-    $('#busca_produto').focus();
-    
     // Interceptar submit do formulário de venda
-    $('#formVenda').on('submit', function(e) {
+    $('#formVenda').off('submit').on('submit', function(e) {
         e.preventDefault();
         
         // Verificar se há itens na venda
@@ -899,30 +941,55 @@ $(document).ready(function() {
         $(this).append(descontoInput);
         
         // Enviar o formulário
+        console.log('Enviando formulário de venda...');
         this.submit();
     });
+    
+    // Focus no campo de busca após configurar eventos
+    setTimeout(function() {
+        $('#busca_produto').focus();
+        console.log('Foco aplicado ao campo de busca');
+    }, 600);
 });
 
 // Função para visualizar venda
 function visualizarVenda(vendaId) {
+    console.log('Visualizando venda:', vendaId);
     // Abrir modal ou página com detalhes da venda
     window.location.href = `/vendas/${vendaId}`;
 }
 
 // Função para imprimir recibo de venda
 function imprimirRecibo(vendaId) {
+    console.log('Iniciando impressão do recibo para venda:', vendaId);
+    
     // Buscar dados da venda e configurações da empresa
     Promise.all([
-        fetch(`/api/venda/${vendaId}`).then(response => response.json()),
-        fetch('/api/configuracoes-empresa').then(response => response.json())
+        fetch(`/api/venda/${vendaId}`).then(response => {
+            console.log('Response venda status:', response.status);
+            if (!response.ok) {
+                throw new Error(`Erro ao carregar venda: HTTP ${response.status}`);
+            }
+            return response.json();
+        }),
+        fetch('/api/configuracoes-empresa').then(response => {
+            console.log('Response config status:', response.status);
+            if (!response.ok) {
+                throw new Error(`Erro ao carregar configurações: HTTP ${response.status}`);
+            }
+            return response.json();
+        })
     ])
     .then(([venda, config]) => {
+        console.log('Dados carregados - Venda:', venda, 'Config:', config);
+        
         if (venda.error) {
             alert('Erro ao carregar dados da venda: ' + venda.error);
             return;
         }
         
         if (config.error) {
+            console.log('Usando configurações padrão devido ao erro:', config.error);
             // Usar configurações padrão se houver erro
             config = {
                 nome_empresa: 'FG AUTO PEÇAS',
@@ -1114,12 +1181,14 @@ function imprimirRecibo(vendaId) {
         `;
         
         // Abrir nova janela com o recibo
+        console.log('Abrindo janela de impressão...');
         const reciboWindow = window.open('', '_blank');
         reciboWindow.document.write(reciboHTML);
         reciboWindow.document.close();
+        console.log('Janela de impressão aberta com sucesso');
     })
     .catch(error => {
-        console.error('Erro ao carregar dados:', error);
+        console.error('Erro ao carregar dados para impressão:', error);
         alert('Erro ao carregar dados para impressão: ' + error.message);
     });
 }
