@@ -37,7 +37,7 @@
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border: none;
     border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    box-shadow: 0 10px 30px rgba(12, 1, 110, 0.08);
     overflow: hidden;
     position: relative;
 }
