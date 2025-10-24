@@ -107,7 +107,7 @@
                             <label class="form-label">Buscar:</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="campoBusca" 
-                                       placeholder="Nome / Código Fornecedor / Código de Barras / Categoria">
+                                       placeholder="Nome / Marca / Código Fornecedor / Código de Barras / Categoria">
                                 <button class="btn btn-success" type="button" id="btnBuscar">
                                     <span class="loading-spinner" id="loadingSpinner"></span>
                                     <span id="btnBuscarTexto">Busca Avançada</span>
@@ -115,7 +115,7 @@
                             </div>
                             <small class="text-muted">
                                 <i class="fas fa-info-circle"></i> 
-                                Busque por nome, código do fornecedor, código de barras ou categoria
+                                Busque por nome, marca, código do fornecedor, código de barras ou categoria
                             </small>
                         </div>
                     </div>
@@ -130,6 +130,7 @@
                                 <tr>
                                     <th>Código</th>
                                     <th>Descrição</th>
+                                    <th>Marca</th>
                                     <th>Cod. Fornecedor</th>
                                     <th>Categoria</th>
                                     <th>Estoque</th>
@@ -148,6 +149,13 @@
                                         <br><small class="text-muted">
                                             <i class="fas fa-barcode"></i> {{ produto.codigo_barras }}
                                         </small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if produto.marca %}
+                                        <span class="badge bg-primary">{{ produto.marca }}</span>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
                                         {% endif %}
                                     </td>
                                     <td>

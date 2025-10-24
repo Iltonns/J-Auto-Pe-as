@@ -774,6 +774,7 @@ def adicionar_produto_route():
     codigo_fornecedor = request.form.get('codigo_fornecedor')
     descricao = request.form.get('descricao')
     categoria = request.form.get('categoria')
+    marca = request.form.get('marca')
     
     # Validação segura para campos numéricos
     try:
@@ -821,7 +822,7 @@ def adicionar_produto_route():
     
     try:
         adicionar_produto(nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                         codigo_fornecedor, preco_custo, margem_lucro, foto_url)
+                         codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
         flash('Produto adicionado com sucesso!', 'success')
     except Exception as e:
         # Se houve erro ao adicionar no banco, remover a foto que foi salva
@@ -843,6 +844,7 @@ def editar_produto_route(id):
     codigo_fornecedor = request.form.get('codigo_fornecedor')
     descricao = request.form.get('descricao')
     categoria = request.form.get('categoria')
+    marca = request.form.get('marca')
     
     # Validação segura para campos numéricos
     try:
@@ -927,7 +929,7 @@ def editar_produto_route(id):
     try:
         print("DEBUG: Chamando editar_produto...")
         editar_produto(id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                      codigo_fornecedor, preco_custo, margem_lucro, foto_url)
+                      codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
         print("DEBUG: Produto editado com sucesso")
         flash('Produto editado com sucesso!', 'success')
     except Exception as e:

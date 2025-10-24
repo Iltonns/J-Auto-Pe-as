@@ -66,6 +66,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Produto</th>
+                                <th>Marca</th>
                                 <th>Categoria</th>
                                 <th>Cód. Fornecedor</th>
                                 <th>Preço</th>
@@ -83,6 +84,13 @@
                                     <div class="fw-bold">{{ produto.nome }}</div>
                                     {% if produto.codigo_fornecedor %}
                                     <small class="text-muted">Cód: {{ produto.codigo_fornecedor }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if produto.marca %}
+                                        <span class="badge bg-primary">{{ produto.marca }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -122,7 +130,7 @@
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="editarProduto({{ produto.id }}, {{ produto.nome|tojson }}, {{ produto.preco }}, {{ produto.estoque }}, {{ (produto.codigo_barras or '')|tojson }}, {{ (produto.codigo_fornecedor or '')|tojson }}, {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }}, {{ (produto.foto_url or '')|tojson }})"
+                                            onclick="editarProduto({{ produto.id }}, {{ produto.nome|tojson }}, {{ produto.preco }}, {{ produto.estoque }}, {{ (produto.codigo_barras or '')|tojson }}, {{ (produto.codigo_fornecedor or '')|tojson }}, {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }}, {{ (produto.foto_url or '')|tojson }}, {{ (produto.marca or '')|tojson }})"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarProduto">
                                         <i class="fas fa-edit"></i>
@@ -184,10 +192,16 @@
                         <div class="tab-pane fade show active" id="info-basica" role="tabpanel">
                     <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="nome" class="form-label">Nome do Produto *</label>
                                 <input type="text" class="form-control" id="nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="marca" class="form-label">Marca</label>
+                                <input type="text" class="form-control" id="marca" name="marca" placeholder="Ex: Bosch, NGK">
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -359,10 +373,16 @@
                         <div class="tab-pane fade show active" id="edit-info-basica" role="tabpanel">
                     <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="edit_nome" class="form-label">Nome do Produto *</label>
                                 <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="edit_marca" class="form-label">Marca</label>
+                                <input type="text" class="form-control" id="edit_marca" name="marca" placeholder="Ex: Bosch, NGK">
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -697,7 +717,7 @@ function calcularPrecoVendaEdit() {
 
 
 // Função atualizada para editar produto
-function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo, foto_url) {
+function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo, foto_url, marca) {
     $('#edit_produto_id').val(id);
     $('#edit_nome').val(nome);
     $('#edit_preco').val(preco);
@@ -706,6 +726,7 @@ function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedo
     $('#edit_codigo_barras').val(codigo_barras || '');
     $('#edit_codigo_fornecedor').val(codigo_fornecedor || '');
     $('#edit_preco_custo').val(preco_custo || '');
+    $('#edit_marca').val(marca || '');
     
     // Limpar checkbox de remover foto
     $('#remover_foto').prop('checked', false);
