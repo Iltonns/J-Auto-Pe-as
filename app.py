@@ -1131,9 +1131,25 @@ def registrar_venda_route():
                 return redirect(url_for('vendas'))
         
         venda_id = registrar_venda(cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id)
+        
+        # Se a requisição é AJAX, retorna JSON com o ID da venda
+        if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+            return jsonify({
+                'success': True,
+                'venda_id': venda_id,
+                'message': f'Venda #{venda_id} registrada com sucesso!'
+            })
+        
         flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
         
     except Exception as e:
+        # Se a requisição é AJAX, retorna erro em JSON
+        if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 400
+            
         flash(f'Erro ao registrar venda: {str(e)}', 'error')
     
     return redirect(url_for('vendas'))

@@ -335,6 +335,35 @@
     </div>
 </div>
 
+<!-- MODAL RECIBO DE VENDA -->
+<div class="modal fade" id="modalReciboVenda" tabindex="-1" aria-labelledby="modalReciboVendaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalReciboVendaLabel">
+                    <i class="fas fa-receipt me-2"></i>
+                    Recibo de Venda
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="conteudoRecibo">
+                <!-- Conteúdo do recibo será carregado aqui -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Fechar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="imprimirReciboModal()">
+                    <i class="fas fa-print me-2"></i>Imprimir
+                </button>
+                <button type="button" class="btn btn-success" onclick="novaVenda()" data-bs-dismiss="modal">
+                    <i class="fas fa-plus me-2"></i>Nova Venda
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
