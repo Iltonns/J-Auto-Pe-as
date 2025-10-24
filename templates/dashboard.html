@@ -55,17 +55,17 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-1">R$ {{ "%.2f"|format(estatisticas.valor_estoque or 0) }}</h3>
-                        <p class="mb-0 opacity-75">Valor do Estoque</p>
+                        <h3 class="fw-bold mb-1">{{ estatisticas.vendas_dia_quantidade or 0 }}</h3>
+                        <p class="mb-0 opacity-75">Vendas do Dia</p>
                     </div>
                     <div class="align-self-center">
-                        <i class="fas fa-warehouse fa-3x opacity-75"></i>
+                        <i class="fas fa-shopping-cart fa-3x opacity-75"></i>
                     </div>
                 </div>
                 <div class="mt-3 pt-2 border-top border-light border-opacity-25">
                     <small class="opacity-75">
-                        <i class="fas fa-chart-line me-1"></i>
-                        Patrimônio Total
+                        <i class="fas fa-money-bill-wave me-1"></i>
+                        Vendas do Dia
                     </small>
                 </div>
             </div>
@@ -106,51 +106,70 @@
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-2 col-6 mb-3">
-                        <div class="position-relative">
-                            <a href="{{ url_for('orcamentos') }}" class="btn btn-orcamento btn-lg w-100 py-3">
-                                <i class="fas fa-file-invoice-dollar d-block mb-2 fa-2x"></i>
-                                <small class="fw-bold">Novo Orçamento</small>
-                            </a>
+                    <!-- Primeira linha -->
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+                        <a href="{{ url_for('orcamentos') }}" class="btn btn-purple btn-lg w-100 py-3 position-relative" style="background: linear-gradient(135deg, #6f42c1 0%, #8a63d2 100%); border: none; color: white;">
+                            <i class="fas fa-file-invoice-dollar d-block mb-2 fa-2x"></i>
+                            <small class="fw-bold">Novo Orçamento</small>
                             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
                                 <i class="fas fa-star"></i>
                             </span>
-                        </div>
+                        </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
                         <a href="{{ url_for('vendas') }}" class="btn btn-primary btn-lg w-100 py-3">
                             <i class="fas fa-cash-register d-block mb-2 fa-2x"></i>
                             <small class="fw-bold">Nova Venda</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
                         <a href="{{ url_for('produtos') }}" class="btn btn-success btn-lg w-100 py-3">
                             <i class="fas fa-car-battery d-block mb-2 fa-2x"></i>
                             <small class="fw-bold">Nova Peça</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
                         <a href="{{ url_for('clientes') }}" class="btn btn-info btn-lg w-100 py-3">
                             <i class="fas fa-user-plus d-block mb-2 fa-2x"></i>
                             <small class="fw-bold">Novo Cliente</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+                        <a href="{{ url_for('caixa') }}" class="btn btn-dark btn-lg w-100 py-3" style="background: linear-gradient(135deg, #343a40 0%, #495057 100%); border: none;">
+                            <i class="fas fa-wallet d-block mb-2 fa-2x"></i>
+                            <small class="fw-bold">Caixa</small>
+                        </a>
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+                        <a href="{{ url_for('relatorios') }}" class="btn btn-secondary btn-lg w-100 py-3" style="background: linear-gradient(135deg, #6c757d 0%, #868e96 100%); border: none;">
+                            <i class="fas fa-chart-line d-block mb-2 fa-2x"></i>
+                            <small class="fw-bold">Relatórios</small>
+                        </a>
+                    </div>
+                    
+                    <!-- Segunda linha -->
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
                         <a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-warning btn-lg w-100 py-3">
                             <i class="fas fa-credit-card d-block mb-2 fa-2x"></i>
                             <small class="fw-bold">Contas a Pagar</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
                         <a href="{{ url_for('contas_a_receber_hoje') }}" class="btn btn-danger btn-lg w-100 py-3">
                             <i class="fas fa-coins d-block mb-2 fa-2x"></i>
                             <small class="fw-bold">Contas a Receber</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-6 mb-3">
-                        <a href="{{ url_for('relatorios') }}" class="btn btn-secondary btn-lg w-100 py-3" style="background: linear-gradient(135deg, #37474f 0%, #546e7a 100%); border: none;">
-                            <i class="fas fa-chart-line d-block mb-2 fa-2x"></i>
-                            <small class="fw-bold">Relatórios</small>
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+                        <a href="{{ url_for('financeiro') }}" class="btn btn-teal btn-lg w-100 py-3" style="background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%); border: none; color: white;">
+                            <i class="fas fa-chart-pie d-block mb-2 fa-2x"></i>
+                            <small class="fw-bold">Financeiro</small>
+                        </a>
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-3">
+                        <a href="{{ url_for('usuarios') }}" class="btn btn-indigo btn-lg w-100 py-3" style="background: linear-gradient(135deg, #6610f2 0%, #7c69ef 100%); border: none; color: white;">
+                            <i class="fas fa-users-cog d-block mb-2 fa-2x"></i>
+                            <small class="fw-bold">Usuários</small>
                         </a>
                     </div>
                 </div>
@@ -244,6 +263,87 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Padronização dos botões de ação rápida */
+.btn-lg.w-100.py-3 {
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-lg.w-100.py-3:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+
+.btn-lg.w-100.py-3 i {
+    margin-bottom: 8px !important;
+}
+
+.btn-lg.w-100.py-3 small {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Efeito de brilho nos botões */
+.btn-lg.w-100.py-3::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn-lg.w-100.py-3:hover::before {
+    left: 100%;
+}
+
+/* Responsividade melhorada */
+@media (max-width: 768px) {
+    .btn-lg.w-100.py-3 {
+        min-height: 100px;
+        padding: 15px 10px !important;
+    }
+    
+    .btn-lg.w-100.py-3 i {
+        font-size: 1.5rem !important;
+        margin-bottom: 5px !important;
+    }
+    
+    .btn-lg.w-100.py-3 small {
+        font-size: 0.75rem;
+    }
+}
+
+/* Dashboard Cards - melhor responsividade */
+@media (max-width: 576px) {
+    .dashboard-card {
+        margin-bottom: 15px;
+    }
+    
+    .dashboard-card .card-body {
+        padding: 20px 15px;
+    }
+    
+    .dashboard-card h3 {
+        font-size: 1.8rem;
+    }
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}

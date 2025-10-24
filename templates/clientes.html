@@ -134,7 +134,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('atualizar_cliente') }}">
+            <form method="POST" id="form-editar-cliente" action="">
                 <input type="hidden" id="edit_cliente_id" name="cliente_id">
                 <div class="modal-body">
                     <div class="row">
@@ -194,6 +194,9 @@ function editarCliente(id, nome, telefone, email, cpf_cnpj, endereco) {
     $('#edit_email').val(email);
     $('#edit_cpf_cnpj').val(cpf_cnpj);
     $('#edit_endereco').val(endereco);
+    
+    // Definir a action do formulário com o ID correto
+    $('#form-editar-cliente').attr('action', '/clientes/editar/' + id);
 }
 
 function confirmarExclusao(id, nome) {
@@ -201,7 +204,7 @@ function confirmarExclusao(id, nome) {
         // Criar formulário para exclusão
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("excluir_cliente") }}';
+        form.action = '/clientes/deletar/' + id;
         
         const input = document.createElement('input');
         input.type = 'hidden';

@@ -69,7 +69,7 @@
                                 <i class="fas fa-search"></i>
                             </span>
                             <input type="text" class="form-control border-0" id="buscaProduto" 
-                                   placeholder="🔍 Buscar autopeça por nome, código ou categoria..."
+                                   placeholder="🔍 Buscar por nome, código de barras, código do fornecedor..."
                                    style="padding: 15px; font-size: 1rem;">
                         </div>
                     </div>
@@ -91,7 +91,9 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Nome</th>
+                                <th>Produto</th>
+                                <th>Categoria</th>
+                                <th>Cód. Fornecedor</th>
                                 <th>Preço</th>
                                 <th>Estoque</th>
                                 <th>Código de Barras</th>
@@ -103,18 +105,42 @@
                             {% for produto in produtos %}
                             <tr>
                                 <td>{{ produto.id }}</td>
-                                <td>{{ produto.nome }}</td>
-                                <td>R$ {{ "%.2f"|format(produto.preco) }}</td>
                                 <td>
-                                    <span class="badge {% if produto.quantidade <= 0 %}bg-danger{% elif produto.quantidade <= 5 %}bg-warning{% else %}bg-success{% endif %}">
-                                        {{ produto.quantidade }}
+                                    <div class="fw-bold">{{ produto.nome }}</div>
+                                    {% if produto.codigo_fornecedor %}
+                                    <small class="text-muted">Cód: {{ produto.codigo_fornecedor }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if produto.categoria %}
+                                        <span class="badge bg-info">{{ produto.categoria }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if produto.codigo_fornecedor %}
+                                        <span class="badge bg-secondary">{{ produto.codigo_fornecedor }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="fw-bold">R$ {{ "%.2f"|format(produto.preco) }}</div>
+                                    {% if produto.preco_custo > 0 %}
+                                    <small class="text-muted">Custo: R$ {{ "%.2f"|format(produto.preco_custo) }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if produto.estoque <= 0 %}bg-danger{% elif produto.estoque <= 5 %}bg-warning{% else %}bg-success{% endif %}">
+                                        {{ produto.estoque }}
                                     </span>
                                 </td>
                                 <td>{{ produto.codigo_barras or '-' }}</td>
                                 <td>
-                                    {% if produto.quantidade <= 0 %}
+                                    {% if produto.estoque <= 0 %}
                                         <span class="badge bg-danger">Sem Estoque</span>
-                                    {% elif produto.quantidade <= 5 %}
+                                    {% elif produto.estoque <= 5 %}
                                         <span class="badge bg-warning">Estoque Baixo</span>
                                     {% else %}
                                         <span class="badge bg-success">Disponível</span>
@@ -122,7 +148,7 @@
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="editarProduto({{ produto.id }}, '{{ produto.nome }}', {{ produto.preco }}, {{ produto.quantidade }}, '{{ produto.codigo_barras or '' }}')"
+                                            onclick="editarProduto({{ produto.id }}, '{{ produto.nome }}', {{ produto.preco }}, {{ produto.estoque }}, '{{ produto.codigo_barras or '' }}', '{{ produto.codigo_fornecedor or '' }}', {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }})"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarProduto">
                                         <i class="fas fa-edit"></i>
@@ -155,7 +181,7 @@
 
 <!-- Modal Novo Produto -->
 <div class="modal fade" id="modalNovoProduto" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -165,32 +191,95 @@
             </div>
             <form method="POST" action="{{ url_for('adicionar_produto') }}">
                 <div class="modal-body">
+                    <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-8">
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="nome" class="form-label">Nome do Produto *</label>
                                 <input type="text" class="form-control" id="nome" name="nome" required>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="mb-3">
-                                <label for="preco" class="form-label">Preço (R$) *</label>
-                                <input type="number" class="form-control" id="preco" name="preco" step="0.01" min="0" required>
+                                <label for="codigo_fornecedor" class="form-label">Código do Fornecedor</label>
+                                <input type="text" class="form-control" id="codigo_fornecedor" name="codigo_fornecedor" placeholder="Código interno">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="codigo_barras" class="form-label">Código de Barras</label>
+                                <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="EAN-13">
                             </div>
                         </div>
                     </div>
                     
+                    <!-- Cálculo de preço -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-calculator"></i> Controle de Preço e Margem
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="preco_custo" class="form-label">
+                                            <i class="fas fa-tag text-info"></i> Preço de Custo (R$) *
+                                        </label>
+                                        <input type="number" class="form-control" id="preco_custo" name="preco_custo" step="0.01" min="0" required oninput="calcularPrecoVendaAutomatico()">
+                                        <div class="form-text">Valor que você pagou pelo produto</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="margem_lucro" class="form-label">
+                                            <i class="fas fa-percentage text-success"></i> Margem de Lucro (%) *
+                                        </label>
+                                        <input type="number" class="form-control" id="margem_lucro" name="margem_lucro" step="0.01" min="0" required oninput="calcularPrecoVendaAutomatico()">
+                                        <div class="form-text">Ex: 100 para dobrar o valor (100% de lucro)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="preco" class="form-label">
+                                            <i class="fas fa-dollar-sign text-warning"></i> Preço de Venda (R$) *
+                                        </label>
+                                        <input type="number" class="form-control bg-light" id="preco" name="preco" step="0.01" min="0" required readonly>
+                                        <div class="form-text text-success" id="info_calculo_display">Calculado automaticamente</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info d-flex align-items-center">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <div>
+                                            <strong>Como funciona:</strong> 
+                                            Informe o <strong>custo</strong> e a <strong>margem desejada</strong>. 
+                                            O preço de venda será calculado automaticamente.
+                                            <br>
+                                            <small class="text-muted">Exemplo: Custo R$ 20,00 + Margem 100% = Preço de Venda R$ 40,00</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Estoque -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="quantidade" class="form-label">Quantidade em Estoque *</label>
-                                <input type="number" class="form-control" id="quantidade" name="quantidade" min="0" required>
+                                <label for="estoque" class="form-label">Quantidade em Estoque *</label>
+                                <input type="number" class="form-control" id="estoque" name="estoque" min="0" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="codigo_barras" class="form-label">Código de Barras</label>
-                                <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="EAN-13 ou código personalizado">
+                                <label for="estoque_minimo" class="form-label">Estoque Mínimo</label>
+                                <input type="number" class="form-control" id="estoque_minimo" name="estoque_minimo" value="5" min="0">
                             </div>
                         </div>
                     </div>
@@ -208,7 +297,7 @@
 
 <!-- Modal Editar Produto -->
 <div class="modal fade" id="modalEditarProduto" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -216,35 +305,97 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('atualizar_produto') }}">
+            <form method="POST" id="form-editar-produto" action="">
                 <input type="hidden" id="edit_produto_id" name="produto_id">
                 <div class="modal-body">
+                    <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-8">
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="edit_nome" class="form-label">Nome do Produto *</label>
                                 <input type="text" class="form-control" id="edit_nome" name="nome" required>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="mb-3">
-                                <label for="edit_preco" class="form-label">Preço (R$) *</label>
-                                <input type="number" class="form-control" id="edit_preco" name="preco" step="0.01" min="0" required>
+                                <label for="edit_codigo_fornecedor" class="form-label">Código do Fornecedor</label>
+                                <input type="text" class="form-control" id="edit_codigo_fornecedor" name="codigo_fornecedor">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="edit_codigo_barras" class="form-label">Código de Barras</label>
+                                <input type="text" class="form-control" id="edit_codigo_barras" name="codigo_barras">
                             </div>
                         </div>
                     </div>
                     
+                    <!-- Preços -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-calculator"></i> Controle de Preço e Margem
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="edit_preco_custo" class="form-label">
+                                            <i class="fas fa-tag text-info"></i> Preço de Custo (R$) *
+                                        </label>
+                                        <input type="number" class="form-control" id="edit_preco_custo" name="preco_custo" step="0.01" min="0" required oninput="calcularPrecoVendaEdit()">
+                                        <div class="form-text">Valor que você pagou pelo produto</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="edit_margem_lucro" class="form-label">
+                                            <i class="fas fa-percentage text-success"></i> Margem de Lucro (%) *
+                                        </label>
+                                        <input type="number" class="form-control" id="edit_margem_lucro" name="margem_lucro" step="0.01" min="0" required oninput="calcularPrecoVendaEdit()">
+                                        <div class="form-text">Ex: 100 para dobrar o valor (100% de lucro)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="edit_preco" class="form-label">
+                                            <i class="fas fa-dollar-sign text-warning"></i> Preço de Venda (R$) *
+                                        </label>
+                                        <input type="number" class="form-control bg-light" id="edit_preco" name="preco" step="0.01" min="0" required readonly>
+                                        <div class="form-text text-success" id="edit_info_calculo_display">Calculado automaticamente</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info d-flex align-items-center">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <div>
+                                            <strong>Margem Editável:</strong> 
+                                            Altere a margem a qualquer momento para ajustar o preço de venda.
+                                            <br>
+                                            <small class="text-muted">O preço será recalculado automaticamente conforme sua margem</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Estoque -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="edit_quantidade" class="form-label">Quantidade em Estoque *</label>
-                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" min="0" required>
+                                <label for="edit_estoque" class="form-label">Quantidade em Estoque *</label>
+                                <input type="number" class="form-control" id="edit_estoque" name="estoque" min="0" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="edit_codigo_barras" class="form-label">Código de Barras</label>
-                                <input type="text" class="form-control" id="edit_codigo_barras" name="codigo_barras">
+                                <label for="edit_estoque_minimo" class="form-label">Estoque Mínimo</label>
+                                <input type="number" class="form-control" id="edit_estoque_minimo" name="estoque_minimo" value="5" min="0">
                             </div>
                         </div>
                     </div>
@@ -262,18 +413,18 @@
 
 <!-- Modal Importar XML -->
 <div class="modal fade" id="modalImportarXML" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-file-import"></i> Importar Produtos via XML
+                    <i class="fas fa-file-import"></i> Importar Produtos via XML de NFe
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('importar_produtos_xml') }}" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="arquivo_xml" class="form-label">Arquivo XML *</label>
+                        <label for="arquivo_xml" class="form-label">Arquivo XML da NFe *</label>
                         <input type="file" class="form-control" id="arquivo_xml" name="arquivo_xml" accept=".xml" required>
                         <div class="form-text">
                             Selecione um arquivo XML de Nota Fiscal Eletrônica (NFe) para importar os produtos automaticamente.
@@ -282,13 +433,52 @@
                     
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Dica:</strong> O sistema irá extrair automaticamente nome, preço, quantidade e código de barras dos produtos do XML.
+                        <strong>O que será importado:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Nome do produto</li>
+                            <li>Preço unitário</li>
+                            <li>Quantidade (adicionada ao estoque)</li>
+                            <li>Código de barras (EAN)</li>
+                            <li>NCM (Nomenclatura Comum do Mercosul)</li>
+                            <li>Unidade de medida</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Importante:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Se o produto já existir (mesmo código de barras), o estoque será atualizado</li>
+                            <li>Produtos novos serão criados automaticamente</li>
+                            <li>O sistema detecta automaticamente produtos duplicados</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-plus-circle text-success fa-2x mb-2"></i>
+                                    <h6>Produtos Novos</h6>
+                                    <small>Serão criados no sistema</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-sync-alt text-warning fa-2x mb-2"></i>
+                                    <h6>Produtos Existentes</h6>
+                                    <small>Estoque será atualizado</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-success">
-                        <i class="fas fa-upload"></i> Importar
+                        <i class="fas fa-upload"></i> Importar Produtos
                     </button>
                 </div>
             </form>
@@ -300,12 +490,96 @@
 
 {% block extra_js %}
 <script>
-function editarProduto(id, nome, preco, quantidade, codigo_barras) {
+// Função para calcular preço de venda automaticamente (novo produto)
+function calcularPrecoVendaAutomatico() {
+    const custo = parseFloat(document.getElementById('preco_custo').value) || 0;
+    const margem = parseFloat(document.getElementById('margem_lucro').value) || 0;
+    
+    if (custo > 0 && margem >= 0) {
+        // Fórmula: Preço = Custo + (Custo * Margem/100)
+        const precoVenda = custo + (custo * margem / 100);
+        document.getElementById('preco').value = precoVenda.toFixed(2);
+        
+        // Atualizar informações de cálculo
+        const lucroValor = precoVenda - custo;
+        if (margem > 0) {
+            document.getElementById('info_calculo_display').innerHTML = 
+                `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
+            document.getElementById('info_calculo_display').className = 'form-text text-success';
+        } else {
+            document.getElementById('info_calculo_display').textContent = 'Preço igual ao custo (sem lucro)';
+            document.getElementById('info_calculo_display').className = 'form-text text-warning';
+        }
+    } else if (custo > 0) {
+        document.getElementById('preco').value = custo.toFixed(2);
+        document.getElementById('info_calculo_display').textContent = 'Informe a margem desejada';
+        document.getElementById('info_calculo_display').className = 'form-text text-muted';
+    } else {
+        document.getElementById('preco').value = '';
+        document.getElementById('info_calculo_display').textContent = 'Calculado automaticamente';
+        document.getElementById('info_calculo_display').className = 'form-text text-success';
+    }
+}
+
+// Função para calcular preço de venda automaticamente (editar produto)
+function calcularPrecoVendaEdit() {
+    const custo = parseFloat(document.getElementById('edit_preco_custo').value) || 0;
+    const margem = parseFloat(document.getElementById('edit_margem_lucro').value) || 0;
+    
+    if (custo > 0 && margem >= 0) {
+        // Fórmula: Preço = Custo + (Custo * Margem/100)
+        const precoVenda = custo + (custo * margem / 100);
+        document.getElementById('edit_preco').value = precoVenda.toFixed(2);
+        
+        // Atualizar informações de cálculo
+        const lucroValor = precoVenda - custo;
+        if (margem > 0) {
+            document.getElementById('edit_info_calculo_display').innerHTML = 
+                `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
+            document.getElementById('edit_info_calculo_display').className = 'form-text text-success';
+        } else {
+            document.getElementById('edit_info_calculo_display').textContent = 'Preço igual ao custo (sem lucro)';
+            document.getElementById('edit_info_calculo_display').className = 'form-text text-warning';
+        }
+    } else if (custo > 0) {
+        document.getElementById('edit_preco').value = custo.toFixed(2);
+        document.getElementById('edit_info_calculo_display').textContent = 'Informe a margem desejada';
+        document.getElementById('edit_info_calculo_display').className = 'form-text text-muted';
+    } else {
+        document.getElementById('edit_preco').value = '';
+        document.getElementById('edit_info_calculo_display').textContent = 'Calculado automaticamente';
+        document.getElementById('edit_info_calculo_display').className = 'form-text text-success';
+    }
+}
+
+
+
+// Função atualizada para editar produto
+function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo) {
     $('#edit_produto_id').val(id);
     $('#edit_nome').val(nome);
     $('#edit_preco').val(preco);
-    $('#edit_quantidade').val(quantidade);
-    $('#edit_codigo_barras').val(codigo_barras);
+    $('#edit_estoque').val(estoque);
+    $('#edit_estoque_minimo').val(estoque_minimo || 5);
+    $('#edit_codigo_barras').val(codigo_barras || '');
+    $('#edit_codigo_fornecedor').val(codigo_fornecedor || '');
+    $('#edit_preco_custo').val(preco_custo || '');
+    
+    // Se temos margem salva, usar ela; senão, calcular a partir do preço e custo
+    if (margem_lucro && margem_lucro > 0) {
+        $('#edit_margem_lucro').val(margem_lucro);
+    } else if (preco > 0 && preco_custo > 0) {
+        const margemCalculada = ((preco - preco_custo) / preco_custo) * 100;
+        $('#edit_margem_lucro').val(margemCalculada.toFixed(2));
+    } else {
+        $('#edit_margem_lucro').val('');
+    }
+    
+    // Recalcular o preço com as informações atuais
+    calcularPrecoVendaEdit();
+    
+    // Definir a action do formulário com o ID correto
+    $('#form-editar-produto').attr('action', '/produtos/editar/' + id);
 }
 
 function confirmarExclusao(id, nome) {
@@ -313,7 +587,7 @@ function confirmarExclusao(id, nome) {
         // Criar formulário para exclusão
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("excluir_produto") }}';
+        form.action = '/produtos/deletar/' + id;
         
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -337,9 +611,9 @@ function verDetalhes(id) {
             }
             
             let statusEstoque = '';
-            if (produto.quantidade <= 0) {
+            if (produto.estoque <= 0) {
                 statusEstoque = '<span class="badge bg-danger">Sem Estoque</span>';
-            } else if (produto.quantidade <= 5) {
+            } else if (produto.estoque <= 5) {
                 statusEstoque = '<span class="badge bg-warning">Estoque Baixo</span>';
             } else {
                 statusEstoque = '<span class="badge bg-success">Disponível</span>';
@@ -353,7 +627,7 @@ function verDetalhes(id) {
                         <strong>Preço:</strong> R$ ${produto.preco.toFixed(2)}
                     </div>
                     <div class="col-md-6">
-                        <strong>Estoque:</strong> ${produto.quantidade}<br>
+                        <strong>Estoque:</strong> ${produto.estoque}<br>
                         <strong>Status:</strong> ${statusEstoque}<br>
                         <strong>Código:</strong> ${produto.codigo_barras || 'Não informado'}
                     </div>
@@ -385,6 +659,10 @@ $(document).ready(function() {
             }
         });
     });
+    
+    // Inicializar campos de cálculo
+    $('#preco_custo, #margem_lucro').on('input', calcularPrecoVendaAutomatico);
+    $('#edit_preco_custo, #edit_margem_lucro').on('input', calcularPrecoVendaEdit);
 });
 </script>
 

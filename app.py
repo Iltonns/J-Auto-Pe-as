@@ -9,6 +9,7 @@ from functools import wraps
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
     init_db, criar_usuario_admin, verificar_usuario, buscar_usuario_por_id,
+    buscar_usuario_por_email, atualizar_senha_usuario,
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto,
@@ -20,7 +21,9 @@ from Minha_autopecas_web.logica_banco import (
     popular_dados_exemplo,
     # Novas funções do caixa
     abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa,
-    listar_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros
+    listar_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros,
+    # Função de importação XML
+    importar_produtos_de_xml
 )
 
 app = Flask(__name__)
@@ -116,6 +119,40 @@ def logout():
     logout_user()
     flash('Logout realizado com sucesso!', 'success')
     return redirect(url_for('login'))
+
+@app.route('/recuperar-senha', methods=['GET', 'POST'])
+def recuperar_senha():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        nova_senha = request.form.get('nova_senha')
+        confirmar_senha = request.form.get('confirmar_senha')
+        
+        if not email or not nova_senha or not confirmar_senha:
+            flash('Todos os campos são obrigatórios!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        if nova_senha != confirmar_senha:
+            flash('As senhas não coincidem!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        if len(nova_senha) < 6:
+            flash('A senha deve ter pelo menos 6 caracteres!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        # Buscar usuário por email
+        usuario = buscar_usuario_por_email(email)
+        if not usuario:
+            flash('Email não encontrado em nosso sistema!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        # Atualizar senha
+        if atualizar_senha_usuario(usuario['id'], nova_senha):
+            flash('Senha atualizada com sucesso! Você já pode fazer login.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Erro ao atualizar senha. Tente novamente.', 'error')
+    
+    return render_template('recuperar_senha.html')
 
 # ROTAS DE CRIAÇÃO DE USUÁRIO
 @app.route('/criar-usuario', methods=['POST'])
@@ -506,15 +543,49 @@ def api_buscar_produtos():
 @login_required
 def adicionar_produto_route():
     nome = request.form['nome']
-    preco = float(request.form['preco'])
-    estoque = int(request.form.get('estoque', 0))
-    estoque_minimo = int(request.form.get('estoque_minimo', 5))
     codigo_barras = request.form.get('codigo_barras')
+    codigo_fornecedor = request.form.get('codigo_fornecedor')
     descricao = request.form.get('descricao')
     categoria = request.form.get('categoria')
     
+    # Validação segura para campos numéricos
     try:
-        adicionar_produto(nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria)
+        estoque = int(request.form.get('estoque', 0))
+    except (ValueError, TypeError):
+        estoque = 0
+    
+    try:
+        estoque_minimo_value = request.form.get('estoque_minimo', '5').strip()
+        if estoque_minimo_value == '':
+            estoque_minimo = 5
+        else:
+            estoque_minimo = int(estoque_minimo_value)
+    except (ValueError, TypeError):
+        estoque_minimo = 5
+    
+    # O novo sistema sempre usa custo + margem
+    try:
+        preco_custo = float(request.form.get('preco_custo', 0))
+    except (ValueError, TypeError):
+        preco_custo = 0.0
+        
+    try:
+        margem_lucro = float(request.form.get('margem_lucro', 0))
+    except (ValueError, TypeError):
+        margem_lucro = 0.0
+    
+    # O preço já vem calculado do frontend, mas vamos recalcular para garantir
+    if preco_custo > 0 and margem_lucro >= 0:
+        preco = preco_custo + (preco_custo * margem_lucro / 100)
+    else:
+        try:
+            preco = float(request.form.get('preco', 0))
+        except (ValueError, TypeError):
+            preco = 0.0
+    
+    try:
+        adicionar_produto(nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                         codigo_fornecedor, preco_custo, margem_lucro)
         flash('Produto adicionado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar produto: {str(e)}', 'error')
@@ -525,15 +596,49 @@ def adicionar_produto_route():
 @login_required
 def editar_produto_route(id):
     nome = request.form['nome']
-    preco = float(request.form['preco'])
-    estoque = int(request.form['estoque'])
-    estoque_minimo = int(request.form.get('estoque_minimo', 5))
     codigo_barras = request.form.get('codigo_barras')
+    codigo_fornecedor = request.form.get('codigo_fornecedor')
     descricao = request.form.get('descricao')
     categoria = request.form.get('categoria')
     
+    # Validação segura para campos numéricos
     try:
-        editar_produto(id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria)
+        estoque = int(request.form.get('estoque', 0))
+    except (ValueError, TypeError):
+        estoque = 0
+    
+    try:
+        estoque_minimo_value = request.form.get('estoque_minimo', '5').strip()
+        if estoque_minimo_value == '':
+            estoque_minimo = 5
+        else:
+            estoque_minimo = int(estoque_minimo_value)
+    except (ValueError, TypeError):
+        estoque_minimo = 5
+    
+    # O novo sistema sempre usa custo + margem
+    try:
+        preco_custo = float(request.form.get('preco_custo', 0))
+    except (ValueError, TypeError):
+        preco_custo = 0.0
+        
+    try:
+        margem_lucro = float(request.form.get('margem_lucro', 0))
+    except (ValueError, TypeError):
+        margem_lucro = 0.0
+    
+    # O preço já vem calculado do frontend, mas vamos recalcular para garantir
+    if preco_custo > 0 and margem_lucro >= 0:
+        preco = preco_custo + (preco_custo * margem_lucro / 100)
+    else:
+        try:
+            preco = float(request.form.get('preco', 0))
+        except (ValueError, TypeError):
+            preco = 0.0
+    
+    try:
+        editar_produto(id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                      codigo_fornecedor, preco_custo, margem_lucro)
         flash('Produto editado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao editar produto: {str(e)}', 'error')
@@ -551,13 +656,76 @@ def deletar_produto_route(id):
     
     return redirect(url_for('produtos'))
 
+@app.route('/produtos/importar-xml', methods=['POST'], endpoint='importar_produtos_xml')
+@login_required
+def importar_produtos_xml_route():
+    """Rota para importar produtos via arquivo XML de NFe"""
+    try:
+        # Verificar se arquivo foi enviado
+        if 'arquivo_xml' not in request.files:
+            flash('Nenhum arquivo foi selecionado!', 'error')
+            return redirect(url_for('produtos'))
+        
+        arquivo = request.files['arquivo_xml']
+        
+        if arquivo.filename == '':
+            flash('Nenhum arquivo foi selecionado!', 'error')
+            return redirect(url_for('produtos'))
+        
+        if arquivo and arquivo.filename.lower().endswith('.xml'):
+            try:
+                # Ler conteúdo do arquivo
+                conteudo_xml = arquivo.read().decode('utf-8')
+                
+                # Processar XML
+                resultado = importar_produtos_de_xml(conteudo_xml)
+                
+                if resultado['sucesso']:
+                    # Montar mensagem de sucesso
+                    mensagem_partes = []
+                    
+                    if resultado['produtos_importados']:
+                        mensagem_partes.append(f"{len(resultado['produtos_importados'])} produtos importados")
+                    
+                    if resultado['produtos_atualizados']:
+                        mensagem_partes.append(f"{len(resultado['produtos_atualizados'])} produtos atualizados")
+                    
+                    if mensagem_partes:
+                        flash(f"Importação concluída! {', '.join(mensagem_partes)}.", 'success')
+                    else:
+                        flash('Nenhum produto foi processado.', 'warning')
+                    
+                    # Mostrar erros se houver
+                    if resultado['erros']:
+                        for erro in resultado['erros'][:5]:  # Mostrar apenas os 5 primeiros erros
+                            flash(f"Aviso: {erro}", 'warning')
+                        
+                        if len(resultado['erros']) > 5:
+                            flash(f"... e mais {len(resultado['erros']) - 5} avisos.", 'warning')
+                
+                else:
+                    flash(f"Erro ao processar XML: {resultado['erro']}", 'error')
+                    
+            except UnicodeDecodeError:
+                flash('Erro: Arquivo XML com codificação inválida. Certifique-se de que o arquivo está em UTF-8.', 'error')
+            except Exception as e:
+                flash(f'Erro ao processar arquivo XML: {str(e)}', 'error')
+        else:
+            flash('Arquivo deve ser um XML válido!', 'error')
+            
+    except Exception as e:
+        flash(f'Erro ao processar arquivo XML: {str(e)}', 'error')
+    
+    return redirect(url_for('produtos'))
+
 # VENDAS
 @app.route('/vendas')
 @login_required
 def vendas():
     clientes_lista = listar_clientes()
     vendas_lista = listar_vendas()
-    return render_template('vendas.html', clientes=clientes_lista, vendas=vendas_lista)
+    produtos_lista = listar_produtos()
+    return render_template('vendas.html', clientes=clientes_lista, vendas=vendas_lista, produtos=produtos_lista)
 
 @app.route('/vendas/registrar', methods=['POST'], endpoint='registrar_venda')
 @login_required

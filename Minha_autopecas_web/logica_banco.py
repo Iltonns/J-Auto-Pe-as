@@ -105,6 +105,30 @@ def init_db():
         )
     ''')
     
+    # Adicionar colunas para dados da NFe se não existirem
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN ncm TEXT")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN unidade TEXT DEFAULT 'UN'")
+    except:
+        pass
+    
+    # Adicionar colunas para gestão comercial
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN codigo_fornecedor TEXT")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN preco_custo REAL DEFAULT 0")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN margem_lucro REAL DEFAULT 0")
+    except:
+        pass
+    
     # Tabela de vendas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vendas (
@@ -391,6 +415,53 @@ def buscar_usuario_por_id(user_id):
             'permissao_admin': user[11]
         }
     return None
+
+def buscar_usuario_por_email(email):
+    """Busca um usuário pelo email"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, username, email, nome_completo, ativo,
+               permissao_vendas, permissao_estoque, permissao_clientes,
+               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
+        FROM usuarios WHERE email = ? AND ativo = 1
+    ''', (email,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user:
+        return {
+            'id': user[0], 
+            'username': user[1], 
+            'email': user[2],
+            'nome_completo': user[3] or '',
+            'ativo': user[4],
+            'permissao_vendas': user[5],
+            'permissao_estoque': user[6],
+            'permissao_clientes': user[7],
+            'permissao_financeiro': user[8],
+            'permissao_caixa': user[9],
+            'permissao_relatorios': user[10],
+            'permissao_admin': user[11]
+        }
+    return None
+
+def atualizar_senha_usuario(user_id, nova_senha):
+    """Atualiza a senha de um usuário"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    password_hash = generate_password_hash(nova_senha)
+    cursor.execute('''
+        UPDATE usuarios SET password_hash = ? WHERE id = ?
+    ''', (password_hash, user_id))
+    
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    
+    return success
 
 def criar_usuario(username, password, nome_completo, email, permissoes=None, created_by=None):
     """Cria um novo usuário com permissões específicas"""
@@ -916,7 +987,8 @@ def listar_produtos():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo
+        SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
+               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade
         FROM produtos
         WHERE ativo = 1
         ORDER BY nome
@@ -933,27 +1005,33 @@ def listar_produtos():
             'codigo_barras': row[5],
             'descricao': row[6],
             'categoria': row[7],
-            'ativo': row[8]
+            'ativo': row[8],
+            'codigo_fornecedor': row[9],
+            'preco_custo': row[10] or 0,
+            'margem_lucro': row[11] or 0,
+            'ncm': row[12],
+            'unidade': row[13] or 'UN'
         })
     
     conn.close()
     return produtos
 
 def buscar_produto(termo_busca):
-    """Busca produto por nome, código de barras ou ID"""
+    """Busca produto por nome, código de barras, código do fornecedor ou ID"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, nome, preco, estoque, codigo_barras
+        SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria
         FROM produtos
         WHERE ativo = 1 AND (
             nome LIKE ? OR 
             codigo_barras = ? OR 
+            codigo_fornecedor LIKE ? OR
             CAST(id AS TEXT) = ?
         )
         LIMIT 10
-    ''', (f'%{termo_busca}%', termo_busca, termo_busca))
+    ''', (f'%{termo_busca}%', termo_busca, f'%{termo_busca}%', termo_busca))
     
     produtos = []
     for row in cursor.fetchall():
@@ -962,38 +1040,59 @@ def buscar_produto(termo_busca):
             'nome': row[1],
             'preco': row[2],
             'estoque': row[3],
-            'codigo_barras': row[4]
+            'codigo_barras': row[4],
+            'codigo_fornecedor': row[5],
+            'preco_custo': row[6] or 0,
+            'margem_lucro': row[7] or 0,
+            'categoria': row[8]
         })
     
     conn.close()
     return produtos
 
-def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None):
+def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None, 
+                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0):
     """Adiciona um novo produto"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
+    # Calcular preço de venda baseado no custo e margem se fornecidos
+    # Fórmula: Preço = Custo + (Custo * Margem/100)
+    # Exemplo: R$ 20 + (R$ 20 * 100%) = R$ 20 + R$ 20 = R$ 40
+    if preco_custo > 0 and margem_lucro > 0:
+        preco = preco_custo + (preco_custo * margem_lucro / 100)
+    
     cursor.execute('''
-        INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria))
+        INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                            codigo_fornecedor, preco_custo, margem_lucro)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+          codigo_fornecedor, preco_custo, margem_lucro))
     
     produto_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return produto_id
 
-def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None):
+def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
+                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0):
     """Edita um produto existente"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
+    # Calcular preço de venda baseado no custo e margem se fornecidos
+    # Fórmula: Preço = Custo + (Custo * Margem/100)
+    if preco_custo > 0 and margem_lucro > 0:
+        preco = preco_custo + (preco_custo * margem_lucro / 100)
+    
     cursor.execute('''
         UPDATE produtos 
         SET nome = ?, preco = ?, estoque = ?, estoque_minimo = ?, 
-            codigo_barras = ?, descricao = ?, categoria = ?
+            codigo_barras = ?, descricao = ?, categoria = ?,
+            codigo_fornecedor = ?, preco_custo = ?, margem_lucro = ?
         WHERE id = ?
-    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, id))
+    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+          codigo_fornecedor, preco_custo, margem_lucro, id))
     
     conn.commit()
     conn.close()
@@ -1480,6 +1579,14 @@ def obter_estatisticas_dashboard():
     ''')
     vendas_mes = cursor.fetchone()
     
+    # Vendas do dia
+    cursor.execute('''
+        SELECT COUNT(*), SUM(total) 
+        FROM vendas 
+        WHERE date(data_venda) = date('now')
+    ''')
+    vendas_dia = cursor.fetchone()
+    
     # Contas a receber em atraso
     cursor.execute('''
         SELECT SUM(valor) 
@@ -1505,6 +1612,8 @@ def obter_estatisticas_dashboard():
         'produtos_estoque_baixo': produtos_estoque_baixo,
         'vendas_mes_quantidade': vendas_mes[0] or 0,
         'vendas_mes_valor': vendas_mes[1] or 0,
+        'vendas_dia_quantidade': vendas_dia[0] or 0,
+        'vendas_dia_valor': vendas_dia[1] or 0,
         'valor_atraso_receber': valor_atraso_receber,
         'valor_atraso_pagar': valor_atraso_pagar
     }
@@ -1713,6 +1822,205 @@ def converter_orcamento_em_venda(orcamento_id, forma_pagamento):
         raise e
     finally:
         conn.close()
+
+def mapear_ncm_para_categoria(ncm):
+    """Mapeia códigos NCM para categorias de autopeças"""
+    if not ncm:
+        return "Geral"
+    
+    # Mapeamento baseado em códigos NCM comuns de autopeças
+    mapeamentos = {
+        "2710": "Óleos e Lubrificantes",  # Óleos de petróleo
+        "3819": "Fluidos de Freio",       # Fluidos para freios hidráulicos
+        "4009": "Borrachas",              # Tubos e mangueiras de borracha
+        "7318": "Parafusos e Fixadores",  # Parafusos, porcas, rebites
+        "8307": "Tubos Flexíveis",        # Tubos flexíveis de metais comuns
+        "8409": "Motor",                  # Partes de motores de pistão
+        "8411": "Turbo e Compressores",   # Turbojatos, turbopropulsores
+        "8412": "Sistema Hidráulico",     # Outros motores e máquinas
+        "8413": "Bombas",                 # Bombas para líquidos
+        "8414": "Compressores de Ar",     # Bombas de ar, compressores
+        "8421": "Filtros",                # Centrifugadoras, filtros
+        "8483": "Transmissão",            # Árvores de transmissão
+        "8507": "Bateria",                # Acumuladores elétricos
+        "8511": "Sistema Elétrico",       # Aparelhos e dispositivos elétricos
+        "8708": "Peças Automotivas",      # Partes e acessórios de veículos
+        "9401": "Assentos",               # Assentos e suas partes
+    }
+    
+    # Verificar pelos primeiros 4 dígitos do NCM
+    ncm_clean = ncm.replace(".", "").replace("-", "")[:4]
+    
+    for codigo, categoria in mapeamentos.items():
+        if ncm_clean.startswith(codigo):
+            return categoria
+    
+    # Categorias por faixa de NCM
+    if ncm_clean.startswith("27"):
+        return "Combustíveis e Óleos"
+    elif ncm_clean.startswith("38"):
+        return "Produtos Químicos"
+    elif ncm_clean.startswith("40"):
+        return "Borrachas e Vedações"
+    elif ncm_clean.startswith("73") or ncm_clean.startswith("76"):
+        return "Peças Metálicas"
+    elif ncm_clean.startswith("84") or ncm_clean.startswith("85"):
+        return "Componentes Mecânicos"
+    elif ncm_clean.startswith("87"):
+        return "Peças Automotivas"
+    else:
+        return "Geral"
+
+def importar_produtos_de_xml(conteudo_xml):
+    """
+    Importa produtos de um arquivo XML de NFe
+    """
+    import xml.etree.ElementTree as ET
+    from decimal import Decimal
+    
+    produtos_importados = []
+    produtos_atualizados = []
+    erros = []
+    
+    try:
+        # Parse do XML
+        root = ET.fromstring(conteudo_xml)
+        
+        # Namespace da NFe
+        ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        
+        # Buscar todos os produtos (det)
+        produtos_xml = root.findall('.//nfe:det', ns)
+        
+        if not produtos_xml:
+            raise ValueError("Nenhum produto encontrado no XML")
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        for det in produtos_xml:
+            try:
+                # Extrair dados do produto
+                prod = det.find('nfe:prod', ns)
+                if prod is None:
+                    continue
+                
+                # Dados básicos do produto
+                codigo_produto = prod.find('nfe:cProd', ns)
+                codigo_produto = codigo_produto.text if codigo_produto is not None else ''
+                
+                codigo_ean = prod.find('nfe:cEAN', ns)
+                codigo_ean = codigo_ean.text if codigo_ean is not None else ''
+                if codigo_ean in ['SEM GTIN', '']:
+                    codigo_ean = ''
+                
+                nome_produto = prod.find('nfe:xProd', ns)
+                nome_produto = nome_produto.text if nome_produto is not None else ''
+                
+                valor_unitario = prod.find('nfe:vUnCom', ns)
+                valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
+                
+                quantidade = prod.find('nfe:qCom', ns)
+                quantidade = int(float(quantidade.text)) if quantidade is not None else 0
+                
+                ncm = prod.find('nfe:NCM', ns)
+                ncm = ncm.text if ncm is not None else ''
+                
+                unidade = prod.find('nfe:uCom', ns)
+                unidade = unidade.text if unidade is not None else 'UN'
+                
+                if not nome_produto:
+                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+                    continue
+                
+                # Verificar se produto já existe (por código de barras ou código do produto)
+                produto_existente = None
+                if codigo_ean:
+                    cursor.execute('''
+                        SELECT id, nome, preco, estoque 
+                        FROM produtos 
+                        WHERE codigo_barras = ?
+                    ''', (codigo_ean,))
+                    produto_existente = cursor.fetchone()
+                
+                if not produto_existente and codigo_produto:
+                    cursor.execute('''
+                        SELECT id, nome, preco, estoque 
+                        FROM produtos 
+                        WHERE codigo_fornecedor = ? OR nome LIKE ? OR codigo_barras LIKE ?
+                    ''', (codigo_produto, f'%{codigo_produto}%', f'%{codigo_produto}%'))
+                    produto_existente = cursor.fetchone()
+                
+                if produto_existente:
+                    # Atualizar produto existente incluindo categoria
+                    produto_id = produto_existente[0]
+                    novo_estoque = produto_existente[3] + quantidade
+                    categoria = mapear_ncm_para_categoria(ncm)
+                    
+                    cursor.execute('''
+                        UPDATE produtos 
+                        SET estoque = ?, preco = ?, ncm = ?, unidade = ?, codigo_fornecedor = ?, categoria = ?
+                        WHERE id = ?
+                    ''', (novo_estoque, valor_unitario, ncm, unidade, codigo_produto, categoria, produto_id))
+                    
+                    produtos_atualizados.append({
+                        'id': produto_id,
+                        'nome': produto_existente[1],
+                        'quantidade_adicionada': quantidade,
+                        'novo_estoque': novo_estoque,
+                        'preco_atualizado': valor_unitario
+                    })
+                else:
+                    # Criar novo produto com categoria baseada no NCM
+                    categoria = mapear_ncm_para_categoria(ncm)
+                    
+                    cursor.execute('''
+                        INSERT INTO produtos (nome, preco, estoque, codigo_barras, ncm, unidade, codigo_fornecedor, categoria)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (nome_produto, valor_unitario, quantidade, codigo_ean, ncm, unidade, codigo_produto, categoria))
+                    
+                    produto_id = cursor.lastrowid
+                    produtos_importados.append({
+                        'id': produto_id,
+                        'nome': nome_produto,
+                        'preco': valor_unitario,
+                        'estoque': quantidade,
+                        'codigo_barras': codigo_ean,
+                        'codigo_fornecedor': codigo_produto,
+                        'categoria': categoria
+                    })
+                
+            except Exception as e:
+                erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            'sucesso': True,
+            'produtos_importados': produtos_importados,
+            'produtos_atualizados': produtos_atualizados,
+            'erros': erros,
+            'total_processados': len(produtos_xml)
+        }
+        
+    except ET.ParseError as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro ao analisar XML: {str(e)}',
+            'produtos_importados': [],
+            'produtos_atualizados': [],
+            'erros': [f'XML inválido: {str(e)}']
+        }
+    except Exception as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro geral: {str(e)}',
+            'produtos_importados': [],
+            'produtos_atualizados': [],
+            'erros': [str(e)]
+        }
 
 # Inicialização automática
 if __name__ == "__main__":
