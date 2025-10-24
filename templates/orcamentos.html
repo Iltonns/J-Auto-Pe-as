@@ -123,6 +123,39 @@
                             </small>
                         </div>
                     </div>
+                    
+                    <!-- Controles de Paginação e Contador para Orçamentos -->
+                    <div class="row mb-3 align-items-center">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <label for="itensPorPaginaOrcamento" class="form-label me-2 mb-0">Mostrar:</label>
+                                <select class="form-select w-auto" id="itensPorPaginaOrcamento" style="min-width: 80px;">
+                                    <option value="10">10</option>
+                                    <option value="20" selected>20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                    <option value="all">Todos</option>
+                                </select>
+                                <span class="ms-2 text-muted">produtos por página</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="d-flex align-items-center justify-content-end">
+                                <span class="badge bg-success me-2" id="contadorProdutosOrcamento">
+                                    <i class="fas fa-cogs"></i> 
+                                    Mostrando <span id="produtosVisiveisOrcamento">0</span> de <span id="totalProdutosOrcamento">{{ produtos|length }}</span> produtos
+                                </span>
+                                <div class="btn-group" role="group" id="controlesNavegacaoOrcamento">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnAnteriorOrcamento" disabled>
+                                        <i class="fas fa-chevron-left"></i> Anterior
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnProximoOrcamento">
+                                        Próximo <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Tabela de Produtos -->
                     <div class="table-responsive">
@@ -643,6 +676,13 @@ function atualizarTabelaProdutos(produtos) {
     if (produtos.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum produto encontrado</td></tr>';
     }
+    
+    // Atualizar paginação após mudança na tabela
+    todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
+    paginaAtualOrcamento = 1;
+    if (typeof atualizarPaginacaoOrcamento === 'function') {
+        atualizarPaginacaoOrcamento();
+    }
 }
 
 function buscarProdutosLocal(termo) {
@@ -692,6 +732,110 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnBuscar) {
         btnBuscar.addEventListener('click', buscarProdutosRemoto);
     }
+    
+    // Inicializar paginação de orçamentos
+    inicializarPaginacaoOrcamento();
+});
+
+// Variáveis de paginação para orçamentos
+let paginaAtualOrcamento = 1;
+let itensPorPaginaOrcamento = 20;
+let todasAsLinhasOrcamento = [];
+
+// Inicializar sistema de paginação para orçamentos
+function inicializarPaginacaoOrcamento() {
+    // Coletar todas as linhas da tabela
+    todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
+    
+    // Event listeners para controles
+    document.getElementById('itensPorPaginaOrcamento').addEventListener('change', function() {
+        const valor = this.value;
+        itensPorPaginaOrcamento = valor === 'all' ? todasAsLinhasOrcamento.length : parseInt(valor);
+        paginaAtualOrcamento = 1;
+        atualizarPaginacaoOrcamento();
+    });
+    
+    document.getElementById('btnAnteriorOrcamento').addEventListener('click', function() {
+        if (paginaAtualOrcamento > 1) {
+            paginaAtualOrcamento--;
+            atualizarPaginacaoOrcamento();
+        }
+    });
+    
+    document.getElementById('btnProximoOrcamento').addEventListener('click', function() {
+        const totalPaginas = Math.ceil(todasAsLinhasOrcamento.length / itensPorPaginaOrcamento);
+        if (paginaAtualOrcamento < totalPaginas) {
+            paginaAtualOrcamento++;
+            atualizarPaginacaoOrcamento();
+        }
+    });
+    
+    // Atualizar busca para trabalhar com paginação
+    document.getElementById('campoBusca').addEventListener('keyup', function() {
+        const termo = this.value.toLowerCase();
+        
+        if (termo === '') {
+            // Se não há busca, usar todas as linhas
+            todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
+        } else {
+            // Filtrar linhas baseado na busca
+            todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row')).filter(function(linha) {
+                return linha.textContent.toLowerCase().includes(termo);
+            });
+        }
+        
+        paginaAtualOrcamento = 1;
+        atualizarPaginacaoOrcamento();
+    });
+    
+    // Inicializar com os valores padrão
+    atualizarPaginacaoOrcamento();
+}
+
+// Atualizar a paginação dos orçamentos
+function atualizarPaginacaoOrcamento() {
+    const totalItens = todasAsLinhasOrcamento.length;
+    const totalPaginas = Math.ceil(totalItens / itensPorPaginaOrcamento);
+    
+    // Ocultar todas as linhas primeiro
+    document.querySelectorAll('#tabelaProdutos tr.produto-row').forEach(linha => {
+        linha.style.display = 'none';
+    });
+    
+    // Calcular índices
+    const inicio = (paginaAtualOrcamento - 1) * itensPorPaginaOrcamento;
+    const fim = inicio + itensPorPaginaOrcamento;
+    
+    // Mostrar apenas as linhas da página atual
+    const linhasParaMostrar = todasAsLinhasOrcamento.slice(inicio, fim);
+    linhasParaMostrar.forEach(linha => {
+        linha.style.display = '';
+    });
+    
+    // Atualizar contador
+    const produtosVisiveis = linhasParaMostrar.length;
+    document.getElementById('produtosVisiveisOrcamento').textContent = produtosVisiveis;
+    document.getElementById('totalProdutosOrcamento').textContent = totalItens;
+    
+    // Atualizar botões de navegação
+    document.getElementById('btnAnteriorOrcamento').disabled = paginaAtualOrcamento <= 1;
+    document.getElementById('btnProximoOrcamento').disabled = paginaAtualOrcamento >= totalPaginas;
+    
+    // Mostrar/ocultar controles de navegação
+    const controlesNavegacao = document.getElementById('controlesNavegacaoOrcamento');
+    if (totalPaginas <= 1) {
+        controlesNavegacao.style.display = 'none';
+    } else {
+        controlesNavegacao.style.display = 'flex';
+    }
+    
+    // Atualizar texto dos botões com número da página
+    const btnAnterior = document.getElementById('btnAnteriorOrcamento');
+    const btnProximo = document.getElementById('btnProximoOrcamento');
+    
+    btnAnterior.innerHTML = `<i class="fas fa-chevron-left"></i> Anterior ${paginaAtualOrcamento > 1 ? '(' + (paginaAtualOrcamento - 1) + ')' : ''}`;
+    btnProximo.innerHTML = `Próximo ${paginaAtualOrcamento < totalPaginas ? '(' + (paginaAtualOrcamento + 1) + ')' : ''} <i class="fas fa-chevron-right"></i>`;
+}
 });
 
 // Busca remota na API

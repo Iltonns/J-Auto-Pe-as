@@ -85,6 +85,39 @@
                     </div>
                 </div>
                 
+                <!-- Controles de Paginação e Contador -->
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center">
+                            <label for="itensPorPagina" class="form-label me-2 mb-0">Mostrar:</label>
+                            <select class="form-select w-auto" id="itensPorPagina" style="min-width: 80px;">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="all">Todos</option>
+                            </select>
+                            <span class="ms-2 text-muted">produtos por página</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="d-flex align-items-center justify-content-end">
+                            <span class="badge bg-primary me-2" id="contadorProdutos">
+                                <i class="fas fa-box"></i> 
+                                Mostrando <span id="produtosVisiveis">0</span> de <span id="totalProdutos">{{ produtos|length }}</span> produtos
+                            </span>
+                            <div class="btn-group" role="group" id="controlesNavegacao">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnterior" disabled>
+                                    <i class="fas fa-chevron-left"></i> Anterior
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximo">
+                                    Próximo <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 {% if produtos %}
                 <div class="table-responsive">
                     <table class="table table-hover" id="tabelaProdutos">
@@ -663,6 +696,102 @@ $(document).ready(function() {
     // Inicializar campos de cálculo
     $('#preco_custo, #margem_lucro').on('input', calcularPrecoVendaAutomatico);
     $('#edit_preco_custo, #edit_margem_lucro').on('input', calcularPrecoVendaEdit);
+    
+    // Inicializar paginação
+    inicializarPaginacao();
+});
+
+// Variáveis de paginação
+let paginaAtual = 1;
+let itensPorPagina = 20;
+let todasAsLinhas = [];
+
+// Inicializar sistema de paginação
+function inicializarPaginacao() {
+    // Coletar todas as linhas da tabela
+    todasAsLinhas = Array.from($('#tabelaProdutos tbody tr'));
+    
+    // Event listeners para controles
+    $('#itensPorPagina').on('change', function() {
+        const valor = $(this).val();
+        itensPorPagina = valor === 'all' ? todasAsLinhas.length : parseInt(valor);
+        paginaAtual = 1;
+        atualizarPaginacao();
+    });
+    
+    $('#btnAnterior').on('click', function() {
+        if (paginaAtual > 1) {
+            paginaAtual--;
+            atualizarPaginacao();
+        }
+    });
+    
+    $('#btnProximo').on('click', function() {
+        const totalPaginas = Math.ceil(todasAsLinhas.length / itensPorPagina);
+        if (paginaAtual < totalPaginas) {
+            paginaAtual++;
+            atualizarPaginacao();
+        }
+    });
+    
+    // Atualizar busca para trabalhar com paginação
+    $('#buscaProduto').on('keyup', function() {
+        const termo = $(this).val().toLowerCase();
+        
+        if (termo === '') {
+            // Se não há busca, usar todas as linhas
+            todasAsLinhas = Array.from($('#tabelaProdutos tbody tr'));
+        } else {
+            // Filtrar linhas baseado na busca
+            todasAsLinhas = Array.from($('#tabelaProdutos tbody tr')).filter(function(linha) {
+                return $(linha).text().toLowerCase().includes(termo);
+            });
+        }
+        
+        paginaAtual = 1;
+        atualizarPaginacao();
+    });
+    
+    // Inicializar com os valores padrão
+    atualizarPaginacao();
+}
+
+// Atualizar a paginação
+function atualizarPaginacao() {
+    const totalItens = todasAsLinhas.length;
+    const totalPaginas = Math.ceil(totalItens / itensPorPagina);
+    
+    // Ocultar todas as linhas primeiro
+    $('#tabelaProdutos tbody tr').hide();
+    
+    // Calcular índices
+    const inicio = (paginaAtual - 1) * itensPorPagina;
+    const fim = inicio + itensPorPagina;
+    
+    // Mostrar apenas as linhas da página atual
+    const linhasParaMostrar = todasAsLinhas.slice(inicio, fim);
+    $(linhasParaMostrar).show();
+    
+    // Atualizar contador
+    const produtosVisiveis = linhasParaMostrar.length;
+    $('#produtosVisiveis').text(produtosVisiveis);
+    $('#totalProdutos').text(totalItens);
+    
+    // Atualizar botões de navegação
+    $('#btnAnterior').prop('disabled', paginaAtual <= 1);
+    $('#btnProximo').prop('disabled', paginaAtual >= totalPaginas);
+    
+    // Mostrar/ocultar controles de navegação
+    if (totalPaginas <= 1) {
+        $('#controlesNavegacao').hide();
+    } else {
+        $('#controlesNavegacao').show();
+    }
+    
+    // Atualizar texto dos botões com número da página
+    $('#btnAnterior').html(`<i class="fas fa-chevron-left"></i> Anterior ${paginaAtual > 1 ? '(' + (paginaAtual - 1) + ')' : ''}`);
+    $('#btnProximo').html(`Próximo ${paginaAtual < totalPaginas ? '(' + (paginaAtual + 1) + ')' : ''} <i class="fas fa-chevron-right"></i>`);
+}
 });
 </script>
 
