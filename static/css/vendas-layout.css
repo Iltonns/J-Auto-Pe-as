@@ -1,0 +1,549 @@
+/* ===== ESTILOS MODERNOS PARA ÁREA DE VENDAS ===== */
+
+/* Usando a paleta de cores do sistema automotive-theme */
+:root {
+    --primary-dark: #1a237e;        /* Azul escuro profissional */
+    --primary-blue: #1a237e;        /* Azul vibrante */
+    --accent-orange: #ff6d00;       /* Laranja energia */
+    --accent-red: #d32f2f;          /* Vermelho intenso */
+    --neutral-dark: #1a237e;        /* Cinza escuro metal */
+    --neutral-medium: #1a237e;      /* Cinza médio */
+    --neutral-light: #eceff1;       /* Cinza claro */
+    --success: #1d9b23;            /* Verde sucesso */
+    --warning: #f57c00;            /* Laranja alerta */
+    --danger: #c62828;             /* Vermelho perigo */
+    --gradient-primary: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
+    --gradient-accent: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+    --gradient-neutral: linear-gradient(135deg, var(--neutral-dark) 0%, var(--neutral-medium) 100%);
+}
+
+/* Layout principal responsivo */
+.vendas-container {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 1.5rem;
+    min-height: calc(100vh - 200px);
+}
+
+@media (max-width: 1200px) {
+    .vendas-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+/* Card principal de vendas */
+.venda-principal {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    overflow: hidden;
+    position: relative;
+}
+
+.venda-principal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-primary);
+}
+
+/* Header do card com gradiente */
+.card-header-vendas {
+    background: var(--gradient-primary);
+    color: white;
+    padding: 1.5rem;
+    border: none;
+    margin-bottom: 0;
+}
+
+.card-header-vendas h5 {
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.card-header-vendas i {
+    font-size: 1.2rem;
+}
+
+/* Seções organizadas */
+.secao-vendas {
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.secao-vendas:not(:last-child) {
+    border-bottom: 1px solid var(--neutral-light);
+}
+
+.secao-titulo {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--neutral-dark);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Campo de busca aprimorado */
+.busca-container {
+    position: relative;
+}
+
+.busca-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+#busca_produto {
+    border: 2px solid var(--neutral-light);
+    border-radius: 15px;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: white;
+    width: 100%;
+}
+
+#busca_produto:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 0.2rem rgba(41, 98, 255, 0.15);
+    outline: none;
+}
+
+#busca_produto.searching {
+    border-color: var(--accent-orange);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23ff6d00'%3e%3cpath fill-rule='evenodd' d='M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z' clip-rule='evenodd' /%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 20px;
+}
+
+/* Botões de ação modernos */
+.btn-vendas {
+    border-radius: 12px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-vendas:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.btn-busca-avancada {
+    background: var(--gradient-accent);
+    color: white;
+}
+
+.btn-finalizar {
+    background: linear-gradient(135deg, var(--success) 0%, #20c997 100%);
+    color: white;
+    font-size: 1.1rem;
+    padding: 0.8rem 2rem;
+}
+
+.btn-limpar {
+    background: var(--gradient-neutral);
+    color: white;
+}
+
+/* Tabela de itens moderna */
+.tabela-vendas {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    border: none;
+}
+
+.tabela-vendas thead {
+    background: var(--gradient-neutral);
+    color: white;
+}
+
+.tabela-vendas th {
+    border: none;
+    padding: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+.tabela-vendas td {
+    border: none;
+    padding: 1rem;
+    border-bottom: 1px solid var(--neutral-light);
+    vertical-align: middle;
+}
+
+.tabela-vendas tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: scale(1.005);
+    transition: all 0.2s ease;
+}
+
+/* Resumo de venda */
+.resumo-venda {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.resumo-venda .card-body {
+    padding: 2rem;
+}
+
+.total-venda {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+    text-align: center;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Produtos rápidos sidebar */
+.sidebar-produtos {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    height: fit-content;
+    position: sticky;
+    top: 2rem;
+}
+
+.produtos-rapidos-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+}
+
+.produto-rapido {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 2px solid var(--neutral-light);
+    border-radius: 15px;
+    padding: 1rem;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.produto-rapido::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.produto-rapido:hover::before {
+    transform: scaleX(1);
+}
+
+.produto-rapido:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(41, 98, 255, 0.15);
+    border-color: var(--primary-blue);
+}
+
+.produto-nome {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--neutral-dark);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+.produto-preco {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--success);
+}
+
+.produto-estoque {
+    font-size: 0.7rem;
+    color: var(--neutral-medium);
+    margin-top: 0.25rem;
+}
+
+/* Resultados de busca */
+#resultadoBusca {
+    margin-top: 1rem;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    border: none;
+    animation: fadeInUp 0.3s ease;
+    max-height: 300px;
+    background: white;
+    z-index: 1000;
+    position: relative;
+}
+
+.resultado-header {
+    background: var(--gradient-accent);
+    color: white;
+    padding: 1rem;
+    font-weight: 600;
+}
+
+.tabela-busca {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.produto-resultado {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.produto-resultado:hover {
+    background-color: #f8f9fa !important;
+    transform: scale(1.002);
+}
+
+.produto-resultado button:hover {
+    transform: scale(1.1);
+}
+
+/* Histórico de vendas */
+.historico-vendas {
+    margin-top: 2rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.historico-header {
+    background: linear-gradient(135deg, var(--neutral-dark) 0%, var(--neutral-medium) 100%);
+    color: white;
+    padding: 1.5rem;
+    font-weight: 600;
+}
+
+/* Indicadores de status */
+.status-badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-dinheiro { background: #d4edda; color: var(--success); }
+.status-pix { background: #cce5ff; color: var(--primary-dark); }
+.status-cartao { background: #fff3cd; color: var(--warning); }
+
+/* Lista de produtos de busca */
+.lista-produtos-busca {
+    margin: 0;
+}
+
+.lista-produtos-busca .list-group-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.lista-produtos-busca .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Loading indicator */
+.btn-loading {
+    position: relative;
+}
+
+.btn-loading .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Indicador de limpar busca */
+#limparBusca {
+    background: var(--danger);
+    color: white;
+    border-left: none;
+    cursor: pointer;
+}
+
+#limparBusca:hover {
+    background: var(--accent-red);
+}
+
+/* Animações */
+@keyframes fadeInUp {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .vendas-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .produtos-rapidos-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .secao-vendas {
+        padding: 1rem;
+    }
+    
+    .total-venda {
+        font-size: 1.5rem;
+        padding: 0.75rem;
+    }
+    
+    .card-header-vendas {
+        padding: 1rem;
+    }
+    
+    .resumo-venda .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Campo de desconto */
+#desconto_percentual {
+    border: 2px solid var(--success);
+    border-radius: 10px;
+}
+
+#desconto_percentual:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+#valorDesconto {
+    font-weight: bold;
+    color: var(--danger) !important;
+}
+
+/* Estilos para impressão de recibo */
+.recibo-print {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #000;
+}
+
+.recibo-print .header {
+    text-align: center;
+    border-bottom: 2px solid #000;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+}
+
+.recibo-print .logo {
+    max-width: 150px;
+    max-height: 60px;
+    margin-bottom: 10px;
+}
+
+.recibo-print .empresa-info h2 {
+    font-size: 16px;
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+.recibo-print .empresa-info p {
+    font-size: 10px;
+    margin: 2px 0;
+}
+
+.recibo-print .venda-details {
+    margin: 15px 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.recibo-print .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+}
+
+.recibo-print .items-table th,
+.recibo-print .items-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: left;
+}
+
+.recibo-print .items-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+.recibo-print .items-table .text-right {
+    text-align: right;
+}
+
+.recibo-print .totals {
+    margin-top: 15px;
+    text-align: right;
+}
+
+.recibo-print .total-final {
+    font-size: 14px;
+    font-weight: bold;
+    border-top: 2px solid #000;
+    padding-top: 5px;
+}

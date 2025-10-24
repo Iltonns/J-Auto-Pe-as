@@ -3,467 +3,317 @@
 {% block title %}Vendas e Caixa - Sistema de Autopeças{% endblock %}
 {% block page_title %}Sistema de Vendas e Caixa{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/vendas-layout.css') }}">
+{% endblock %}
+
 {% block content %}
-<style>
-/* Estilos específicos para a página de vendas */
-.produto-rapido {
-    font-size: 0.7rem;
-    padding: 0.25rem;
-    height: auto;
-    min-height: 60px;
-    white-space: normal;
-    line-height: 1.2;
-}
 
-.produto-rapido:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
-#resultadoBusca {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    border-radius: 0.375rem;
-    background: white;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 1000;
-    position: relative;
-}
-
-.lista-produtos-busca {
-    margin: 0;
-}
-
-.lista-produtos-busca .list-group-item {
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.lista-produtos-busca .list-group-item:hover {
-    background-color: #f8f9fa;
-}
-
-/* Melhorias na tabela de busca */
-.produto-resultado:hover {
-    background-color: #f8f9fa !important;
-}
-
-.produto-resultado button:hover {
-    transform: scale(1.1);
-}
-
-/* Campo de busca com feedback visual */
-#busca_produto:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
-
-#busca_produto.searching {
-    border-color: #ffc107;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23ffc107'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='10.5 10.5l-3-3'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 16px 12px;
-}
-
-/* Loading indicator */
-.btn-loading {
-    position: relative;
-}
-
-.btn-loading .fa-spinner {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Indicador de limpar busca */
-#limparBusca {
-    background: #dc3545;
-    color: white;
-    border-left: none;
-}
-
-#limparBusca:hover {
-    background: #c82333;
-}
-
-/* Estilos para impressão de recibo */
-.recibo-print {
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    line-height: 1.4;
-    color: #000;
-}
-
-/* Estilos para campo de desconto */
-#desconto_percentual {
-    border: 2px solid #28a745;
-}
-
-#desconto_percentual:focus {
-    border-color: #dc3545;
-    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-}
-
-#valorDesconto {
-    font-weight: bold;
-    color: #dc3545 !important;
-}
-
-.recibo-print .header {
-    text-align: center;
-    border-bottom: 2px solid #000;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-}
-
-.recibo-print .logo {
-    max-width: 150px;
-    max-height: 60px;
-    margin-bottom: 10px;
-}
-
-.recibo-print .empresa-info h2 {
-    font-size: 16px;
-    font-weight: bold;
-    margin: 5px 0;
-}
-
-.recibo-print .empresa-info p {
-    font-size: 10px;
-    margin: 2px 0;
-}
-
-.recibo-print .venda-details {
-    margin: 15px 0;
-    padding: 10px 0;
-    border-bottom: 1px solid #ddd;
-}
-
-.recibo-print .items-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 15px 0;
-}
-
-.recibo-print .items-table th,
-.recibo-print .items-table td {
-    border: 1px solid #000;
-    padding: 4px;
-    text-align: left;
-}
-
-.recibo-print .items-table th {
-    background-color: #f0f0f0;
-    font-weight: bold;
-}
-
-.recibo-print .items-table .text-right {
-    text-align: right;
-}
-
-.recibo-print .totals {
-    margin-top: 15px;
-    text-align: right;
-}
-
-.recibo-print .total-final {
-    font-size: 14px;
-    font-weight: bold;
-    border-top: 2px solid #000;
-    padding-top: 5px;
-}
-</style>
-<div class="row">
-    <!-- Área de Vendas -->
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-cash-register"></i> Nova Venda
-                </h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('registrar_venda') }}" id="formVenda">
-                    <!-- Seleção de Cliente -->
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="cliente_id" class="form-label">Cliente</label>
-                            <select class="form-control" id="cliente_id" name="cliente_id">
-                                <option value="">Cliente Avulso</option>
-                                {% for cliente in clientes %}
-                                <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="forma_pagamento" class="form-label">Forma de Pagamento *</label>
-                            <select class="form-control" id="forma_pagamento" name="forma_pagamento" required>
-                                <option value="dinheiro">Dinheiro</option>
-                                <option value="pix">PIX</option>
-                                <option value="cartao_debito">Cartão de Débito</option>
-                                <option value="cartao_credito">Cartão de Crédito</option>
-                                <option value="prazo">A Prazo</option>
-                            </select>
-                        </div>
+<div class="vendas-container">
+    <!-- ÁREA PRINCIPAL DE VENDAS -->
+    <div class="venda-principal">
+        <div class="card-header-vendas">
+            <h5>
+                <i class="fas fa-cash-register"></i>
+                Nova Venda
+            </h5>
+        </div>
+        
+        <form method="POST" action="{{ url_for('registrar_venda') }}" id="formVenda">
+            <!-- SEÇÃO: INFORMAÇÕES GERAIS -->
+            <div class="secao-vendas">
+                <div class="secao-titulo">
+                    <i class="fas fa-user"></i>
+                    Informações da Venda
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="cliente_id" class="form-label">Cliente</label>
+                        <select class="form-control" id="cliente_id" name="cliente_id">
+                            <option value="">Cliente Avulso</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    
-                    <!-- Busca de Produtos -->
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="busca_produto" class="form-label">Buscar Produto</label>
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-search"></i>
-                                </span>
+                    <div class="col-md-6 mb-3">
+                        <label for="forma_pagamento" class="form-label">Forma de Pagamento *</label>
+                        <select class="form-control" id="forma_pagamento" name="forma_pagamento" required>
+                            <option value="dinheiro">💰 Dinheiro</option>
+                            <option value="pix">📱 PIX</option>
+                            <option value="cartao_debito">💳 Cartão de Débito</option>
+                            <option value="cartao_credito">💳 Cartão de Crédito</option>
+                            <option value="prazo">📅 A Prazo</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SEÇÃO: BUSCA DE PRODUTOS -->
+            <div class="secao-vendas">
+                <div class="secao-titulo">
+                    <i class="fas fa-search"></i>
+                    Buscar Produtos
+                </div>
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="busca_produto" class="form-label">Buscar Produto</label>
+                        <div class="busca-container">
+                            <div class="busca-input-group">
                                 <input type="text" class="form-control" id="busca_produto" 
                                        placeholder="Nome / Código Fornecedor / Código de Barras / ID" 
                                        autocomplete="off">
-                                <button type="button" class="btn btn-outline-primary" onclick="buscarProdutoDetalhado()">
+                            </div>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-vendas btn-busca-avancada" onclick="buscarProdutoDetalhado()">
                                     <i class="fas fa-list"></i> Busca Avançada
                                 </button>
                             </div>
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle"></i> 
-                                Digite para buscar em tempo real ou use Enter para busca rápida. 
-                                <strong>F3:</strong> focar na busca | <strong>ESC:</strong> limpar
-                            </small>
                         </div>
-                        <div class="col-md-4">
-                            <label for="quantidade_produto" class="form-label">Quantidade</label>
-                            <input type="number" class="form-control" id="quantidade_produto" value="1" min="1">
-                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Digite para buscar em tempo real ou use Enter para busca rápida. 
+                            <strong>F3:</strong> focar na busca | <strong>ESC:</strong> limpar
+                        </small>
                     </div>
-                    
-                    <!-- Resultado da Busca -->
-                    <div id="resultadoBusca" class="mb-3" style="display: none;">
-                        <div class="card">
-                            <div class="card-header bg-info text-white">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-search"></i> Resultados da Busca
-                                </h6>
-                            </div>
-                            <!-- Controles de Paginação para Busca -->
-                            <div class="card-body p-2">
-                                <div id="controlesPaginacaoBusca"></div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                                    <table class="table table-hover mb-0" id="tabelaBuscaProdutos">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Nome</th>
-                                                <th>Cód. Fornecedor</th>
-                                                <th>Categoria</th>
-                                                <th>Estoque</th>
-                                                <th>Preço</th>
-                                                <th>Ação</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="quantidade_produto" class="form-label">Quantidade</label>
+                        <input type="number" class="form-control" id="quantidade_produto" value="1" min="1">
                     </div>
-                    
-                    <!-- Lista de Produtos na Venda -->
-                    <div class="table-responsive mb-3">
-                        <table class="table table-bordered" id="tabelaVenda">
-                            <thead class="table-dark">
+                </div>
+                
+                <!-- RESULTADOS DA BUSCA -->
+                <div id="resultadoBusca" style="display: none;">
+                    <div class="resultado-header">
+                        <i class="fas fa-search"></i> Resultados da Busca
+                    </div>
+                    <div class="tabela-busca">
+                        <table class="table table-hover mb-0" id="tabelaBuscaProdutos">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Produto</th>
-                                    <th>Qtd</th>
-                                    <th>Preço Unit.</th>
-                                    <th>Subtotal</th>
-                                    <th>Ações</th>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Cód. Fornecedor</th>
+                                    <th>Categoria</th>
+                                    <th>Estoque</th>
+                                    <th>Preço</th>
+                                    <th>Ação</th>
                                 </tr>
                             </thead>
-                            <tbody id="itensVenda">
-                                <tr id="linhaVazia">
-                                    <td colspan="5" class="text-center text-muted">
-                                        <i class="fas fa-cart-plus"></i> Adicione produtos à venda
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
-                    
-                    <!-- Totais e Finalização -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card bg-light">
-                                <div class="card-body">
-                                    <h5>Resumo da Venda</h5>
-                                    <p class="mb-1">Itens: <span id="totalItens">0</span></p>
-                                    <p class="mb-1">Subtotal: R$ <span id="subtotalVenda">0,00</span></p>
-                                    
-                                    <!-- Campo de Desconto -->
-                                    <div class="row mb-2">
-                                        <div class="col-6">
-                                            <label for="desconto_percentual" class="form-label small">Desconto (%)</label>
-                                            <input type="number" class="form-control form-control-sm" 
-                                                   id="desconto_percentual" name="desconto_percentual" 
-                                                   min="0" max="100" step="0.01" value="0" 
-                                                   placeholder="0.00">
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="form-label small">Valor do Desconto</label>
-                                            <div class="form-control-plaintext small text-danger" id="valorDesconto">R$ 0,00</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <hr>
-                                    <h4 class="text-primary">Total: R$ <span id="totalVenda">0,00</span></h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="valor_pago" class="form-label">Valor Pago (R$) *</label>
-                                <input type="number" class="form-control" id="valor_pago" name="valor_pago" step="0.01" min="0" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Troco</label>
-                                <div class="form-control-plaintext fw-bold" id="troco">R$ 0,00</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Botões -->
-                    <div class="d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary" onclick="limparVenda()">
-                            <i class="fas fa-trash"></i> Limpar
-                        </button>
-                        <button type="submit" class="btn btn-primary" id="btnFinalizar" disabled>
-                            <i class="fas fa-shopping-cart"></i> Finalizar Venda
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Painel de Produtos Rápidos -->
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="fas fa-bolt"></i> Produtos Rápidos
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="row g-2" id="produtosRapidos">
-                    {% for produto in produtos[:12] %}
-                    <div class="col-6">
-                        <button type="button" class="btn btn-outline-primary btn-sm w-100 produto-rapido" 
-                                data-id="{{ produto.id }}" 
-                                data-nome="{{ produto.nome }}" 
-                                data-preco="{{ produto.preco }}"
-                                data-estoque="{{ produto.estoque }}"
-                                data-codigo-fornecedor="{{ produto.codigo_fornecedor or '' }}"
-                                title="{{ produto.nome }} - R$ {{ '%.2f'|format(produto.preco) }}{% if produto.codigo_fornecedor %} | Cód: {{ produto.codigo_fornecedor }}{% endif %}">
-                            <small><strong>{{ produto.nome[:12] }}{% if produto.nome|length > 12 %}...{% endif %}</strong></small><br>
-                            {% if produto.codigo_fornecedor %}
-                            <small class="text-muted">{{ produto.codigo_fornecedor }}</small><br>
-                            {% endif %}
-                            <strong class="text-success">R$ {{ "%.2f"|format(produto.preco) }}</strong>
-                            <br><small class="text-muted">Est: {{ produto.estoque }}</small>
-                        </button>
-                    </div>
-                    {% endfor %}
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Seção de Vendas Realizadas -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-history"></i> Vendas Realizadas Hoje
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-dark">
+            
+            <!-- SEÇÃO: ITENS DA VENDA -->
+            <div class="secao-vendas">
+                <div class="secao-titulo">
+                    <i class="fas fa-shopping-cart"></i>
+                    Itens da Venda
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table tabela-vendas" id="tabelaVenda">
+                        <thead>
                             <tr>
-                                <th>Nº Venda</th>
-                                <th>Cliente</th>
-                                <th>Itens</th>
-                                <th>Total</th>
-                                <th>Forma Pagamento</th>
-                                <th>Hora</th>
+                                <th>Produto</th>
+                                <th>Qtd</th>
+                                <th>Preço Unit.</th>
+                                <th>Subtotal</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% if vendas_hoje %}
-                                {% for venda in vendas_hoje %}
-                                <tr>
-                                    <td>
-                                        <strong>#{{ venda.id }}</strong>
-                                    </td>
-                                    <td>
-                                        {{ venda.cliente or 'Cliente Avulso' }}
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info">{{ venda.total_itens }} itens</span>
-                                    </td>
-                                    <td>
-                                        <strong class="text-success">R$ {{ "%.2f"|format(venda.total)|replace('.', ',') }}</strong>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-{% if venda.forma_pagamento == 'dinheiro' %}success{% elif venda.forma_pagamento == 'pix' %}primary{% elif venda.forma_pagamento == 'cartao_credito' %}warning{% elif venda.forma_pagamento == 'cartao_debito' %}info{% else %}secondary{% endif %}">
-                                            {{ venda.forma_pagamento|replace('_', ' ')|title }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if venda.data_venda %}
-                                            {{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}
-                                        {% else %}
-                                            --:--
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="btn-group" role="group">
-                                            <button class="btn btn-sm btn-primary" onclick="visualizarVenda({{ venda.id }})" title="Visualizar">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-success" onclick="imprimirRecibo({{ venda.id }})" title="Imprimir Recibo">
-                                                <i class="fas fa-print"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted">
-                                        <i class="fas fa-info-circle"></i> Nenhuma venda realizada hoje
-                                    </td>
-                                </tr>
-                            {% endif %}
+                        <tbody id="itensVenda">
+                            <tr id="linhaVazia">
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <i class="fas fa-cart-plus fa-2x mb-2"></i><br>
+                                    <strong>Adicione produtos à venda</strong><br>
+                                    <small>Use a busca acima ou os produtos rápidos ao lado</small>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+            
+            <!-- SEÇÃO: FINALIZAÇÃO -->
+            <div class="secao-vendas">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="resumo-venda">
+                            <div class="card-body">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-calculator"></i>
+                                    Resumo da Venda
+                                </h5>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Itens:</span>
+                                    <strong><span id="totalItens">0</span></strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-3">
+                                    <span>Subtotal:</span>
+                                    <strong>R$ <span id="subtotalVenda">0,00</span></strong>
+                                </div>
+                                
+                                <!-- DESCONTO -->
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <label for="desconto_percentual" class="form-label small">Desconto (%)</label>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               id="desconto_percentual" name="desconto_percentual" 
+                                               min="0" max="100" step="0.01" value="0" 
+                                               placeholder="0.00">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Valor do Desconto</label>
+                                        <div class="form-control-plaintext small text-danger" id="valorDesconto">R$ 0,00</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="total-venda">
+                                    R$ <span id="totalVenda">0,00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="valor_pago" class="form-label">
+                                <i class="fas fa-money-bill-wave"></i>
+                                Valor Pago (R$) *
+                            </label>
+                            <input type="number" class="form-control" id="valor_pago" name="valor_pago" step="0.01" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-coins"></i>
+                                Troco
+                            </label>
+                            <div class="form-control-plaintext fw-bold fs-4" id="troco">R$ 0,00</div>
+                        </div>
+                        
+                        <!-- BOTÕES DE AÇÃO -->
+                        <div class="d-flex justify-content-end gap-3 mt-4">
+                            <button type="button" class="btn btn-vendas btn-limpar" onclick="limparVenda()">
+                                <i class="fas fa-trash"></i> Limpar
+                            </button>
+                            <button type="submit" class="btn btn-vendas btn-finalizar" id="btnFinalizar" disabled>
+                                <i class="fas fa-shopping-cart"></i> Finalizar Venda
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- SIDEBAR: PRODUTOS RÁPIDOS -->
+    <div class="sidebar-produtos">
+        <div class="card-header-vendas">
+            <h6 class="mb-0">
+                <i class="fas fa-bolt"></i> Produtos Rápidos
+            </h6>
+        </div>
+        <div class="produtos-rapidos-grid" id="produtosRapidos">
+            {% for produto in produtos[:12] %}
+            <button type="button" class="produto-rapido" 
+                    data-id="{{ produto.id }}" 
+                    data-nome="{{ produto.nome }}" 
+                    data-preco="{{ produto.preco }}"
+                    data-estoque="{{ produto.estoque }}"
+                    data-codigo-fornecedor="{{ produto.codigo_fornecedor or '' }}"
+                    title="{{ produto.nome }} - R$ {{ '%.2f'|format(produto.preco) }}{% if produto.codigo_fornecedor %} | Cód: {{ produto.codigo_fornecedor }}{% endif %}">
+                <div class="produto-nome">
+                    <strong>{{ produto.nome[:15] }}{% if produto.nome|length > 15 %}...{% endif %}</strong>
+                </div>
+                {% if produto.codigo_fornecedor %}
+                <div class="text-muted small">{{ produto.codigo_fornecedor }}</div>
+                {% endif %}
+                <div class="produto-preco">R$ {{ "%.2f"|format(produto.preco) }}</div>
+                <div class="produto-estoque">Est: {{ produto.estoque }}</div>
+            </button>
+            {% endfor %}
         </div>
     </div>
 </div>
 
-<!-- Modal Produto Encontrado -->
+<!-- HISTÓRICO DE VENDAS -->
+<div class="historico-vendas">
+    <div class="historico-header">
+        <h5 class="mb-0">
+            <i class="fas fa-history"></i> Vendas Realizadas Hoje
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nº Venda</th>
+                        <th>Cliente</th>
+                        <th>Itens</th>
+                        <th>Total</th>
+                        <th>Forma Pagamento</th>
+                        <th>Hora</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if vendas_hoje %}
+                        {% for venda in vendas_hoje %}
+                        <tr>
+                            <td>
+                                <strong>#{{ venda.id }}</strong>
+                            </td>
+                            <td>
+                                {{ venda.cliente or 'Cliente Avulso' }}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ venda.total_itens }} itens</span>
+                            </td>
+                            <td>
+                                <strong class="text-success">R$ {{ "%.2f"|format(venda.total)|replace('.', ',') }}</strong>
+                            </td>
+                            <td>
+                                <span class="status-badge {% if venda.forma_pagamento == 'dinheiro' %}status-dinheiro{% elif venda.forma_pagamento == 'pix' %}status-pix{% else %}status-cartao{% endif %}">
+                                    {{ venda.forma_pagamento|replace('_', ' ')|title }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if venda.data_venda %}
+                                    {{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}
+                                {% else %}
+                                    --:--
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-primary" onclick="visualizarVenda({{ venda.id }})" title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <a href="{{ url_for('visualizar_venda', venda_id=venda.id) }}" target="_blank" class="btn btn-sm btn-success" title="Imprimir Recibo">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fas fa-info-circle fa-2x mb-2"></i><br>
+                                <strong>Nenhuma venda realizada hoje</strong><br>
+                                <small>As vendas aparecerão aqui conforme forem sendo realizadas</small>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PRODUTO ENCONTRADO -->
 <div class="modal fade" id="modalProdutoEncontrado" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -474,11 +324,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="dadosProdutoEncontrado">
-                <!-- Dados do produto serão carregados aqui -->
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="confirmarAdicaoProduto()">
+                <button type="button" class="btn btn-primary" onclick="adicionarProdutoVenda(produtoTemp.id, produtoTemp.nome, produtoTemp.preco, produtoTemp.estoque, parseInt($('#quantidade_produto').val()))">
                     <i class="fas fa-plus"></i> Adicionar à Venda
                 </button>
             </div>
@@ -492,86 +341,8 @@
 <script>
 let itensVenda = [];
 let produtoTemp = null;
-
-// Buscar produto
-function buscarProduto() {
-    const termoBusca = $('#busca_produto').val().trim();
-    if (!termoBusca) {
-        alert('Digite um código, nome ou ID do produto');
-        return;
-    }
-    
-    fetch(`/api/produto/${encodeURIComponent(termoBusca)}`)
-        .then(response => response.json())
-        .then(produto => {
-            if (produto.error) {
-                alert('Produto não encontrado');
-                $('#busca_produto').focus().select();
-                return;
-            }
-            
-            if (produto.estoque <= 0) {
-                alert('Produto sem estoque!');
-                return;
-            }
-            
-            produtoTemp = produto;
-            mostrarProdutoEncontrado(produto);
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao buscar produto');
-        });
-}
-
-// Mostrar produto encontrado
-function mostrarProdutoEncontrado(produto) {
-    const quantidade = $('#quantidade_produto').val();
-    const conteudo = `
-        <div class="row">
-            <div class="col-12">
-                <p><strong>Nome:</strong> ${produto.nome}</p>
-                <p><strong>Preço:</strong> R$ ${produto.preco.toFixed(2)}</p>
-                <p><strong>Estoque:</strong> ${produto.estoque}</p>
-                <p><strong>Quantidade a adicionar:</strong> ${quantidade}</p>
-                <hr>
-                <p><strong>Subtotal:</strong> <span class="text-success">R$ ${(produto.preco * quantidade).toFixed(2)}</span></p>
-            </div>
-        </div>
-    `;
-    
-    $('#dadosProdutoEncontrado').html(conteudo);
-    $('#modalProdutoEncontrado').modal('show');
-}
-
-// Confirmar adição do produto
-function confirmarAdicaoProduto() {
-    if (!produtoTemp) return;
-    
-    const quantidade = parseInt($('#quantidade_produto').val());
-    
-    // Verificar se produto já está na venda
-    const itemExistente = itensVenda.find(item => item.id === produtoTemp.id);
-    
-    if (itemExistente) {
-        itemExistente.quantidade += quantidade;
-        itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
-    } else {
-        itensVenda.push({
-            id: produtoTemp.id,
-            nome: produtoTemp.nome,
-            preco: produtoTemp.preco,
-            quantidade: quantidade,
-            subtotal: produtoTemp.preco * quantidade
-        });
-    }
-    
-    atualizarTabelaVenda();
-    $('#modalProdutoEncontrado').modal('hide');
-    $('#busca_produto').val('').focus();
-    $('#quantidade_produto').val(1);
-    produtoTemp = null;
-}
+let subtotalVendaCalculado = 0;
+let totalComDescontoCalculado = 0;
 
 // Atualizar tabela de venda
 function atualizarTabelaVenda() {
@@ -581,8 +352,10 @@ function atualizarTabelaVenda() {
     if (itensVenda.length === 0) {
         tbody.append(`
             <tr id="linhaVazia">
-                <td colspan="5" class="text-center text-muted">
-                    <i class="fas fa-cart-plus"></i> Adicione produtos à venda
+                <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fas fa-cart-plus fa-2x mb-2"></i><br>
+                    <strong>Adicione produtos à venda</strong><br>
+                    <small>Use a busca acima ou os produtos rápidos ao lado</small>
                 </td>
             </tr>
         `);
@@ -591,20 +364,20 @@ function atualizarTabelaVenda() {
         itensVenda.forEach((item, index) => {
             tbody.append(`
                 <tr>
-                    <td>${item.nome}</td>
+                    <td><strong>${item.nome}</strong></td>
                     <td>
                         <input type="number" class="form-control form-control-sm" 
                                value="${item.quantidade}" min="1" 
-                               onchange="alterarQuantidade(${index}, this.value)">
+                               onchange="alterarQuantidade(${index}, this.value)" style="width: 80px;">
                         <input type="hidden" name="produto_id[]" value="${item.id}">
                         <input type="hidden" name="quantidade[]" value="${item.quantidade}">
                         <input type="hidden" name="preco[]" value="${item.preco}">
                     </td>
-                    <td>R$ ${item.preco.toFixed(2)}</td>
-                    <td>R$ ${item.subtotal.toFixed(2)}</td>
+                    <td><strong>R$ ${item.preco.toFixed(2).replace('.', ',')}</strong></td>
+                    <td><strong class="text-success">R$ ${item.subtotal.toFixed(2).replace('.', ',')}</strong></td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-danger" 
-                                onclick="removerItem(${index})">
+                                onclick="removerItem(${index})" title="Remover item">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -625,7 +398,6 @@ function alterarQuantidade(index, novaQuantidade) {
     itensVenda[index].quantidade = novaQuantidade;
     itensVenda[index].subtotal = itensVenda[index].preco * novaQuantidade;
     
-    // Atualizar os inputs hidden na linha correspondente
     const linha = $(`#itensVenda tr:eq(${index})`);
     linha.find('input[name="quantidade[]"]').val(novaQuantidade);
     
@@ -643,12 +415,13 @@ function atualizarTotais() {
     const totalItens = itensVenda.reduce((sum, item) => sum + item.quantidade, 0);
     const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
     
-    // Calcular desconto
     const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
     const valorDesconto = (subtotal * descontoPercentual) / 100;
     const totalComDesconto = subtotal - valorDesconto;
     
-    // Atualizar display
+    subtotalVendaCalculado = subtotal;
+    totalComDescontoCalculado = totalComDesconto;
+
     $('#totalItens').text(totalItens);
     $('#subtotalVenda').text(subtotal.toFixed(2).replace('.', ','));
     $('#valorDesconto').text(`R$ ${valorDesconto.toFixed(2).replace('.', ',')}`);
@@ -659,11 +432,7 @@ function atualizarTotais() {
 
 // Calcular troco
 function calcularTroco() {
-    const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
-    const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-    const valorDesconto = (subtotal * descontoPercentual) / 100;
-    const totalComDesconto = subtotal - valorDesconto;
-    
+    const totalComDesconto = totalComDescontoCalculado;
     const valorPago = parseFloat($('#valor_pago').val()) || 0;
     const troco = valorPago - totalComDesconto;
     
@@ -696,15 +465,14 @@ function limparVenda() {
 $('.produto-rapido').click(function() {
     const id = $(this).data('id');
     const nome = $(this).data('nome');
-    const preco = $(this).data('preco');
-    const estoque = $(this).data('estoque');
+    const preco = parseFloat($(this).data('preco'));
+    const estoque = parseInt($(this).data('estoque'));
     
     if (estoque <= 0) {
         alert('Produto sem estoque!');
         return;
     }
     
-    // Verificar se produto já está na venda
     const itemExistente = itensVenda.find(item => item.id === id);
     
     if (itemExistente) {
@@ -732,12 +500,10 @@ $('.produto-rapido').click(function() {
 function buscarProdutoTempoReal(termo) {
     console.log('Busca em tempo real para:', termo);
     
-    // Cancelar busca anterior se existir
     if (window.buscaTimeout) {
         clearTimeout(window.buscaTimeout);
     }
     
-    // Aguardar um pouco antes de fazer a busca (debounce)
     window.buscaTimeout = setTimeout(() => {
         $('#busca_produto').addClass('searching');
         
@@ -754,7 +520,7 @@ function buscarProdutoTempoReal(termo) {
                 $('#busca_produto').removeClass('searching');
                 
                 if (produtos && produtos.length > 0) {
-                    mostrarResultadosBusca(produtos.slice(0, 10)); // Mostrar 10 resultados
+                    mostrarResultadosBusca(produtos.slice(0, 10));
                 } else {
                     console.log('Nenhum produto encontrado, ocultando resultados');
                     $('#resultadoBusca').hide();
@@ -765,12 +531,11 @@ function buscarProdutoTempoReal(termo) {
                 $('#busca_produto').removeClass('searching');
                 $('#resultadoBusca').hide();
                 
-                // Mostrar erro apenas se não for erro de conectividade
                 if (!error.message.includes('fetch')) {
                     console.warn('Erro na busca em tempo real, mas continuando silenciosamente');
                 }
             });
-    }, 300); // Aguardar 300ms antes de buscar
+    }, 300);
 }
 
 // Busca detalhada
@@ -784,7 +549,6 @@ function buscarProdutoDetalhado() {
         return;
     }
     
-    // Mostrar indicador de carregamento
     const btnBusca = $('button[onclick="buscarProdutoDetalhado()"]');
     const textOriginal = btnBusca.html();
     btnBusca.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Buscando...');
@@ -801,7 +565,6 @@ function buscarProdutoDetalhado() {
             console.log('Produtos encontrados na busca detalhada:', produtos.length);
             if (produtos && produtos.length > 0) {
                 mostrarResultadosBusca(produtos);
-                // Focar no primeiro resultado se houver apenas um
                 if (produtos.length === 1) {
                     setTimeout(() => {
                         const primeiroBtn = $('#tabelaBuscaProdutos tbody button').first();
@@ -821,7 +584,6 @@ function buscarProdutoDetalhado() {
             alert('Erro ao buscar produtos: ' + error.message);
         })
         .finally(() => {
-            // Restaurar botão
             btnBusca.prop('disabled', false).html(textOriginal);
         });
 }
@@ -857,7 +619,6 @@ function mostrarResultadosBusca(produtos) {
         produtos.forEach((produto, index) => {
             console.log(`Adicionando produto ${index + 1}:`, produto.nome);
             
-            // Verificar se produto tem propriedades necessárias
             if (!produto.id || !produto.nome || produto.preco === undefined) {
                 console.warn('Produto com dados incompletos:', produto);
                 return;
@@ -866,7 +627,6 @@ function mostrarResultadosBusca(produtos) {
             const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
                                produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
             
-            // Escapar aspas no nome do produto para onclick
             const nomeEscapado = (produto.nome || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
             
             const row = $(`
@@ -901,7 +661,6 @@ function mostrarResultadosBusca(produtos) {
         console.log('Exibindo div de resultados');
         $('#resultadoBusca').show();
         
-        // Scroll para o topo da tabela de resultados
         $('#resultadoBusca')[0].scrollTop = 0;
         
     } catch (error) {
@@ -911,13 +670,12 @@ function mostrarResultadosBusca(produtos) {
 }
 
 // Adicionar produto da busca à venda
-function adicionarProdutoVenda(id, nome, preco, estoque) {
+function adicionarProdutoVenda(id, nome, preco, estoque, quantidadeForçada = null) {
     try {
         console.log('Adicionando produto à venda:', {id, nome, preco, estoque});
         
-        const quantidade = parseInt($('#quantidade_produto').val()) || 1;
+        const quantidade = quantidadeForçada || parseInt($('#quantidade_produto').val()) || 1;
         
-        // Validações
         if (!id || !nome || preco === undefined) {
             alert('Dados do produto inválidos');
             return;
@@ -933,7 +691,6 @@ function adicionarProdutoVenda(id, nome, preco, estoque) {
             return;
         }
         
-        // Verificar se produto já está na venda
         const itemExistente = itensVenda.find(item => item.id === id);
         
         if (itemExistente) {
@@ -959,6 +716,12 @@ function adicionarProdutoVenda(id, nome, preco, estoque) {
         $('#quantidade_produto').val(1);
         $('#resultadoBusca').hide();
         
+        const modalElement = document.getElementById('modalProdutoEncontrado');
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+             modalInstance.hide();
+        }
+        
         console.log('Produto adicionado com sucesso');
         
     } catch (error) {
@@ -971,11 +734,9 @@ function adicionarProdutoVenda(id, nome, preco, estoque) {
 $(document).ready(function() {
     console.log('Página de vendas carregada');
     
-    // Aguardar um pouco mais para garantir que todos os elementos estão prontos
     setTimeout(function() {
         console.log('Configurando event listeners...');
         
-        // Verificar se os elementos existem
         if ($('#busca_produto').length === 0) {
             console.error('Campo de busca não encontrado!');
             return;
@@ -983,7 +744,6 @@ $(document).ready(function() {
         
         console.log('Campo de busca encontrado, configurando eventos...');
         
-        // Enter na busca
         $('#busca_produto').off('keypress').on('keypress', function(e) {
             console.log('Tecla pressionada no campo busca:', e.which);
             if (e.which === 13) {
@@ -993,12 +753,10 @@ $(document).ready(function() {
             }
         });
         
-        // Busca em tempo real
         $('#busca_produto').off('input').on('input', function() {
             const termo = $(this).val().trim();
             console.log('Input mudou para:', termo);
             
-            // Adicionar classe visual de busca
             if (termo.length >= 2) {
                 $(this).addClass('searching');
                 console.log('Iniciando busca em tempo real...');
@@ -1010,7 +768,6 @@ $(document).ready(function() {
             }
         });
         
-        // Adicionar evento para limpar busca ao clicar no X
         $('#busca_produto').after('<span class="input-group-text" id="limparBusca" style="cursor: pointer; display: none;"><i class="fas fa-times"></i></span>');
         
         $('#busca_produto').on('input', function() {
@@ -1027,14 +784,11 @@ $(document).ready(function() {
             $(this).hide();
         });
         
-        // Teclas de atalho
         $(document).on('keydown', function(e) {
-            // F3 para focar na busca
             if (e.which === 114) { // F3
                 e.preventDefault();
                 $('#busca_produto').focus().select();
             }
-            // ESC para limpar busca
             if (e.which === 27) { // ESC
                 $('#busca_produto').val('').removeClass('searching');
                 $('#resultadoBusca').hide();
@@ -1043,12 +797,10 @@ $(document).ready(function() {
         });
         
         console.log('Event listeners configurados com sucesso');
-    }, 100); // Reduzir timeout para 100ms
+    }, 100);
     
-    // Calcular troco quando valor pago muda
     $('#valor_pago').off('input').on('input', calcularTroco);
     
-    // Recalcular totais quando desconto muda
     $('#desconto_percentual').off('input').on('input', function() {
         const valor = parseFloat($(this).val()) || 0;
         if (valor > 100) {
@@ -1057,47 +809,32 @@ $(document).ready(function() {
         atualizarTotais();
     });
     
-    // Auto-fill valor pago para forma de pagamento diferente de dinheiro
     $('#forma_pagamento').off('change').change(function() {
         const formaPagamento = $(this).val();
         if (formaPagamento !== 'dinheiro') {
-            // Calcular total com desconto
-            const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
-            const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-            const valorDesconto = (subtotal * descontoPercentual) / 100;
-            const totalComDesconto = subtotal - valorDesconto;
-            
+            const totalComDesconto = totalComDescontoCalculado;
             $('#valor_pago').val(totalComDesconto.toFixed(2));
             calcularTroco();
         }
     });
     
-    // Interceptar submit do formulário de venda
     $('#formVenda').off('submit').on('submit', function(e) {
         e.preventDefault();
         
-        // Verificar se há itens na venda
         if (itensVenda.length === 0) {
             alert('Nenhum produto foi adicionado à venda!');
             return false;
         }
         
-        // Verificar se valor pago foi informado para pagamento em dinheiro
         const formaPagamento = $('#forma_pagamento').val();
         const valorPago = parseFloat($('#valor_pago').val()) || 0;
-        
-        // Calcular total com desconto
-        const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
-        const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-        const valorDesconto = (subtotal * descontoPercentual) / 100;
-        const totalComDesconto = subtotal - valorDesconto;
+        const totalComDesconto = totalComDescontoCalculado;
         
         if (formaPagamento === 'dinheiro' && valorPago < totalComDesconto) {
             alert('Valor pago é inferior ao total da venda!');
             return false;
         }
         
-        // Converter itens para JSON e adicionar ao formulário
         const itensFormatados = itensVenda.map(item => ({
             produto_id: item.id,
             quantidade: item.quantidade,
@@ -1111,9 +848,8 @@ $(document).ready(function() {
             value: JSON.stringify(itensFormatados)
         });
         
-        // Adicionar desconto em valor absoluto
         const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-        const subtotalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+        const subtotalVenda = subtotalVendaCalculado;
         const valorDescontoAbsoluto = (subtotalVenda * descontoPercentual) / 100;
         
         const descontoInput = $('<input>').attr({
@@ -1125,12 +861,10 @@ $(document).ready(function() {
         $(this).append(itensInput);
         $(this).append(descontoInput);
         
-        // Enviar o formulário
         console.log('Enviando formulário de venda...');
         this.submit();
     });
     
-    // Focus no campo de busca após configurar eventos
     setTimeout(function() {
         $('#busca_produto').focus();
         console.log('Foco aplicado ao campo de busca');
@@ -1140,314 +874,13 @@ $(document).ready(function() {
 // Função para visualizar venda
 function visualizarVenda(vendaId) {
     console.log('Visualizando venda:', vendaId);
-    // Abrir modal ou página com detalhes da venda
     window.location.href = `/vendas/${vendaId}`;
-}
-
-// Função alternativa simples para impressão
-function imprimirReciboSimples(vendaId) {
-    console.log('Iniciando impressão simples do recibo para venda:', vendaId);
-    
-    // Criar um iframe invisível para impressão
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    
-    // URL para impressão direta
-    iframe.src = `/vendas/${vendaId}/imprimir`;
-    
-    iframe.onload = function() {
-        setTimeout(() => {
-            iframe.contentWindow.print();
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
-        }, 500);
-    };
 }
 
 // Função para imprimir recibo de venda
 function imprimirRecibo(vendaId) {
-    console.log('Iniciando impressão do recibo para venda:', vendaId);
-    
-    // Mostrar indicador de carregamento
-    const originalContent = document.body.innerHTML;
-    
-    try {
-        // Buscar dados da venda e configurações da empresa
-        Promise.all([
-            fetch(`/api/venda/${vendaId}`)
-                .then(response => {
-                    console.log('Response venda status:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`Erro ao carregar venda: HTTP ${response.status}`);
-                    }
-                    return response.json();
-                }),
-            fetch('/api/configuracoes-empresa')
-                .then(response => {
-                    console.log('Response config status:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`Erro ao carregar configurações: HTTP ${response.status}`);
-                    }
-                    return response.json();
-                })
-        ])
-        .then(([venda, config]) => {
-            console.log('Dados carregados - Venda:', venda, 'Config:', config);
-            
-            if (venda.error) {
-                alert('Erro ao carregar dados da venda: ' + venda.error);
-                return;
-            }
-            
-            if (config.error) {
-                console.log('Usando configurações padrão devido ao erro:', config.error);
-                // Usar configurações padrão se houver erro
-                config = {
-                    nome_empresa: 'FG AUTO PEÇAS',
-                    endereco: 'Rua Exemplo, 123 - Centro',
-                    cidade: '',
-                    estado: '',
-                    cep: '',
-                    telefone: '(00) 0000-0000',
-                    email: 'contato@fgautopecas.com.br',
-                    cnpj: '',
-                    logo_path: ''
-                };
-            }
-            
-            // Criar conteúdo do recibo
-            let itensHTML = '';
-            venda.itens.forEach(item => {
-                itensHTML += `
-                    <tr>
-                        <td>${item.produto_nome}</td>
-                        <td class="number">${item.quantidade}</td>
-                        <td class="number">R$ ${item.preco_unitario.toFixed(2).replace('.', ',')}</td>
-                        <td class="number">R$ ${(item.quantidade * item.preco_unitario).toFixed(2).replace('.', ',')}</td>
-                    </tr>
-                `;
-            });
-            
-            let descontoHTML = '';
-            if (venda.desconto > 0) {
-                descontoHTML = `
-                    <div class="total-line" style="color: #dc3545;">
-                        <span>Desconto:</span>
-                        <span>- R$ ${venda.desconto.toFixed(2).replace('.', ',')}</span>
-                    </div>
-                `;
-            }
-            
-            const reciboHTML = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Recibo de Venda #${venda.id}</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            margin: 0;
-                            padding: 20px;
-                            font-size: 12px;
-                        }
-                        .header {
-                            text-align: center;
-                            border-bottom: 2px solid #333;
-                            padding-bottom: 10px;
-                            margin-bottom: 20px;
-                        }
-                        .logo {
-                            max-height: 60px;
-                            max-width: 150px;
-                            margin-bottom: 10px;
-                        }
-                        .empresa-info {
-                            margin-bottom: 10px;
-                        }
-                        .empresa-info h2 {
-                            margin: 0;
-                            color: #007bff;
-                            font-size: 18px;
-                        }
-                        .empresa-info p {
-                            margin: 2px 0;
-                            font-size: 11px;
-                        }
-                        .venda-info {
-                            display: flex;
-                            justify-content: space-between;
-                            margin-bottom: 20px;
-                            border-bottom: 1px solid #ddd;
-                            padding-bottom: 10px;
-                        }
-                        .venda-info div {
-                            flex: 1;
-                        }
-                        .items-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-bottom: 20px;
-                        }
-                        .items-table th,
-                        .items-table td {
-                            border: 1px solid #ddd;
-                            padding: 5px;
-                            text-align: left;
-                        }
-                        .items-table th {
-                            background-color: #f8f9fa;
-                            font-weight: bold;
-                        }
-                        .items-table td.number {
-                            text-align: right;
-                        }
-                        .totals {
-                            float: right;
-                            width: 250px;
-                            border: 1px solid #ddd;
-                            padding: 10px;
-                        }
-                        .totals .total-line {
-                            display: flex;
-                            justify-content: space-between;
-                            margin-bottom: 5px;
-                        }
-                        .totals .final-total {
-                            border-top: 2px solid #333;
-                            padding-top: 5px;
-                            font-weight: bold;
-                            font-size: 14px;
-                        }
-                        .footer {
-                            clear: both;
-                            text-align: center;
-                            margin-top: 40px;
-                            padding-top: 20px;
-                            border-top: 1px solid #ddd;
-                            font-size: 10px;
-                            color: #666;
-                        }
-                        @media print {
-                            body { margin: 0; padding: 10px; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        ${config.logo_path ? `<img src="/static/images/${config.logo_path}" alt="Logo" class="logo">` : ''}
-                        <div class="empresa-info">
-                            <h2>${config.nome_empresa}</h2>
-                            <p>${config.endereco}</p>
-                            ${config.cidade && config.estado ? `<p>${config.cidade} - ${config.estado}${config.cep ? ' - CEP: ' + config.cep : ''}</p>` : ''}
-                            <p>Tel: ${config.telefone} | Email: ${config.email}</p>
-                            ${config.cnpj ? `<p>CNPJ: ${config.cnpj}</p>` : ''}
-                        </div>
-                    </div>
-                    
-                    <div class="venda-info">
-                        <div>
-                            <strong>RECIBO DE VENDA #${venda.id}</strong><br>
-                            <strong>Cliente:</strong> ${venda.cliente_nome || 'Cliente Avulso'}<br>
-                            <strong>Data:</strong> ${new Date(venda.created_at).toLocaleDateString('pt-BR')}<br>
-                            <strong>Hora:</strong> ${new Date(venda.created_at).toLocaleTimeString('pt-BR')}
-                        </div>
-                        <div style="text-align: right;">
-                            <strong>Forma de Pagamento:</strong><br>
-                            ${venda.forma_pagamento.replace('_', ' ').toUpperCase()}<br>
-                            ${venda.valor_pago ? `<strong>Valor Pago:</strong> R$ ${venda.valor_pago.toFixed(2).replace('.', ',')}<br>` : ''}
-                            ${venda.troco ? `<strong>Troco:</strong> R$ ${venda.troco.toFixed(2).replace('.', ',')}` : ''}
-                        </div>
-                    </div>
-                    
-                    <table class="items-table">
-                        <thead>
-                            <tr>
-                                <th>Produto</th>
-                                <th style="width: 60px;">Qtd</th>
-                                <th style="width: 80px;">Preço Unit.</th>
-                                <th style="width: 80px;">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itensHTML}
-                        </tbody>
-                    </table>
-                    
-                    <div class="totals">
-                        <div class="total-line">
-                            <span>Subtotal:</span>
-                            <span>R$ ${(venda.total + (venda.desconto || 0)).toFixed(2).replace('.', ',')}</span>
-                        </div>
-                        ${descontoHTML}
-                        <div class="total-line final-total">
-                            <span>TOTAL GERAL:</span>
-                            <span>R$ ${venda.total.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="footer">
-                        <p>Obrigado pela preferência!</p>
-                        <p>Sistema de Autopeças - Recibo gerado em ${new Date().toLocaleString('pt-BR')}</p>
-                    </div>
-                    
-                    <script>
-                        window.onload = function() {
-                            window.print();
-                            // Voltar à página anterior após impressão
-                            setTimeout(function() { 
-                                window.close();
-                            }, 1000);
-                        }
-                    </script>
-                </body>
-                </html>
-            `;
-            
-            // Tentar abrir nova janela, com fallback para impressão na mesma página
-            try {
-                const reciboWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
-                
-                if (reciboWindow && !reciboWindow.closed) {
-                    // Janela aberta com sucesso
-                    reciboWindow.document.write(reciboHTML);
-                    reciboWindow.document.close();
-                    console.log('Janela de impressão aberta com sucesso');
-                } else {
-                    // Pop-up bloqueado, usar método alternativo
-                    throw new Error('Pop-up bloqueado');
-                }
-            } catch (popupError) {
-                console.log('Pop-up bloqueado, usando método alternativo');
-                
-                // Método alternativo: substituir conteúdo da página atual
-                if (confirm('O pop-up foi bloqueado. Deseja imprimir na mesma janela? (A página será recarregada após a impressão)')) {
-                    // Salvar conteúdo atual
-                    const currentContent = document.documentElement.outerHTML;
-                    
-                    // Substituir conteúdo
-                    document.open();
-                    document.write(reciboHTML);
-                    document.close();
-                    
-                    // Configurar volta ao conteúdo original após impressão
-                    setTimeout(() => {
-                        // Recarregar página original
-                        window.location.reload();
-                    }, 2000);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao carregar dados para impressão:', error);
-            alert('Erro ao carregar dados para impressão: ' + error.message);
-        });
-    } catch (error) {
-        console.error('Erro geral na função de impressão:', error);
-        alert('Erro na impressão: ' + error.message);
-    }
+    console.log('Redirecionando para visualização e impressão da venda:', vendaId);
+    window.open(`/vendas/${vendaId}`, '_blank');
 }
 </script>
 {% endblock %}
