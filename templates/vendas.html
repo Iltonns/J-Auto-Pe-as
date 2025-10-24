@@ -351,6 +351,10 @@ function alterarQuantidade(index, novaQuantidade) {
     itensVenda[index].quantidade = novaQuantidade;
     itensVenda[index].subtotal = itensVenda[index].preco * novaQuantidade;
     
+    // Atualizar os inputs hidden na linha correspondente
+    const linha = $(`#itensVenda tr:eq(${index})`);
+    linha.find('input[name="quantidade[]"]').val(novaQuantidade);
+    
     atualizarTabelaVenda();
 }
 
@@ -418,7 +422,12 @@ $('.produto-rapido').click(function() {
     const itemExistente = itensVenda.find(item => item.id === id);
     
     if (itemExistente) {
-        itemExistente.quantidade += 1;
+        const novaQuantidade = itemExistente.quantidade + 1;
+        if (novaQuantidade > estoque) {
+            alert(`Estoque insuficiente! Disponível: ${estoque}, já adicionado: ${itemExistente.quantidade}`);
+            return;
+        }
+        itemExistente.quantidade = novaQuantidade;
         itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
     } else {
         itensVenda.push({
@@ -575,6 +584,39 @@ $(document).ready(function() {
     
     // Focus no campo de busca
     $('#busca_produto').focus();
+    
+    // Interceptar submit do formulário de venda
+    $('#formVenda').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Verificar se há itens na venda
+        if (itensVenda.length === 0) {
+            alert('Nenhum produto foi adicionado à venda!');
+            return false;
+        }
+        
+        // Verificar se valor pago foi informado para pagamento em dinheiro
+        const formaPagamento = $('#forma_pagamento').val();
+        const valorPago = parseFloat($('#valor_pago').val()) || 0;
+        const totalVenda = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        if (formaPagamento === 'dinheiro' && valorPago < totalVenda) {
+            alert('Valor pago é inferior ao total da venda!');
+            return false;
+        }
+        
+        // Converter itens para JSON e adicionar ao formulário
+        const itensInput = $('<input>').attr({
+            type: 'hidden',
+            name: 'itens',
+            value: JSON.stringify(itensVenda)
+        });
+        
+        $(this).append(itensInput);
+        
+        // Enviar o formulário
+        this.submit();
+    });
 });
 </script>
 {% endblock %}
