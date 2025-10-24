@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório Financeiro - Sistema de Autopeças{% endblock %}
+{% block page_title %}Relatório Financeiro{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Filtros -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-filter"></i> Filtros
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Data Início</label>
+                        <input type="date" name="data_inicio" class="form-control" value="{{ data_inicio or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control" value="{{ data_fim or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary d-block w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if relatorio.erro %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao gerar relatório: {{ relatorio.erro }}
+            </div>
+        {% else %}
+            <!-- Resumo Financeiro -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_vendas) }}</h4>
+                                    <p class="mb-0">Total em Vendas</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-arrow-up fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_a_receber) }}</h4>
+                                    <p class="mb-0">A Receber</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-clock fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) }}</h4>
+                                    <p class="mb-0">A Pagar</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-arrow-down fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card {% if relatorio.resumo.saldo_liquido >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) }}</h4>
+                                    <p class="mb-0">Saldo Líquido</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-balance-scale fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Vendas por Forma de Pagamento -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-credit-card"></i> Vendas por Forma de Pagamento
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if relatorio.vendas_forma_pagamento %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Forma de Pagamento</th>
+                                                <th>Quantidade</th>
+                                                <th>Valor Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for forma in relatorio.vendas_forma_pagamento %}
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge bg-secondary">{{ forma.forma_pagamento }}</span>
+                                                    </td>
+                                                    <td>{{ forma.quantidade }}</td>
+                                                    <td>R$ {{ "%.2f"|format(forma.valor) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Gráfico simples -->
+                                <div class="mt-3">
+                                    {% for forma in relatorio.vendas_forma_pagamento %}
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between">
+                                                <span>{{ forma.forma_pagamento }}</span>
+                                                <span>R$ {{ "%.2f"|format(forma.valor) }}</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-primary" 
+                                                     style="width: {{ (forma.valor / relatorio.resumo.total_vendas * 100) if relatorio.resumo.total_vendas > 0 else 0 }}%">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted">Nenhuma venda encontrada no período.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contas a Receber -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-arrow-up"></i> Contas a Receber
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if relatorio.contas_receber %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Status</th>
+                                                <th>Quantidade</th>
+                                                <th>Valor Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for conta in relatorio.contas_receber %}
+                                                <tr>
+                                                    <td>
+                                                        {% if conta.status == 'pendente' %}
+                                                            <span class="badge bg-warning">{{ conta.status }}</span>
+                                                        {% else %}
+                                                            <span class="badge bg-success">{{ conta.status }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ conta.quantidade }}</td>
+                                                    <td>R$ {{ "%.2f"|format(conta.valor) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">Nenhuma conta a receber encontrada.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contas a Pagar -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-arrow-down"></i> Contas a Pagar
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if relatorio.contas_pagar %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Status</th>
+                                                <th>Quantidade</th>
+                                                <th>Valor Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for conta in relatorio.contas_pagar %}
+                                                <tr>
+                                                    <td>
+                                                        {% if conta.status == 'pendente' %}
+                                                            <span class="badge bg-danger">{{ conta.status }}</span>
+                                                        {% else %}
+                                                            <span class="badge bg-success">{{ conta.status }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ conta.quantidade }}</td>
+                                                    <td>R$ {{ "%.2f"|format(conta.valor) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">Nenhuma conta a pagar encontrada.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Movimentações do Caixa -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-cash-register"></i> Movimentações do Caixa
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if relatorio.movimentacoes_caixa %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Tipo</th>
+                                                <th>Quantidade</th>
+                                                <th>Valor Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for movimento in relatorio.movimentacoes_caixa %}
+                                                <tr>
+                                                    <td>
+                                                        {% if movimento.tipo == 'entrada' %}
+                                                            <span class="badge bg-success">{{ movimento.tipo }}</span>
+                                                        {% else %}
+                                                            <span class="badge bg-danger">{{ movimento.tipo }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ movimento.quantidade }}</td>
+                                                    <td>R$ {{ "%.2f"|format(movimento.valor) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">Nenhuma movimentação de caixa encontrada.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

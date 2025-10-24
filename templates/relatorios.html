@@ -14,41 +14,54 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <div class="card border-primary">
                             <div class="card-body text-center">
                                 <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
                                 <h5>Relatório de Vendas</h5>
-                                <p class="text-muted">Vendas por período, produtos mais vendidos</p>
-                                <button class="btn btn-primary" onclick="alert('Em desenvolvimento')">
-                                    Gerar Relatório
-                                </button>
+                                <p class="text-muted">Vendas por período, clientes e formas de pagamento</p>
+                                <a href="{{ url_for('relatorio_vendas') }}" class="btn btn-primary">
+                                    <i class="fas fa-file-chart-line"></i> Gerar Relatório
+                                </a>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <div class="card border-success">
                             <div class="card-body text-center">
-                                <i class="fas fa-boxes fa-3x text-success mb-3"></i>
-                                <h5>Relatório de Estoque</h5>
-                                <p class="text-muted">Produtos em estoque, movimentação</p>
-                                <button class="btn btn-success" onclick="alert('Em desenvolvimento')">
-                                    Gerar Relatório
-                                </button>
+                                <i class="fas fa-star fa-3x text-success mb-3"></i>
+                                <h5>Produtos Mais Vendidos</h5>
+                                <p class="text-muted">Ranking dos produtos mais vendidos</p>
+                                <a href="{{ url_for('relatorio_produtos_mais_vendidos') }}" class="btn btn-success">
+                                    <i class="fas fa-trophy"></i> Gerar Relatório
+                                </a>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <i class="fas fa-boxes fa-3x text-warning mb-3"></i>
+                                <h5>Relatório de Estoque</h5>
+                                <p class="text-muted">Situação do estoque, produtos em falta</p>
+                                <a href="{{ url_for('relatorio_estoque') }}" class="btn btn-warning">
+                                    <i class="fas fa-warehouse"></i> Gerar Relatório
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
                         <div class="card border-info">
                             <div class="card-body text-center">
                                 <i class="fas fa-dollar-sign fa-3x text-info mb-3"></i>
                                 <h5>Relatório Financeiro</h5>
                                 <p class="text-muted">Contas a pagar/receber, fluxo de caixa</p>
-                                <button class="btn btn-info" onclick="alert('Em desenvolvimento')">
-                                    Gerar Relatório
-                                </button>
+                                <a href="{{ url_for('relatorio_financeiro') }}" class="btn btn-info">
+                                    <i class="fas fa-chart-pie"></i> Gerar Relatório
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -58,7 +71,7 @@
                 
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    <strong>Em desenvolvimento:</strong> Os relatórios estão sendo desenvolvidos e estarão disponíveis em breve.
+                    <strong>Informação:</strong> Os relatórios são gerados baseados nas movimentações reais do sistema e podem ser filtrados por período.
                 </div>
             </div>
         </div>

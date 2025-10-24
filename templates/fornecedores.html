@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}Fornecedores - Sistema de Autopeças{% endblock %}
+{% block page_title %}Fornecedores{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> Gestão de Fornecedores
+                </h5>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAdicionarFornecedor">
+                    <i class="fas fa-plus"></i> Novo Fornecedor
+                </button>
+            </div>
+            <div class="card-body">
+                <!-- Controles de Paginação -->
+                <div id="controlesPaginacao"></div>
+                
+                {% if fornecedores %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover automotive-table" id="tabelaFornecedores">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>CNPJ</th>
+                                <th>Telefone</th>
+                                <th>Email</th>
+                                <th>Cidade</th>
+                                <th>Contato</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fornecedor in fornecedores %}
+                            <tr>
+                                <td>
+                                    <strong>{{ fornecedor.nome }}</strong>
+                                </td>
+                                <td>{{ fornecedor.cnpj or '-' }}</td>
+                                <td>{{ fornecedor.telefone or '-' }}</td>
+                                <td>{{ fornecedor.email or '-' }}</td>
+                                <td>{{ fornecedor.cidade or '-' }}</td>
+                                <td>{{ fornecedor.contato_pessoa or '-' }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-primary" 
+                                                onclick="editarFornecedor({{ fornecedor.id }}, '{{ fornecedor.nome }}', '{{ fornecedor.cnpj or '' }}', '{{ fornecedor.telefone or '' }}', '{{ fornecedor.email or '' }}', '{{ fornecedor.endereco or '' }}', '{{ fornecedor.cidade or '' }}', '{{ fornecedor.estado or '' }}', '{{ fornecedor.cep or '' }}', '{{ fornecedor.contato_pessoa or '' }}', '{{ fornecedor.observacoes or '' }}')"
+                                                title="Editar Fornecedor">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <a href="{{ url_for('produtos_fornecedor', id=fornecedor.id) }}" 
+                                           class="btn btn-outline-info" title="Ver Produtos">
+                                            <i class="fas fa-boxes"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" 
+                                                onclick="confirmarExclusao({{ fornecedor.id }}, '{{ fornecedor.nome }}')"
+                                                title="Excluir Fornecedor">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhum fornecedor cadastrado</h5>
+                    <p class="text-muted">Clique no botão "Novo Fornecedor" para começar.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Adicionar Fornecedor -->
+<div class="modal fade" id="modalAdicionarFornecedor" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-truck"></i> Novo Fornecedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('adicionar_fornecedor') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="nome" class="form-label">Nome da Empresa *</label>
+                                <input type="text" class="form-control automotive-form-control" id="nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="cnpj" class="form-label">CNPJ</label>
+                                <input type="text" class="form-control automotive-form-control" id="cnpj" name="cnpj" 
+                                       placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="telefone" class="form-label">Telefone</label>
+                                <input type="text" class="form-control automotive-form-control" id="telefone" name="telefone"
+                                       placeholder="(00) 00000-0000">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control automotive-form-control" id="email" name="email">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="endereco" class="form-label">Endereço</label>
+                        <input type="text" class="form-control automotive-form-control" id="endereco" name="endereco">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cidade" class="form-label">Cidade</label>
+                                <input type="text" class="form-control automotive-form-control" id="cidade" name="cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="estado" class="form-label">Estado</label>
+                                <select class="form-control automotive-form-control" id="estado" name="estado">
+                                    <option value="">Selecione...</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AP">AP</option>
+                                    <option value="AM">AM</option>
+                                    <option value="BA">BA</option>
+                                    <option value="CE">CE</option>
+                                    <option value="DF">DF</option>
+                                    <option value="ES">ES</option>
+                                    <option value="GO">GO</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MT">MT</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MG">MG</option>
+                                    <option value="PA">PA</option>
+                                    <option value="PB">PB</option>
+                                    <option value="PR">PR</option>
+                                    <option value="PE">PE</option>
+                                    <option value="PI">PI</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="RN">RN</option>
+                                    <option value="RS">RS</option>
+                                    <option value="RO">RO</option>
+                                    <option value="RR">RR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SP">SP</option>
+                                    <option value="SE">SE</option>
+                                    <option value="TO">TO</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="cep" class="form-label">CEP</label>
+                                <input type="text" class="form-control automotive-form-control" id="cep" name="cep"
+                                       placeholder="00000-000">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contato_pessoa" class="form-label">Pessoa de Contato</label>
+                        <input type="text" class="form-control automotive-form-control" id="contato_pessoa" name="contato_pessoa">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control automotive-form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Fornecedor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Fornecedor -->
+<div class="modal fade" id="modalEditarFornecedor" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Editar Fornecedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="formEditarFornecedor">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="editNome" class="form-label">Nome da Empresa *</label>
+                                <input type="text" class="form-control automotive-form-control" id="editNome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="editCnpj" class="form-label">CNPJ</label>
+                                <input type="text" class="form-control automotive-form-control" id="editCnpj" name="cnpj">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editTelefone" class="form-label">Telefone</label>
+                                <input type="text" class="form-control automotive-form-control" id="editTelefone" name="telefone">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editEmail" class="form-label">Email</label>
+                                <input type="email" class="form-control automotive-form-control" id="editEmail" name="email">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editEndereco" class="form-label">Endereço</label>
+                        <input type="text" class="form-control automotive-form-control" id="editEndereco" name="endereco">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editCidade" class="form-label">Cidade</label>
+                                <input type="text" class="form-control automotive-form-control" id="editCidade" name="cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="editEstado" class="form-label">Estado</label>
+                                <select class="form-control automotive-form-control" id="editEstado" name="estado">
+                                    <option value="">Selecione...</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AP">AP</option>
+                                    <option value="AM">AM</option>
+                                    <option value="BA">BA</option>
+                                    <option value="CE">CE</option>
+                                    <option value="DF">DF</option>
+                                    <option value="ES">ES</option>
+                                    <option value="GO">GO</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MT">MT</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MG">MG</option>
+                                    <option value="PA">PA</option>
+                                    <option value="PB">PB</option>
+                                    <option value="PR">PR</option>
+                                    <option value="PE">PE</option>
+                                    <option value="PI">PI</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="RN">RN</option>
+                                    <option value="RS">RS</option>
+                                    <option value="RO">RO</option>
+                                    <option value="RR">RR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SP">SP</option>
+                                    <option value="SE">SE</option>
+                                    <option value="TO">TO</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="editCep" class="form-label">CEP</label>
+                                <input type="text" class="form-control automotive-form-control" id="editCep" name="cep">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editContatoPessoa" class="form-label">Pessoa de Contato</label>
+                        <input type="text" class="form-control automotive-form-control" id="editContatoPessoa" name="contato_pessoa">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editObservacoes" class="form-label">Observações</label>
+                        <textarea class="form-control automotive-form-control" id="editObservacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Exclusão -->
+<div class="modal fade" id="modalConfirmarExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-danger"></i> Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o fornecedor <strong id="nomeFornecedorExcluir"></strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i>
+                    Se este fornecedor possui produtos cadastrados, ele será apenas desativado.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="POST" id="formExcluirFornecedor" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Excluir
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function editarFornecedor(id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes) {
+    // Preencher o formulário de edição
+    document.getElementById('editNome').value = nome || '';
+    document.getElementById('editCnpj').value = cnpj || '';
+    document.getElementById('editTelefone').value = telefone || '';
+    document.getElementById('editEmail').value = email || '';
+    document.getElementById('editEndereco').value = endereco || '';
+    document.getElementById('editCidade').value = cidade || '';
+    document.getElementById('editEstado').value = estado || '';
+    document.getElementById('editCep').value = cep || '';
+    document.getElementById('editContatoPessoa').value = contato_pessoa || '';
+    document.getElementById('editObservacoes').value = observacoes || '';
+    
+    // Definir a ação do formulário
+    document.getElementById('formEditarFornecedor').action = `/fornecedores/editar/${id}`;
+    
+    // Abrir o modal
+    new bootstrap.Modal(document.getElementById('modalEditarFornecedor')).show();
+}
+
+function confirmarExclusao(id, nome) {
+    document.getElementById('nomeFornecedorExcluir').textContent = nome;
+    document.getElementById('formExcluirFornecedor').action = `/fornecedores/deletar/${id}`;
+    new bootstrap.Modal(document.getElementById('modalConfirmarExclusao')).show();
+}
+
+// Máscaras para campos
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar paginação e controles
+    $(document).ready(function() {
+        // Criar controles de paginação
+        createPaginationControls('controlesPaginacao', {
+            searchId: 'buscaFornecedor',
+            searchPlaceholder: '🔍 Buscar por nome, CNPJ, telefone, email ou cidade...',
+            tableId: 'tabelaFornecedores',
+            itemsPerPageId: 'itensPorPaginaFornecedores',
+            visibleCountId: 'fornecedoresVisiveis',
+            totalCountId: 'totalFornecedores',
+            prevBtnId: 'btnAnteriorFornecedores',
+            nextBtnId: 'btnProximoFornecedores',
+            paginationControlsId: 'controlesNavegacaoFornecedores',
+            pageInfoId: 'infoPaginacaoFornecedores'
+        });
+        
+        // Inicializar paginação
+        const pagination = new TablePagination({
+            tableId: 'tabelaFornecedores',
+            searchId: 'buscaFornecedor',
+            itemsPerPageId: 'itensPorPaginaFornecedores',
+            visibleCountId: 'fornecedoresVisiveis',
+            totalCountId: 'totalFornecedores',
+            prevBtnId: 'btnAnteriorFornecedores',
+            nextBtnId: 'btnProximoFornecedores',
+            paginationControlsId: 'controlesNavegacaoFornecedores',
+            pageInfoId: 'infoPaginacaoFornecedores',
+            defaultItemsPerPage: 20
+        });
+    });
+
+    // Máscara CNPJ
+    function aplicarMascaraCNPJ(input) {
+        input.addEventListener('input', function() {
+            let valor = this.value.replace(/\D/g, '');
+            valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+            valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            valor = valor.replace(/\.(\d{3})(\d)/, '.$1/$2');
+            valor = valor.replace(/(\d{4})(\d)/, '$1-$2');
+            this.value = valor;
+        });
+    }
+    
+    // Máscara Telefone
+    function aplicarMascaraTelefone(input) {
+        input.addEventListener('input', function() {
+            let valor = this.value.replace(/\D/g, '');
+            valor = valor.replace(/^(\d{2})(\d)/g, '($1) $2');
+            valor = valor.replace(/(\d)(\d{4})$/, '$1-$2');
+            this.value = valor;
+        });
+    }
+    
+    // Máscara CEP
+    function aplicarMascaraCEP(input) {
+        input.addEventListener('input', function() {
+            let valor = this.value.replace(/\D/g, '');
+            valor = valor.replace(/^(\d{5})(\d)/, '$1-$2');
+            this.value = valor;
+        });
+    }
+    
+    // Aplicar máscaras
+    aplicarMascaraCNPJ(document.getElementById('cnpj'));
+    aplicarMascaraCNPJ(document.getElementById('editCnpj'));
+    
+    aplicarMascaraTelefone(document.getElementById('telefone'));
+    aplicarMascaraTelefone(document.getElementById('editTelefone'));
+    
+    aplicarMascaraCEP(document.getElementById('cep'));
+    aplicarMascaraCEP(document.getElementById('editCep'));
+});
+</script>
+{% endblock %}

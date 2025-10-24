@@ -122,7 +122,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('adicionar_conta_pagar') }}">
+            <form method="POST" action="{{ url_for('adicionar_conta_pagar_route') }}">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -196,12 +196,7 @@ function marcarComoPago(contaId, descricao) {
     if (confirm(`Confirmar pagamento da conta "${descricao}"?`)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("marcar_conta_paga") }}';
-        
-        const inputId = document.createElement('input');
-        inputId.type = 'hidden';
-        inputId.name = 'conta_id';
-        inputId.value = contaId;
+        form.action = `/contas-pagar/pagar/${contaId}`;
         
         const inputData = document.createElement('input');
         inputData.type = 'hidden';

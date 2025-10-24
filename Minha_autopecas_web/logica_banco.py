@@ -143,6 +143,10 @@ def init_db():
         cursor.execute("ALTER TABLE produtos ADD COLUMN margem_lucro REAL DEFAULT 0")
     except:
         pass
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN fornecedor_id INTEGER")
+    except:
+        pass
     
     # Tabela de vendas
     cursor.execute('''
@@ -301,6 +305,25 @@ def init_db():
         )
     ''')
     
+    # Tabela de fornecedores
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT UNIQUE,
+            telefone TEXT,
+            email TEXT,
+            endereco TEXT,
+            cidade TEXT,
+            estado TEXT,
+            cep TEXT,
+            contato_pessoa TEXT,
+            observacoes TEXT,
+            ativo BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -380,6 +403,75 @@ def popular_dados_exemplo():
                 INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
                 VALUES (?, ?, ?, ?, ?)
             ''', cliente)
+        
+        # Adicionar fornecedores de exemplo
+        fornecedores_exemplo = [
+            ('NGK Brasil Ltda', '12.345.678/0001-90', '(11) 3456-7890', 'vendas@ngk.com.br', 
+             'Rua Industrial, 1000', 'São Paulo', 'SP', '01234-567', 'Carlos Silva', 'Especialista em velas e cabos de ignição'),
+            ('Bosch Sistemas Automotivos', '23.456.789/0001-01', '(11) 4567-8901', 'comercial@bosch.com.br',
+             'Av. Robert Bosch, 500', 'Campinas', 'SP', '13065-900', 'Ana Santos', 'Líder mundial em tecnologia automotiva'),
+            ('Mahle Brasil', '34.567.890/0001-12', '(11) 5678-9012', 'atendimento@mahle.com.br',
+             'Rua Mahle, 200', 'Jundiaí', 'SP', '13213-105', 'Roberto Costa', 'Especialista em filtros e componentes'),
+            ('Cofap Companhia Fabricadora de Peças', '45.678.901/0001-23', '(11) 6789-0123', 'vendas@cofap.com.br',
+             'Av. das Indústrias, 300', 'São Bernardo do Campo', 'SP', '09750-700', 'Mariana Oliveira', 'Amortecedores e suspensão'),
+            ('Denso do Brasil', '56.789.012/0001-34', '(11) 7890-1234', 'comercial@denso.com.br',
+             'Rua Denso, 150', 'São Bernardo do Campo', 'SP', '09823-000', 'Fernando Lima', 'Sistemas de ar condicionado e eletrônicos'),
+        ]
+        
+        for fornecedor in fornecedores_exemplo:
+            cursor.execute('''
+                INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', fornecedor)
+        
+        # Verificar se há usuário para as vendas
+        cursor.execute("SELECT id FROM usuarios WHERE username = 'admin'")
+        admin_user = cursor.fetchone()
+        
+        if admin_user:
+            admin_id = admin_user[0]
+            
+            # Adicionar algumas vendas de exemplo
+            from datetime import datetime, timedelta
+            import random
+            
+            # Vendas dos últimos 30 dias
+            for i in range(20):
+                data_venda = datetime.now() - timedelta(days=random.randint(0, 30))
+                cliente_id = random.randint(1, 3)
+                forma_pagamento = random.choice(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix'])
+                
+                # Criar venda
+                cursor.execute('''
+                    INSERT INTO vendas (cliente_id, total, forma_pagamento, data_venda, usuario_id)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (cliente_id, 0, forma_pagamento, data_venda, admin_id))
+                
+                venda_id = cursor.lastrowid
+                total_venda = 0
+                
+                # Adicionar 1-3 itens por venda
+                num_itens = random.randint(1, 3)
+                for j in range(num_itens):
+                    produto_id = random.randint(1, 10)
+                    quantidade = random.randint(1, 3)
+                    
+                    # Buscar preço do produto
+                    cursor.execute("SELECT preco FROM produtos WHERE id = ?", (produto_id,))
+                    preco_result = cursor.fetchone()
+                    if preco_result:
+                        preco = preco_result[0]
+                        subtotal = preco * quantidade
+                        
+                        cursor.execute('''
+                            INSERT INTO venda_itens (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (venda_id, produto_id, quantidade, preco, subtotal))
+                        
+                        total_venda += subtotal
+                
+                # Atualizar total da venda
+                cursor.execute("UPDATE vendas SET total = ? WHERE id = ?", (total_venda, venda_id))
         
         conn.commit()
         print("Dados de exemplo adicionados com sucesso!")
@@ -1586,6 +1678,21 @@ def receber_conta(conta_id, data_recebimento=None):
     conn.commit()
     conn.close()
 
+def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None):
+    """Adiciona uma nova conta a receber"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+    
+    conta_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return conta_id
+
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
     """Obtém estatísticas para o dashboard"""
@@ -1600,6 +1707,10 @@ def obter_estatisticas_dashboard():
     cursor.execute("SELECT COUNT(*) FROM clientes")
     total_clientes = cursor.fetchone()[0]
     
+    # Total de fornecedores
+    cursor.execute("SELECT COUNT(*) FROM fornecedores WHERE ativo = 1")
+    total_fornecedores = cursor.fetchone()[0]
+    
     # Valor do estoque
     cursor.execute("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = 1")
     valor_estoque = cursor.fetchone()[0] or 0
@@ -1607,6 +1718,10 @@ def obter_estatisticas_dashboard():
     # Produtos com estoque baixo
     cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1 AND estoque <= estoque_minimo")
     produtos_estoque_baixo = cursor.fetchone()[0]
+    
+    # Produtos sem estoque
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1 AND estoque <= 0")
+    produtos_sem_estoque = cursor.fetchone()[0]
     
     # Vendas do mês
     cursor.execute('''
@@ -1645,8 +1760,10 @@ def obter_estatisticas_dashboard():
     return {
         'total_produtos': total_produtos,
         'total_clientes': total_clientes,
+        'total_fornecedores': total_fornecedores,
         'valor_estoque': valor_estoque,
         'produtos_estoque_baixo': produtos_estoque_baixo,
+        'produtos_sem_estoque': produtos_sem_estoque,
         'vendas_mes_quantidade': vendas_mes[0] or 0,
         'vendas_mes_valor': vendas_mes[1] or 0,
         'vendas_dia_quantidade': vendas_dia[0] or 0,
@@ -2058,6 +2175,603 @@ def importar_produtos_de_xml(conteudo_xml):
             'produtos_atualizados': [],
             'erros': [str(e)]
         }
+
+# FUNÇÕES DE RELATÓRIOS
+
+def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
+    """Gera relatório de vendas por período e/ou cliente"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Query base
+        query = '''
+            SELECT 
+                v.id,
+                v.data_venda,
+                c.nome as cliente_nome,
+                v.total,
+                v.forma_pagamento,
+                u.username as vendedor,
+                COUNT(vi.id) as quantidade_itens
+            FROM vendas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            LEFT JOIN itens_venda vi ON v.id = vi.venda_id
+            WHERE 1=1
+        '''
+        
+        params = []
+        
+        # Filtros por data
+        if data_inicio:
+            query += " AND DATE(v.data_venda) >= ?"
+            params.append(data_inicio)
+        if data_fim:
+            query += " AND DATE(v.data_venda) <= ?"
+            params.append(data_fim)
+        if cliente_id:
+            query += " AND v.cliente_id = ?"
+            params.append(cliente_id)
+        
+        query += '''
+            GROUP BY v.id
+            ORDER BY v.data_venda DESC
+        '''
+        
+        cursor.execute(query, params)
+        vendas = []
+        total_geral = 0
+        
+        for row in cursor.fetchall():
+            venda = {
+                'id': row[0],
+                'data_venda': row[1],
+                'cliente': row[2] or 'Cliente Avulso',
+                'total': row[3],
+                'forma_pagamento': row[4],
+                'vendedor': row[5],
+                'quantidade_itens': row[6]
+            }
+            vendas.append(venda)
+            total_geral += row[3]
+        
+        # Estatísticas resumidas
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total_vendas,
+                SUM(total) as valor_total,
+                AVG(total) as ticket_medio,
+                forma_pagamento,
+                COUNT(*) as quantidade_por_forma
+            FROM vendas v
+            WHERE 1=1
+        ''' + (" AND DATE(v.data_venda) >= ?" if data_inicio else "") +
+              (" AND DATE(v.data_venda) <= ?" if data_fim else "") +
+              (" AND v.cliente_id = ?" if cliente_id else "") +
+              " GROUP BY forma_pagamento", params)
+        
+        formas_pagamento = cursor.fetchall()
+        
+        conn.close()
+        
+        return {
+            'vendas': vendas,
+            'total_geral': total_geral,
+            'quantidade_vendas': len(vendas),
+            'ticket_medio': total_geral / len(vendas) if vendas else 0,
+            'formas_pagamento': formas_pagamento
+        }
+        
+    except Exception as e:
+        conn.close()
+        return {'erro': str(e)}
+
+def gerar_relatorio_produtos_mais_vendidos(data_inicio=None, data_fim=None, limit=10):
+    """Gera relatório dos produtos mais vendidos"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        query = '''
+            SELECT 
+                p.nome,
+                p.codigo_barras,
+                SUM(vi.quantidade) as total_vendido,
+                SUM(vi.subtotal) as valor_total,
+                AVG(vi.preco_unitario) as preco_medio,
+                COUNT(DISTINCT vi.venda_id) as numero_vendas
+            FROM itens_venda vi
+            JOIN produtos p ON vi.produto_id = p.id
+            JOIN vendas v ON vi.venda_id = v.id
+            WHERE 1=1
+        '''
+        
+        params = []
+        
+        if data_inicio:
+            query += " AND DATE(v.data_venda) >= ?"
+            params.append(data_inicio)
+        if data_fim:
+            query += " AND DATE(v.data_venda) <= ?"
+            params.append(data_fim)
+        
+        query += '''
+            GROUP BY p.id, p.nome, p.codigo_barras
+            ORDER BY total_vendido DESC
+            LIMIT ?
+        '''
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        produtos = []
+        
+        for row in cursor.fetchall():
+            produto = {
+                'nome': row[0],
+                'codigo': row[1],
+                'quantidade_vendida': row[2],
+                'valor_total': row[3],
+                'preco_medio': row[4],
+                'numero_vendas': row[5]
+            }
+            produtos.append(produto)
+        
+        conn.close()
+        return {'produtos': produtos}
+        
+    except Exception as e:
+        conn.close()
+        return {'erro': str(e)}
+
+def gerar_relatorio_estoque():
+    """Gera relatório completo do estoque"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Produtos em estoque
+        cursor.execute('''
+            SELECT 
+                p.nome,
+                p.codigo_barras,
+                p.estoque,
+                p.estoque_minimo,
+                p.preco,
+                (p.estoque * p.preco) as valor_estoque,
+                p.categoria,
+                CASE 
+                    WHEN p.estoque <= 0 THEN 'Sem Estoque'
+                    WHEN p.estoque <= p.estoque_minimo THEN 'Estoque Baixo'
+                    ELSE 'Estoque OK'
+                END as status_estoque
+            FROM produtos p
+            WHERE p.ativo = 1
+            ORDER BY p.categoria, p.nome
+        ''')
+        
+        produtos = []
+        valor_total_estoque = 0
+        produtos_sem_estoque = 0
+        produtos_estoque_baixo = 0
+        
+        for row in cursor.fetchall():
+            produto = {
+                'nome': row[0],
+                'codigo': row[1],
+                'estoque': row[2],
+                'estoque_minimo': row[3],
+                'preco': row[4],
+                'valor_estoque': row[5],
+                'categoria': row[6],
+                'status': row[7]
+            }
+            produtos.append(produto)
+            valor_total_estoque += row[5]
+            
+            if row[2] <= 0:
+                produtos_sem_estoque += 1
+            elif row[2] <= row[3]:
+                produtos_estoque_baixo += 1
+        
+        # Estatísticas por categoria
+        cursor.execute('''
+            SELECT 
+                categoria,
+                COUNT(*) as quantidade_produtos,
+                SUM(estoque) as total_estoque,
+                SUM(estoque * preco) as valor_categoria
+            FROM produtos 
+            WHERE ativo = 1
+            GROUP BY categoria
+            ORDER BY valor_categoria DESC
+        ''')
+        
+        categorias = []
+        for row in cursor.fetchall():
+            categoria = {
+                'nome': row[0],
+                'quantidade_produtos': row[1],
+                'total_estoque': row[2],
+                'valor_categoria': row[3]
+            }
+            categorias.append(categoria)
+        
+        conn.close()
+        
+        return {
+            'produtos': produtos,
+            'categorias': categorias,
+            'resumo': {
+                'valor_total_estoque': valor_total_estoque,
+                'total_produtos': len(produtos),
+                'produtos_sem_estoque': produtos_sem_estoque,
+                'produtos_estoque_baixo': produtos_estoque_baixo
+            }
+        }
+        
+    except Exception as e:
+        conn.close()
+        return {'erro': str(e)}
+
+def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
+    """Gera relatório financeiro completo"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Vendas por forma de pagamento
+        query_vendas = '''
+            SELECT 
+                forma_pagamento,
+                COUNT(*) as quantidade,
+                SUM(total) as valor_total
+            FROM vendas
+            WHERE 1=1
+        '''
+        
+        params = []
+        
+        if data_inicio:
+            query_vendas += " AND DATE(data_venda) >= ?"
+            params.append(data_inicio)
+        if data_fim:
+            query_vendas += " AND DATE(data_venda) <= ?"
+            params.append(data_fim)
+        
+        query_vendas += " GROUP BY forma_pagamento"
+        
+        cursor.execute(query_vendas, params)
+        vendas_forma_pagamento = []
+        total_vendas = 0
+        
+        for row in cursor.fetchall():
+            forma = {
+                'forma_pagamento': row[0],
+                'quantidade': row[1],
+                'valor': row[2]
+            }
+            vendas_forma_pagamento.append(forma)
+            total_vendas += row[2]
+        
+        # Contas a receber
+        query_receber = '''
+            SELECT 
+                status,
+                COUNT(*) as quantidade,
+                SUM(valor) as valor_total
+            FROM contas_receber
+            WHERE 1=1
+        '''
+        
+        if data_inicio:
+            query_receber += " AND DATE(data_vencimento) >= ?"
+        if data_fim:
+            query_receber += " AND DATE(data_vencimento) <= ?"
+        
+        query_receber += " GROUP BY status"
+        
+        cursor.execute(query_receber, params)
+        contas_receber = []
+        total_a_receber = 0
+        
+        for row in cursor.fetchall():
+            conta = {
+                'status': row[0],
+                'quantidade': row[1],
+                'valor': row[2]
+            }
+            contas_receber.append(conta)
+            if row[0] == 'pendente':
+                total_a_receber += row[2]
+        
+        # Contas a pagar
+        cursor.execute(query_receber.replace('contas_receber', 'contas_pagar'), params)
+        contas_pagar = []
+        total_a_pagar = 0
+        
+        for row in cursor.fetchall():
+            conta = {
+                'status': row[0],
+                'quantidade': row[1],
+                'valor': row[2]
+            }
+            contas_pagar.append(conta)
+            if row[0] == 'pendente':
+                total_a_pagar += row[2]
+        
+        # Movimentações do caixa
+        query_caixa = '''
+            SELECT 
+                tipo,
+                COUNT(*) as quantidade,
+                SUM(valor) as valor_total
+            FROM caixa_movimentacoes cm
+            WHERE 1=1
+        '''
+        
+        if data_inicio:
+            query_caixa += " AND DATE(cm.data_movimentacao) >= ?"
+        if data_fim:
+            query_caixa += " AND DATE(cm.data_movimentacao) <= ?"
+        
+        query_caixa += " GROUP BY tipo"
+        
+        cursor.execute(query_caixa, params)
+        movimentacoes_caixa = []
+        
+        for row in cursor.fetchall():
+            movimento = {
+                'tipo': row[0],
+                'quantidade': row[1],
+                'valor': row[2]
+            }
+            movimentacoes_caixa.append(movimento)
+        
+        conn.close()
+        
+        return {
+            'vendas_forma_pagamento': vendas_forma_pagamento,
+            'contas_receber': contas_receber,
+            'contas_pagar': contas_pagar,
+            'movimentacoes_caixa': movimentacoes_caixa,
+            'resumo': {
+                'total_vendas': total_vendas,
+                'total_a_receber': total_a_receber,
+                'total_a_pagar': total_a_pagar,
+                'saldo_liquido': total_vendas + total_a_receber - total_a_pagar
+            }
+        }
+        
+    except Exception as e:
+        conn.close()
+        return {'erro': str(e)}
+
+# ========================
+# FUNÇÕES DE FORNECEDORES
+# ========================
+
+def listar_fornecedores():
+    """Lista todos os fornecedores ativos"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
+                   cep, contato_pessoa, observacoes, ativo, created_at
+            FROM fornecedores 
+            WHERE ativo = 1
+            ORDER BY nome
+        ''')
+        
+        fornecedores = []
+        for row in cursor.fetchall():
+            fornecedor = {
+                'id': row[0],
+                'nome': row[1],
+                'cnpj': row[2],
+                'telefone': row[3],
+                'email': row[4],
+                'endereco': row[5],
+                'cidade': row[6],
+                'estado': row[7],
+                'cep': row[8],
+                'contato_pessoa': row[9],
+                'observacoes': row[10],
+                'ativo': row[11],
+                'created_at': row[12]
+            }
+            fornecedores.append(fornecedor)
+        
+        return fornecedores
+    except Exception as e:
+        print(f"Erro ao listar fornecedores: {e}")
+        return []
+    finally:
+        conn.close()
+
+def buscar_fornecedor(fornecedor_id):
+    """Busca um fornecedor específico pelo ID"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
+                   cep, contato_pessoa, observacoes, ativo, created_at
+            FROM fornecedores 
+            WHERE id = ?
+        ''', (fornecedor_id,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'nome': row[1],
+                'cnpj': row[2],
+                'telefone': row[3],
+                'email': row[4],
+                'endereco': row[5],
+                'cidade': row[6],
+                'estado': row[7],
+                'cep': row[8],
+                'contato_pessoa': row[9],
+                'observacoes': row[10],
+                'ativo': row[11],
+                'created_at': row[12]
+            }
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar fornecedor: {e}")
+        return None
+    finally:
+        conn.close()
+
+def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=None, 
+                        cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
+    """Adiciona um novo fornecedor"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
+                                    estado, cep, contato_pessoa, observacoes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes))
+        
+        conn.commit()
+        return cursor.lastrowid
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao adicionar fornecedor: {e}")
+        return None
+    finally:
+        conn.close()
+
+def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None, endereco=None, 
+                     cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
+    """Edita um fornecedor existente"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE fornecedores 
+            SET nome = ?, cnpj = ?, telefone = ?, email = ?, endereco = ?, 
+                cidade = ?, estado = ?, cep = ?, contato_pessoa = ?, observacoes = ?
+            WHERE id = ?
+        ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, 
+              contato_pessoa, observacoes, fornecedor_id))
+        
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao editar fornecedor: {e}")
+        return False
+    finally:
+        conn.close()
+
+def deletar_fornecedor(fornecedor_id):
+    """Deleta (desativa) um fornecedor"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se há produtos vinculados a este fornecedor
+        cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = ? AND ativo = 1', (fornecedor_id,))
+        produtos_vinculados = cursor.fetchone()[0]
+        
+        if produtos_vinculados > 0:
+            # Se há produtos vinculados, apenas desativar
+            cursor.execute('UPDATE fornecedores SET ativo = 0 WHERE id = ?', (fornecedor_id,))
+        else:
+            # Se não há produtos vinculados, pode deletar fisicamente
+            cursor.execute('DELETE FROM fornecedores WHERE id = ?', (fornecedor_id,))
+        
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao deletar fornecedor: {e}")
+        return False
+    finally:
+        conn.close()
+
+def obter_fornecedores_para_select():
+    """Retorna lista de fornecedores para uso em dropdowns"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, nome 
+            FROM fornecedores 
+            WHERE ativo = 1 
+            ORDER BY nome
+        ''')
+        
+        fornecedores = []
+        for row in cursor.fetchall():
+            fornecedores.append({
+                'id': row[0],
+                'nome': row[1]
+            })
+        
+        return fornecedores
+    except Exception as e:
+        print(f"Erro ao obter fornecedores para select: {e}")
+        return []
+    finally:
+        conn.close()
+
+def contar_fornecedores():
+    """Conta o total de fornecedores ativos"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('SELECT COUNT(*) FROM fornecedores WHERE ativo = 1')
+        return cursor.fetchone()[0]
+    except Exception as e:
+        print(f"Erro ao contar fornecedores: {e}")
+        return 0
+    finally:
+        conn.close()
+
+def listar_produtos_por_fornecedor(fornecedor_id):
+    """Lista todos os produtos de um fornecedor específico"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT p.id, p.nome, p.preco, p.estoque, p.preco_custo, p.codigo_barras
+            FROM produtos p
+            WHERE p.fornecedor_id = ? AND p.ativo = 1
+            ORDER BY p.nome
+        ''', (fornecedor_id,))
+        
+        produtos = []
+        for row in cursor.fetchall():
+            produto = {
+                'id': row[0],
+                'nome': row[1],
+                'preco': row[2],
+                'estoque': row[3],
+                'preco_custo': row[4],
+                'codigo_barras': row[5]
+            }
+            produtos.append(produto)
+        
+        return produtos
+    except Exception as e:
+        print(f"Erro ao listar produtos por fornecedor: {e}")
+        return []
+    finally:
+        conn.close()
 
 # Inicialização automática
 if __name__ == "__main__":

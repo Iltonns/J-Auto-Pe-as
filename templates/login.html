@@ -56,10 +56,10 @@
         
         .login-container {
             background: white;
-            border-radius: 25px;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
             overflow: hidden;
-            max-width: 950px;
+            max-width: 850px;
             width: 100%;
             margin: 20px;
             position: relative;
@@ -70,7 +70,7 @@
         .login-left {
             background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 50%, var(--accent-orange) 100%);
             color: white;
-            padding: 60px 40px;
+            padding: 30px 25px;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -90,35 +90,35 @@
         }
         
         .login-right {
-            padding: 60px 40px;
+            padding: 30px 25px;
             background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
         }
         
         .automotive-icon {
-            font-size: 4rem;
+            font-size: 2.5rem;
             color: var(--accent-orange);
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-shadow: 0 4px 15px rgba(255, 109, 0, 0.3);
         }
         
         .login-title {
-            font-size: 2.8rem;
+            font-size: 2rem;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         
         .login-subtitle {
-            font-size: 1.1rem;
+            font-size: 0.9rem;
             opacity: 0.9;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         
         .form-control {
-            border-radius: 15px;
+            border-radius: 10px;
             border: 2px solid #e9ecef;
-            padding: 15px 20px;
+            padding: 10px 15px;
             transition: all 0.3s ease;
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
         
         .form-control:focus {
@@ -130,10 +130,10 @@
         .btn-login {
             background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
             border: none;
-            border-radius: 25px;
-            padding: 15px 40px;
+            border-radius: 20px;
+            padding: 10px 30px;
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 1rem;
             color: white;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             text-transform: uppercase;
@@ -164,8 +164,9 @@
         }
         
         .features li {
-            padding: 8px 0;
+            padding: 4px 0;
             opacity: 0.9;
+            font-size: 0.85rem;
         }
         
         .features li i {
@@ -175,13 +176,50 @@
         
         @media (max-width: 768px) {
             .login-left {
-                padding: 40px 30px;
+                padding: 25px 20px;
             }
             .login-right {
-                padding: 40px 30px;
+                padding: 25px 20px;
             }
             .login-title {
+                font-size: 1.5rem;
+            }
+            .login-container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            .features {
+                display: none; /* Oculta features em mobile para economizar espaço */
+            }
+            .automotive-icon {
                 font-size: 2rem;
+                margin-bottom: 5px;
+            }
+        }
+        
+        /* Layout ainda mais compacto para telas pequenas */
+        @media (max-width: 576px) {
+            .login-left {
+                padding: 20px 15px;
+            }
+            .login-right {
+                padding: 20px 15px;
+            }
+            .login-title {
+                font-size: 1.3rem;
+                margin-bottom: 5px;
+            }
+            .login-subtitle {
+                font-size: 0.8rem;
+                margin-bottom: 15px;
+            }
+            .form-control {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+            .btn-login {
+                padding: 8px 25px;
+                font-size: 0.9rem;
             }
         }
     </style>
@@ -194,17 +232,17 @@
                 <div class="login-left h-100">
                     <div>
                         <!-- Logo da Loja -->
-                        <div class="mb-4 text-center">
+                        <div class="mb-3 text-center">
                             <img src="{{ url_for('static', filename='logo.jpg') }}" 
                                  alt="Logo da Loja" 
                                  class="login-logo img-fluid"
-                                 style="max-height: 120px; max-width: 250px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));"
+                                 style="max-height: 80px; max-width: 200px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                             <div style="display: none;" class="logo-fallback">
-                                <div class="automotive-icon mb-3">
-                                    <i class="fas fa-store" style="font-size: 4rem; color: var(--accent-orange);"></i>
+                                <div class="automotive-icon mb-2">
+                                    <i class="fas fa-store" style="font-size: 2.5rem; color: var(--accent-orange);"></i>
                                 </div>
-                                <h3 class="text-white mb-0">Sua Loja</h3>
+                                <h4 class="text-white mb-0">Sua Loja</h4>
                             </div>
                         </div>
                         
@@ -229,9 +267,9 @@
             <!-- Lado Direito - Formulário -->
             <div class="col-lg-6">
                 <div class="login-right">
-                    <div class="text-center mb-4">
-                        <h2>Bem-vindo de volta!</h2>
-                        <p class="text-muted">Faça login para acessar o sistema</p>
+                    <div class="text-center mb-3">
+                        <h3>Bem-vindo de volta!</h3>
+                        <p class="text-muted small">Faça login para acessar o sistema</p>
                     </div>
                     
                     <!-- Flash Messages -->
@@ -256,16 +294,16 @@
                     {% endwith %}
                     
                     <form method="POST" action="{{ url_for('login') }}">
-                        <div class="mb-3">
-                            <label for="username" class="form-label">
-                                <i class="fas fa-user me-2"></i>Usuário
+                        <div class="mb-2">
+                            <label for="username" class="form-label small">
+                                <i class="fas fa-user me-1"></i>Usuário
                             </label>
                             <input type="text" class="form-control" id="username" name="username" required autofocus>
                         </div>
                         
-                        <div class="mb-4">
-                            <label for="password" class="form-label">
-                                <i class="fas fa-lock me-2"></i>Senha
+                        <div class="mb-3">
+                            <label for="password" class="form-label small">
+                                <i class="fas fa-lock me-1"></i>Senha
                             </label>
                             <div class="input-group">
                                 <input type="password" class="form-control" id="password" name="password" required>
@@ -275,7 +313,7 @@
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn btn-login w-100 mb-3">
+                        <button type="submit" class="btn btn-login w-100 mb-2">
                             <i class="fas fa-sign-in-alt me-2"></i>Entrar
                         </button>
                     </form>
@@ -288,14 +326,14 @@
                     </div>
                     
                     <!-- Botão para criar usuário -->
-                    <div class="text-center mt-3">
+                    <div class="text-center mt-2">
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleCreateUser()">
                             <i class="fas fa-user-plus me-1"></i>Criar Novo Usuário
                         </button>
                     </div>
 
                     <!-- Botão para recuperar senha -->
-                    <div class="text-center mt-3">
+                    <div class="text-center mt-2">
                         <small class="text-muted">
                             <i class="fas fa-question-circle me-1"></i>
                             <a href="{{ url_for('recuperar_senha') }}" class="text-decoration-none" 

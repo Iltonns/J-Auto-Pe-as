@@ -207,7 +207,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('criar_parcelamento') }}">
+            <form method="POST" action="#" onsubmit="alert('Funcionalidade em desenvolvimento'); return false;">
                 <input type="hidden" id="parcelamento_conta_id" name="conta_id">
                 <div class="modal-body">
                     <div class="row">
@@ -266,12 +266,12 @@ function marcarComoRecebido(contaId, descricao) {
     if (confirm(`Confirmar recebimento da conta em atraso "${descricao}"?`)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("marcar_conta_recebida") }}';
+        form.action = `/contas-receber/receber/${contaId}`;
         
-        const inputId = document.createElement('input');
-        inputId.type = 'hidden';
-        inputId.name = 'conta_id';
-        inputId.value = contaId;
+        const inputData = document.createElement('input');
+        inputData.type = 'hidden';
+        inputData.name = 'data_recebimento';
+        inputData.value = new Date().toISOString().split('T')[0];
         
         const inputData = document.createElement('input');
         inputData.type = 'hidden';

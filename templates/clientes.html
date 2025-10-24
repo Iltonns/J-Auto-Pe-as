@@ -16,9 +16,12 @@
                 </button>
             </div>
             <div class="card-body">
+                <!-- Controles de Paginação -->
+                <div id="controlesPaginacao"></div>
+                
                 {% if clientes %}
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover" id="tabelaClientes">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -219,6 +222,34 @@ function confirmarExclusao(id, nome) {
 
 // Máscaras para campos
 $(document).ready(function() {
+    // Criar controles de paginação
+    createPaginationControls('controlesPaginacao', {
+        searchId: 'buscaCliente',
+        searchPlaceholder: '🔍 Buscar por nome, telefone, email ou CPF/CNPJ...',
+        tableId: 'tabelaClientes',
+        itemsPerPageId: 'itensPorPaginaClientes',
+        visibleCountId: 'clientesVisiveis',
+        totalCountId: 'totalClientes',
+        prevBtnId: 'btnAnteriorClientes',
+        nextBtnId: 'btnProximoClientes',
+        paginationControlsId: 'controlesNavegacaoClientes',
+        pageInfoId: 'infoPaginacaoClientes'
+    });
+    
+    // Inicializar paginação
+    const pagination = new TablePagination({
+        tableId: 'tabelaClientes',
+        searchId: 'buscaCliente',
+        itemsPerPageId: 'itensPorPaginaClientes',
+        visibleCountId: 'clientesVisiveis',
+        totalCountId: 'totalClientes',
+        prevBtnId: 'btnAnteriorClientes',
+        nextBtnId: 'btnProximoClientes',
+        paginationControlsId: 'controlesNavegacaoClientes',
+        pageInfoId: 'infoPaginacaoClientes',
+        defaultItemsPerPage: 20
+    });
+    
     // Máscara para telefone
     $('input[name="telefone"]').on('input', function() {
         let value = this.value.replace(/\D/g, '');

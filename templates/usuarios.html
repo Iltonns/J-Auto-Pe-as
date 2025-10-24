@@ -14,8 +14,11 @@
                 <span class="badge bg-primary">{{ usuarios|length }} usuários</span>
             </div>
             <div class="card-body">
+                <!-- Controles de Paginação -->
+                <div id="controlesPaginacao"></div>
+                
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover" id="tabelaUsuarios">
                         <thead class="table-dark">
                             <tr>
                                 <th>Nome Completo</th>
@@ -292,5 +295,35 @@ function confirmarDesativar(userId, nomeUsuario) {
     document.getElementById('formDesativarUsuario').action = `/usuarios/deletar/${userId}`;
     new bootstrap.Modal(document.getElementById('confirmarDesativarModal')).show();
 }
+
+$(document).ready(function() {
+    // Criar controles de paginação
+    createPaginationControls('controlesPaginacao', {
+        searchId: 'buscaUsuario',
+        searchPlaceholder: '🔍 Buscar por nome, usuário ou email...',
+        tableId: 'tabelaUsuarios',
+        itemsPerPageId: 'itensPorPaginaUsuarios',
+        visibleCountId: 'usuariosVisiveis',
+        totalCountId: 'totalUsuarios',
+        prevBtnId: 'btnAnteriorUsuarios',
+        nextBtnId: 'btnProximoUsuarios',
+        paginationControlsId: 'controlesNavegacaoUsuarios',
+        pageInfoId: 'infoPaginacaoUsuarios'
+    });
+    
+    // Inicializar paginação
+    const pagination = new TablePagination({
+        tableId: 'tabelaUsuarios',
+        searchId: 'buscaUsuario',
+        itemsPerPageId: 'itensPorPaginaUsuarios',
+        visibleCountId: 'usuariosVisiveis',
+        totalCountId: 'totalUsuarios',
+        prevBtnId: 'btnAnteriorUsuarios',
+        nextBtnId: 'btnProximoUsuarios',
+        paginationControlsId: 'controlesNavegacaoUsuarios',
+        pageInfoId: 'infoPaginacaoUsuarios',
+        defaultItemsPerPage: 20
+    });
+});
 </script>
 {% endblock %}

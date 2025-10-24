@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Estoque - Sistema de Autopeças{% endblock %}
+{% block page_title %}Relatório de Estoque{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        {% if relatorio.erro %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao gerar relatório: {{ relatorio.erro }}
+            </div>
+        {% else %}
+            <!-- Resumo Geral -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ relatorio.resumo.total_produtos }}</h4>
+                                    <p class="mb-0">Total de Produtos</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-boxes fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque) }}</h4>
+                                    <p class="mb-0">Valor do Estoque</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-dollar-sign fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ relatorio.resumo.produtos_estoque_baixo }}</h4>
+                                    <p class="mb-0">Estoque Baixo</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-exclamation-triangle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>{{ relatorio.resumo.produtos_sem_estoque }}</h4>
+                                    <p class="mb-0">Sem Estoque</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-times-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estoque por Categoria -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-layer-group"></i> Estoque por Categoria
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if relatorio.categorias %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Categoria</th>
+                                        <th>Qtd. Produtos</th>
+                                        <th>Total em Estoque</th>
+                                        <th>Valor da Categoria</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for categoria in relatorio.categorias %}
+                                        <tr>
+                                            <td><strong>{{ categoria.nome }}</strong></td>
+                                            <td>{{ categoria.quantidade_produtos }}</td>
+                                            <td>{{ categoria.total_estoque }} unidades</td>
+                                            <td>R$ {{ "%.2f"|format(categoria.valor_categoria) }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Lista Detalhada de Produtos -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Produtos em Estoque
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-success" onclick="exportarCSV()">
+                            <i class="fas fa-download"></i> Exportar CSV
+                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="filtrarPor('todos')">Todos</button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="filtrarPor('baixo')">Estoque Baixo</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="filtrarPor('sem')">Sem Estoque</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if relatorio.produtos %}
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabelaEstoque">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Produto</th>
+                                        <th>Categoria</th>
+                                        <th>Estoque Atual</th>
+                                        <th>Estoque Mínimo</th>
+                                        <th>Preço</th>
+                                        <th>Valor Estoque</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for produto in relatorio.produtos %}
+                                        <tr data-status="{{ produto.status.lower().replace(' ', '-') }}">
+                                            <td>{{ produto.codigo }}</td>
+                                            <td>{{ produto.nome }}</td>
+                                            <td>{{ produto.categoria }}</td>
+                                            <td>
+                                                <strong class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= produto.estoque_minimo %}text-warning{% endif %}">
+                                                    {{ produto.estoque }}
+                                                </strong>
+                                            </td>
+                                            <td>{{ produto.estoque_minimo }}</td>
+                                            <td>R$ {{ "%.2f"|format(produto.preco) }}</td>
+                                            <td>R$ {{ "%.2f"|format(produto.valor_estoque) }}</td>
+                                            <td>
+                                                {% if produto.status == 'Sem Estoque' %}
+                                                    <span class="badge bg-danger">{{ produto.status }}</span>
+                                                {% elif produto.status == 'Estoque Baixo' %}
+                                                    <span class="badge bg-warning">{{ produto.status }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-success">{{ produto.status }}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhum produto encontrado</h5>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function filtrarPor(tipo) {
+    const tabela = document.getElementById('tabelaEstoque').getElementsByTagName('tbody')[0];
+    const linhas = tabela.getElementsByTagName('tr');
+    
+    for (let i = 0; i < linhas.length; i++) {
+        const linha = linhas[i];
+        const status = linha.getAttribute('data-status');
+        
+        if (tipo === 'todos') {
+            linha.style.display = '';
+        } else if (tipo === 'baixo' && status === 'estoque-baixo') {
+            linha.style.display = '';
+        } else if (tipo === 'sem' && status === 'sem-estoque') {
+            linha.style.display = '';
+        } else if (tipo !== 'todos') {
+            linha.style.display = 'none';
+        }
+    }
+}
+
+function exportarCSV() {
+    const table = document.getElementById('tabelaEstoque');
+    let csv = [];
+    
+    // Cabeçalhos
+    const headers = [];
+    table.querySelectorAll('thead th').forEach(th => {
+        headers.push(th.textContent);
+    });
+    csv.push(headers.join(','));
+    
+    // Dados visíveis
+    table.querySelectorAll('tbody tr').forEach(tr => {
+        if (tr.style.display !== 'none') {
+            const row = [];
+            tr.querySelectorAll('td').forEach(td => {
+                row.push('"' + td.textContent.replace(/"/g, '""') + '"');
+            });
+            csv.push(row.join(','));
+        }
+    });
+    
+    // Download
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'relatorio_estoque.csv';
+    link.click();
+}
+</script>
+{% endblock %}

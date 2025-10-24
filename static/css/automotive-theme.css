@@ -396,3 +396,262 @@
         max-width: 120px !important;
     }
 }
+
+/* === LAYOUT COMPACTO === */
+/* Reduzindo padding e margens gerais para layout mais compacto */
+
+/* Cards compactos */
+.card {
+    margin-bottom: 15px !important; /* Reduzido de padrão */
+}
+
+.card-body {
+    padding: 15px !important; /* Reduzido de 20px padrão */
+}
+
+.dashboard-card .card-body {
+    padding: 12px !important; /* Ainda mais compacto para dashboard */
+}
+
+.dashboard-card h3 {
+    font-size: 1.5rem !important; /* Reduzido */
+    margin-bottom: 5px !important;
+}
+
+.dashboard-card p {
+    font-size: 0.85rem !important; /* Reduzido */
+}
+
+.dashboard-card .fa-3x {
+    font-size: 2rem !important; /* Reduzido de 3rem */
+}
+
+/* Botões de ação rápida mais compactos */
+.btn-lg {
+    padding: 8px 12px !important; /* Reduzido significativamente */
+}
+
+.btn-lg .fa-2x {
+    font-size: 1.3rem !important; /* Reduzido */
+    margin-bottom: 4px !important;
+}
+
+.btn-lg small {
+    font-size: 0.75rem !important; /* Reduzido */
+}
+
+/* Container principal mais compacto */
+.container-fluid {
+    padding: 10px !important; /* Reduzido de padrão */
+}
+
+/* Rows mais compactas */
+.row {
+    margin-bottom: 15px !important; /* Reduzido */
+}
+
+.mb-3 {
+    margin-bottom: 10px !important; /* Reduzido */
+}
+
+.mb-4 {
+    margin-bottom: 15px !important; /* Reduzido */
+}
+
+/* Navbar mais compacta */
+.navbar {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+}
+
+/* Sidebar mais compacta */
+.sidebar .nav-link {
+    padding: 8px 15px !important; /* Reduzido de 15px 20px */
+    margin: 2px 10px !important; /* Reduzido */
+}
+
+.sidebar .brand-section {
+    margin: 10px !important; /* Reduzido de 15px */
+    padding: 15px !important; /* Reduzido de 20px */
+}
+
+/* Tabelas mais compactas */
+.table td,
+.table th {
+    padding: 6px 8px !important; /* Reduzido do padrão */
+    font-size: 0.9rem !important;
+}
+
+/* Formulários mais compactos */
+.form-control {
+    padding: 6px 10px !important; /* Reduzido */
+    font-size: 0.9rem !important;
+}
+
+.automotive-form-control {
+    padding: 10px 15px !important; /* Reduzido de 15px 20px */
+}
+
+/* Alertas mais compactos */
+.alert {
+    padding: 10px 15px !important; /* Reduzido */
+    margin-bottom: 10px !important;
+}
+
+/* Reduzindo altura dos elementos de ação */
+.py-3 {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+/* Cards de ação mais compactos */
+.col-lg-2 .btn,
+.col-md-3 .btn,
+.col-sm-4 .btn,
+.col-6 .btn {
+    min-height: 70px !important; /* Altura mínima reduzida */
+}
+
+/* Espaçamento entre seções reduzido */
+.card-header {
+    padding: 10px 15px !important; /* Reduzido */
+}
+
+.card-header h5 {
+    font-size: 1rem !important; /* Reduzido */
+    margin-bottom: 0 !important;
+}
+
+/* Responsividade aprimorada para layout compacto */
+@media (min-width: 992px) {
+    .col-lg-2 {
+        flex: 0 0 auto;
+        width: 16.66666667%; /* Ajuste para melhor aproveitamento */
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-card h3 {
+        font-size: 1.3rem !important;
+    }
+    
+    .btn-lg {
+        padding: 6px 8px !important;
+        min-height: 60px !important;
+    }
+    
+    .card-body {
+        padding: 10px !important;
+    }
+}
+
+/* Ajustes específicos para produtos recentes e alertas */
+.card:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Otimização de altura de linha */
+body {
+    line-height: 1.3 !important; /* Reduzido de 1.5 padrão */
+}
+
+/* Melhor aproveitamento do espaço vertical */
+.main-content {
+    padding-top: 10px !important;
+}
+
+/* === AJUSTES EXTRAS PARA MÁXIMA COMPACTAÇÃO === */
+
+/* Reduzindo ainda mais os cards do dashboard */
+.dashboard-card {
+    min-height: 90px !important; /* Altura mínima reduzida */
+}
+
+.dashboard-card .card-body {
+    padding: 8px 12px !important; /* Ainda mais compacto */
+}
+
+.dashboard-card h3 {
+    font-size: 1.4rem !important;
+    line-height: 1.1 !important;
+}
+
+.dashboard-card p {
+    font-size: 0.8rem !important;
+    margin-bottom: 3px !important;
+}
+
+.dashboard-card .fa-3x {
+    font-size: 1.8rem !important; /* Menor ainda */
+}
+
+.dashboard-card .mt-3 {
+    margin-top: 8px !important;
+}
+
+.dashboard-card .pt-2 {
+    padding-top: 4px !important;
+}
+
+.dashboard-card small {
+    font-size: 0.7rem !important;
+}
+
+/* Centro de controle mais compacto */
+.card-header h5 {
+    font-size: 0.95rem !important;
+}
+
+/* Botões de ação ainda mais compactos */
+.btn-lg {
+    padding: 6px 8px !important;
+    min-height: 65px !important; /* Reduzido novamente */
+}
+
+.btn-lg .fa-2x {
+    font-size: 1.2rem !important;
+    margin-bottom: 2px !important;
+}
+
+.btn-lg small {
+    font-size: 0.7rem !important;
+    line-height: 1.1 !important;
+}
+
+/* Colunas mais eficientes */
+@media (min-width: 1200px) {
+    .col-lg-2 {
+        max-width: 15% !important;
+    }
+}
+
+/* Espaçamento entre elementos reduzido ao mínimo */
+.row.mb-4 {
+    margin-bottom: 10px !important;
+}
+
+.mb-3 {
+    margin-bottom: 8px !important;
+}
+
+/* Seções específicas do dashboard */
+.text-center .col-lg-2,
+.text-center .col-md-3,
+.text-center .col-sm-4,
+.text-center .col-6 {
+    padding: 2px !important; /* Reduzido padding das colunas */
+}
+
+/* Alertas e produtos recentes compactos */
+.card:not(.dashboard-card) .card-body {
+    padding: 12px !important;
+}
+
+/* Ajuste final para aproveitar melhor a tela */
+@media (min-width: 992px) {
+    .container-fluid {
+        max-width: 100% !important;
+        padding-left: 5px !important;
+        padding-right: 5px !important;
+    }
+}

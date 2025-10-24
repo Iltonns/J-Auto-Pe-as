@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos do Fornecedor - {{ fornecedor.nome }}{% endblock %}
+{% block page_title %}Produtos do Fornecedor: {{ fornecedor.nome }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('fornecedores') }}">Fornecedores</a></li>
+                <li class="breadcrumb-item active">{{ fornecedor.nome }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> Informações do Fornecedor
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Nome:</strong> {{ fornecedor.nome }}</p>
+                        <p><strong>CNPJ:</strong> {{ fornecedor.cnpj or 'Não informado' }}</p>
+                        <p><strong>Telefone:</strong> {{ fornecedor.telefone or 'Não informado' }}</p>
+                        <p><strong>Email:</strong> {{ fornecedor.email or 'Não informado' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Endereço:</strong> {{ fornecedor.endereco or 'Não informado' }}</p>
+                        <p><strong>Cidade:</strong> {{ fornecedor.cidade or 'Não informado' }}</p>
+                        <p><strong>Estado:</strong> {{ fornecedor.estado or 'Não informado' }}</p>
+                        <p><strong>Pessoa de Contato:</strong> {{ fornecedor.contato_pessoa or 'Não informado' }}</p>
+                    </div>
+                </div>
+                {% if fornecedor.observacoes %}
+                <div class="row">
+                    <div class="col-12">
+                        <p><strong>Observações:</strong> {{ fornecedor.observacoes }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-boxes"></i> Produtos do Fornecedor
+                </h5>
+                <a href="{{ url_for('produtos') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Cadastrar Produto
+                </a>
+            </div>
+            <div class="card-body">
+                {% if produtos %}
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>{{ produtos|length }}</strong> produto(s) cadastrado(s) para este fornecedor.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover automotive-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nome do Produto</th>
+                                <th>Preço de Venda</th>
+                                <th>Preço de Custo</th>
+                                <th>Estoque</th>
+                                <th>Margem</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for produto in produtos %}
+                            <tr>
+                                <td>
+                                    <code>{{ produto.codigo_barras or '#' + produto.id|string }}</code>
+                                </td>
+                                <td>
+                                    <strong>{{ produto.nome }}</strong>
+                                </td>
+                                <td>
+                                    <span class="text-success fw-bold">
+                                        R$ {{ "%.2f"|format(produto.preco) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if produto.preco_custo %}
+                                        R$ {{ "%.2f"|format(produto.preco_custo) }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if produto.estoque <= 0 %}
+                                        <span class="badge bg-danger">{{ produto.estoque }}</span>
+                                    {% elif produto.estoque <= 5 %}
+                                        <span class="badge bg-warning text-dark">{{ produto.estoque }}</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ produto.estoque }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if produto.preco_custo and produto.preco_custo > 0 %}
+                                        {% set margem = ((produto.preco - produto.preco_custo) / produto.preco_custo * 100) %}
+                                        <span class="text-info fw-bold">{{ "%.1f"|format(margem) }}%</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('produtos') }}#produto-{{ produto.id }}" 
+                                       class="btn btn-outline-primary btn-sm" title="Editar Produto">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Resumo Estatístico -->
+                <div class="row mt-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{{ produtos|length }}</h5>
+                                <p class="card-text">Total de Produtos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{{ produtos|selectattr('estoque', 'gt', 0)|list|length }}</h5>
+                                <p class="card-text">Com Estoque</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">R$ {{ "%.2f"|format(produtos|sum(attribute='preco_custo', start=0) if produtos|selectattr('preco_custo')|list else 0) }}</h5>
+                                <p class="card-text">Valor Investido</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">R$ {{ "%.2f"|format(produtos|map(attribute='preco')|sum if produtos else 0) }}</h5>
+                                <p class="card-text">Valor de Venda</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-boxes fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Nenhum produto cadastrado para este fornecedor</h5>
+                    <p class="text-muted">Para vincular produtos a este fornecedor, vá para a página de produtos e edite os produtos desejados.</p>
+                    <a href="{{ url_for('produtos') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Ir para Produtos
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

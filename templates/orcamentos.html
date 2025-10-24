@@ -120,42 +120,12 @@
                         </div>
                     </div>
                     
-                    <!-- Controles de Paginação e Contador para Orçamentos -->
-                    <div class="row mb-3 align-items-center">
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center">
-                                <label for="itensPorPaginaOrcamento" class="form-label me-2 mb-0">Mostrar:</label>
-                                <select class="form-select w-auto" id="itensPorPaginaOrcamento" style="min-width: 80px;">
-                                    <option value="10">10</option>
-                                    <option value="20" selected>20</option>
-                                    <option value="50">50</option>
-                                    <option value="100">100</option>
-                                    <option value="all">Todos</option>
-                                </select>
-                                <span class="ms-2 text-muted">produtos por página</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <div class="d-flex align-items-center justify-content-end">
-                                <span class="badge bg-success me-2" id="contadorProdutosOrcamento">
-                                    <i class="fas fa-cogs"></i> 
-                                    Mostrando <span id="produtosVisiveisOrcamento">0</span> de <span id="totalProdutosOrcamento">{{ produtos|length }}</span> produtos
-                                </span>
-                                <div class="btn-group" role="group" id="controlesNavegacaoOrcamento">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnAnteriorOrcamento" disabled>
-                                        <i class="fas fa-chevron-left"></i> Anterior
-                                    </button>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnProximoOrcamento">
-                                        Próximo <i class="fas fa-chevron-right"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Controles de Paginação -->
+                    <div id="controlesPaginacaoOrcamento"></div>
 
                     <!-- Tabela de Produtos -->
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="tabelaProdutosOrcamento">
                             <thead class="table-dark">
                                 <tr>
                                     <th>Código</th>
@@ -168,7 +138,7 @@
                                     <th>Ação</th>
                                 </tr>
                             </thead>
-                            <tbody id="tabelaProdutos">
+                            <tbody id="tabelaProdutosOrcamentoBody">
                                 {% for produto in produtos %}
                                 <tr class="produto-row">
                                     <td>{{ produto.id }}</td>
@@ -203,7 +173,7 @@
                                     <td><strong>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</strong></td>
                                     <td>
                                         <button class="btn btn-sm btn-primary btn-add-item" 
-                                                onclick="adicionarItem({{ produto.id }}, decodeURIComponent('{{ produto.nome|urlencode }}'), {{ produto.preco }}, {{ produto.estoque }})"
+                                                onclick="adicionarItem({{ produto.id }}, '{{ produto.nome|replace("'", "\\'") }}', {{ produto.preco }}, {{ produto.estoque }})"
                                                 title="Adicionar ao orçamento">
                                             <i class="fas fa-plus"></i>
                                         </button>
@@ -400,6 +370,13 @@ let contadorItens = 0;
 function adicionarItem(produtoId, produtoNome, preco, estoque) {
     console.log('adicionarItem chamado:', {produtoId, produtoNome, preco, estoque});
     
+    // Validar parâmetros
+    if (!produtoId || !produtoNome || isNaN(preco) || isNaN(estoque)) {
+        console.error('Parâmetros inválidos:', {produtoId, produtoNome, preco, estoque});
+        mostrarFeedback('Erro: dados do produto inválidos', 'danger');
+        return;
+    }
+    
     // Verificar se o item já existe
     const itemExistente = itensOrcamento.find(item => item.produto_id === produtoId);
     
@@ -418,8 +395,8 @@ function adicionarItem(produtoId, produtoNome, preco, estoque) {
             produto_id: produtoId,
             nome: produtoNome,
             quantidade: 1,
-            preco_unitario: preco,
-            estoque: estoque
+            preco_unitario: parseFloat(preco),
+            estoque: parseInt(estoque)
         };
         
         itensOrcamento.push(novoItem);
@@ -527,7 +504,38 @@ function salvarOrcamento() {
         return;
     }
     
-    document.getElementById('formOrcamento').submit();
+    // Limpar campos hidden anteriores
+    const fieldsAnteriores = document.querySelectorAll('#formOrcamento input[name^="produto_id"], #formOrcamento input[name^="quantidade"], #formOrcamento input[name^="preco_unitario"]');
+    fieldsAnteriores.forEach(field => field.remove());
+    
+    // Adicionar campos hidden para cada item do orçamento
+    const form = document.getElementById('formOrcamento');
+    
+    itensOrcamento.forEach((item, index) => {
+        // Produto ID
+        const inputProdutoId = document.createElement('input');
+        inputProdutoId.type = 'hidden';
+        inputProdutoId.name = 'produto_id[]';
+        inputProdutoId.value = item.produto_id;
+        form.appendChild(inputProdutoId);
+        
+        // Quantidade
+        const inputQuantidade = document.createElement('input');
+        inputQuantidade.type = 'hidden';
+        inputQuantidade.name = 'quantidade[]';
+        inputQuantidade.value = item.quantidade;
+        form.appendChild(inputQuantidade);
+        
+        // Preço unitário
+        const inputPreco = document.createElement('input');
+        inputPreco.type = 'hidden';
+        inputPreco.name = 'preco_unitario[]';
+        inputPreco.value = item.preco_unitario;
+        form.appendChild(inputPreco);
+    });
+    
+    // Submeter o formulário
+    form.submit();
 }
 
 function limparItens() {
@@ -571,12 +579,6 @@ let timeoutBusca = null;
 function buscarProdutos() {
     const termo = document.getElementById('campoBusca').value.trim();
     console.log('Iniciando busca para termo:', termo);
-    
-    if (termo.length < 2 && termo.length > 0) {
-        console.log('Termo muito curto, usando busca local');
-        buscarProdutosLocal(termo);
-        return;
-    }
     
     // Mostrar loading
     mostrarLoading(true);
@@ -671,7 +673,7 @@ function atualizarTabelaProdutos(produtos) {
                 <td><strong>R$ ${preco.toFixed(2).replace('.', ',')}</strong></td>
                 <td>
                     <button class="btn btn-sm btn-primary btn-add-item" 
-                            onclick="adicionarItem(${produto.id}, decodeURIComponent('${encodeURIComponent(produto.nome)}'), ${preco}, ${estoque})"
+                            onclick="adicionarItem(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${preco}, ${estoque})"
                             title="Adicionar ao orçamento">
                         <i class="fas fa-plus"></i>
                     </button>
@@ -702,17 +704,22 @@ function buscarProdutosLocal(termo) {
     console.log('Encontradas', linhas.length, 'linhas para filtrar');
     
     linhas.forEach((linha, index) => {
-        const textoLinha = linha.textContent.toLowerCase();
-        const codigo = linha.cells[0]?.textContent || '';
-        const nome = linha.cells[1]?.textContent || '';
-        const codigoFornecedor = linha.cells[2]?.textContent || '';
-        const categoria = linha.cells[3]?.textContent || '';
+        if (!linha.cells || linha.cells.length < 4) {
+            console.warn('Linha inválida encontrada:', index);
+            linha.style.display = 'none';
+            return;
+        }
+        
+        const codigo = linha.cells[0]?.textContent?.toLowerCase() || '';
+        const nome = linha.cells[1]?.textContent?.toLowerCase() || '';
+        const codigoFornecedor = linha.cells[2]?.textContent?.toLowerCase() || '';
+        const categoria = linha.cells[3]?.textContent?.toLowerCase() || '';
         
         // Busca mais específica
-        const match = codigo.toLowerCase().includes(termoLower) ||
-                     nome.toLowerCase().includes(termoLower) ||
-                     codigoFornecedor.toLowerCase().includes(termoLower) ||
-                     categoria.toLowerCase().includes(termoLower);
+        const match = codigo.includes(termoLower) ||
+                     nome.includes(termoLower) ||
+                     codigoFornecedor.includes(termoLower) ||
+                     categoria.includes(termoLower);
         
         if (match) {
             linha.style.display = '';
@@ -734,9 +741,10 @@ function buscarProdutosLocal(termo) {
         contadorElement.textContent = visiveisCount;
     }
     
-    // Se nenhum resultado, mostrar mensagem
+    // Mostrar mensagem se nenhum resultado
     if (visiveisCount === 0 && termo.length > 0) {
         console.log('Nenhum produto encontrado para:', termo);
+        mostrarFeedback('Nenhum produto encontrado', 'info');
     }
 }
 
@@ -749,39 +757,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const campoBusca = document.getElementById('campoBusca');
     if (campoBusca) {
         console.log('Campo de busca encontrado, adicionando eventos');
-        campoBusca.addEventListener('input', function() {
-            clearTimeout(timeoutBusca);
-            const termo = this.value.trim();
-            console.log('Input na busca:', termo);
-            
-            if (termo.length === 0) {
-                // Mostrar todos os produtos
-                const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
-                linhas.forEach(linha => {
-                    linha.style.display = '';
-                });
-                // Atualizar contador
-                const contadorElement = document.getElementById('produtosVisiveisOrcamento');
-                if (contadorElement) {
-                    contadorElement.textContent = linhas.length;
-                }
-            } else if (termo.length >= 1) {
-                // Busca local em tempo real
-                timeoutBusca = setTimeout(() => {
-                    console.log('Executando busca local para:', termo);
-                    buscarProdutosLocal(termo);
-                }, 300);
-            }
-        });
         
-        // Busca avançada com Enter (busca remota)
-        campoBusca.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                console.log('Enter pressionado, fazendo busca avançada');
-                buscarProdutos();
-            }
-        });
+        // Remover eventos anteriores para evitar duplicação
+        campoBusca.removeEventListener('input', handleBuscaInput);
+        campoBusca.removeEventListener('keypress', handleBuscaKeypress);
+        
+        // Adicionar eventos
+        campoBusca.addEventListener('input', handleBuscaInput);
+        campoBusca.addEventListener('keypress', handleBuscaKeypress);
     } else {
         console.error('Campo de busca não encontrado!');
     }
@@ -789,6 +772,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Botão de busca
     const btnBuscar = document.getElementById('btnBuscar');
     if (btnBuscar) {
+        btnBuscar.removeEventListener('click', buscarProdutos);
         btnBuscar.addEventListener('click', buscarProdutos);
     }
     
@@ -796,137 +780,71 @@ document.addEventListener('DOMContentLoaded', function() {
     inicializarPaginacaoOrcamento();
 });
 
-// Variáveis de paginação para orçamentos
-let paginaAtualOrcamento = 1;
-let itensPorPaginaOrcamento = 20;
-let todasAsLinhasOrcamento = [];
-
-// Inicializar sistema de paginação para orçamentos
-function inicializarPaginacaoOrcamento() {
-    // Coletar todas as linhas da tabela
-    todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
+// Função separada para busca de input
+function handleBuscaInput() {
+    clearTimeout(timeoutBusca);
+    const termo = this.value.trim();
+    console.log('Input na busca:', termo);
     
-    // Event listeners para controles
-    document.getElementById('itensPorPaginaOrcamento').addEventListener('change', function() {
-        const valor = this.value;
-        itensPorPaginaOrcamento = valor === 'all' ? todasAsLinhasOrcamento.length : parseInt(valor);
-        paginaAtualOrcamento = 1;
-        atualizarPaginacaoOrcamento();
-    });
-    
-    document.getElementById('btnAnteriorOrcamento').addEventListener('click', function() {
-        if (paginaAtualOrcamento > 1) {
-            paginaAtualOrcamento--;
-            atualizarPaginacaoOrcamento();
-        }
-    });
-    
-    document.getElementById('btnProximoOrcamento').addEventListener('click', function() {
-        const totalPaginas = Math.ceil(todasAsLinhasOrcamento.length / itensPorPaginaOrcamento);
-        if (paginaAtualOrcamento < totalPaginas) {
-            paginaAtualOrcamento++;
-            atualizarPaginacaoOrcamento();
-        }
-    });
-    
-    // Atualizar busca para trabalhar com paginação
-    document.getElementById('campoBusca').addEventListener('keyup', function() {
-        const termo = this.value.toLowerCase();
-        
-        if (termo === '') {
-            // Se não há busca, usar todas as linhas
-            todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
-        } else {
-            // Filtrar linhas baseado na busca
-            todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row')).filter(function(linha) {
-                return linha.textContent.toLowerCase().includes(termo);
-            });
-        }
-        
-        paginaAtualOrcamento = 1;
-        atualizarPaginacaoOrcamento();
-    });
-    
-    // Inicializar com os valores padrão
-    atualizarPaginacaoOrcamento();
-}
-
-// Atualizar a paginação dos orçamentos
-function atualizarPaginacaoOrcamento() {
-    const totalItens = todasAsLinhasOrcamento.length;
-    const totalPaginas = Math.ceil(totalItens / itensPorPaginaOrcamento);
-    
-    // Ocultar todas as linhas primeiro
-    document.querySelectorAll('#tabelaProdutos tr.produto-row').forEach(linha => {
-        linha.style.display = 'none';
-    });
-    
-    // Calcular índices
-    const inicio = (paginaAtualOrcamento - 1) * itensPorPaginaOrcamento;
-    const fim = inicio + itensPorPaginaOrcamento;
-    
-    // Mostrar apenas as linhas da página atual
-    const linhasParaMostrar = todasAsLinhasOrcamento.slice(inicio, fim);
-    linhasParaMostrar.forEach(linha => {
-        linha.style.display = '';
-    });
-    
-    // Atualizar contador
-    const produtosVisiveis = linhasParaMostrar.length;
-    document.getElementById('produtosVisiveisOrcamento').textContent = produtosVisiveis;
-    document.getElementById('totalProdutosOrcamento').textContent = totalItens;
-    
-    // Atualizar botões de navegação
-    document.getElementById('btnAnteriorOrcamento').disabled = paginaAtualOrcamento <= 1;
-    document.getElementById('btnProximoOrcamento').disabled = paginaAtualOrcamento >= totalPaginas;
-    
-    // Mostrar/ocultar controles de navegação
-    const controlesNavegacao = document.getElementById('controlesNavegacaoOrcamento');
-    if (totalPaginas <= 1) {
-        controlesNavegacao.style.display = 'none';
-    } else {
-        controlesNavegacao.style.display = 'flex';
-    }
-    
-    // Atualizar texto dos botões com número da página
-    const btnAnterior = document.getElementById('btnAnteriorOrcamento');
-    const btnProximo = document.getElementById('btnProximoOrcamento');
-    
-    btnAnterior.innerHTML = `<i class="fas fa-chevron-left"></i> Anterior ${paginaAtualOrcamento > 1 ? '(' + (paginaAtualOrcamento - 1) + ')' : ''}`;
-    btnProximo.innerHTML = `Próximo ${paginaAtualOrcamento < totalPaginas ? '(' + (paginaAtualOrcamento + 1) + ')' : ''} <i class="fas fa-chevron-right"></i>`;
-}
-});
-
-// Busca remota na API
-function buscarProdutosRemoto() {
-    const termo = document.getElementById('campoBusca').value.trim();
-    if (!termo) return;
-    
-    const btnBuscar = document.getElementById('btnBuscar');
-    const btnTexto = document.getElementById('btnBuscarTexto');
-    const spinner = document.getElementById('loadingSpinner');
-    
-    // Mostrar loading
-    btnBuscar.disabled = true;
-    btnTexto.textContent = 'Buscando...';
-    spinner.style.display = 'inline-block';
-    
-    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
-        .then(response => response.json())
-        .then(produtos => {
-            atualizarTabelaProdutos(produtos);
-        })
-        .catch(error => {
-            console.error('Erro na busca:', error);
-            mostrarFeedback('Erro ao buscar produtos', 'danger');
-        })
-        .finally(() => {
-            // Remover loading
-            btnBuscar.disabled = false;
-            btnTexto.textContent = 'Busca Avançada';
-            spinner.style.display = 'none';
+    if (termo.length === 0) {
+        // Mostrar todos os produtos
+        const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
+        linhas.forEach(linha => {
+            linha.style.display = '';
         });
+        // Atualizar contador
+        const contadorElement = document.getElementById('produtosVisiveisOrcamento');
+        if (contadorElement) {
+            contadorElement.textContent = linhas.length;
+        }
+    } else if (termo.length >= 1) {
+        // Busca local em tempo real
+        timeoutBusca = setTimeout(() => {
+            console.log('Executando busca local para:', termo);
+            buscarProdutosLocal(termo);
+        }, 300);
+    }
 }
+
+// Função separada para tecla Enter
+function handleBuscaKeypress(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        console.log('Enter pressionado, fazendo busca avançada');
+        buscarProdutos();
+    }
+}
+
+// Variáveis de paginação para orçamentos
+document.addEventListener('DOMContentLoaded', function() {
+    // Criar controles de paginação
+    createPaginationControls('controlesPaginacaoOrcamento', {
+        searchId: 'campoBusca',
+        searchPlaceholder: '🔍 Buscar por nome, código fornecedor, código de barras ou categoria...',
+        tableId: 'tabelaProdutosOrcamento',
+        itemsPerPageId: 'itensPorPaginaOrcamento',
+        visibleCountId: 'produtosVisiveisOrcamento',
+        totalCountId: 'totalProdutosOrcamento',
+        prevBtnId: 'btnAnteriorOrcamento',
+        nextBtnId: 'btnProximoOrcamento',
+        paginationControlsId: 'controlesNavegacaoOrcamento',
+        pageInfoId: 'infoPaginacaoOrcamento'
+    });
+    
+    // Inicializar paginação
+    const paginationOrcamento = new TablePagination({
+        tableId: 'tabelaProdutosOrcamento',
+        searchId: 'campoBusca',
+        itemsPerPageId: 'itensPorPaginaOrcamento',
+        visibleCountId: 'produtosVisiveisOrcamento',
+        totalCountId: 'totalProdutosOrcamento',
+        prevBtnId: 'btnAnteriorOrcamento',
+        nextBtnId: 'btnProximoOrcamento',
+        paginationControlsId: 'controlesNavegacaoOrcamento',
+        pageInfoId: 'infoPaginacaoOrcamento',
+        defaultItemsPerPage: 20
+    });
+});
 
 // Função para mostrar feedback visual
 function mostrarFeedback(mensagem, tipo = 'info') {

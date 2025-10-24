@@ -134,7 +134,9 @@
                                 <label for="cliente_id" class="form-label">Cliente</label>
                                 <select class="form-control" id="cliente_id" name="cliente_id">
                                     <option value="">Selecione um cliente</option>
-                                    <!-- Clientes serão carregados dinamicamente -->
+                                    {% for cliente in clientes %}
+                                    <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                         </div>
@@ -200,19 +202,13 @@ function marcarComoRecebido(contaId, descricao) {
     if (confirm(`Confirmar recebimento da conta "${descricao}"?`)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("marcar_conta_recebida") }}';
-        
-        const inputId = document.createElement('input');
-        inputId.type = 'hidden';
-        inputId.name = 'conta_id';
-        inputId.value = contaId;
+        form.action = `/contas-receber/receber/${contaId}`;
         
         const inputData = document.createElement('input');
         inputData.type = 'hidden';
         inputData.name = 'data_recebimento';
         inputData.value = new Date().toISOString().split('T')[0];
         
-        form.appendChild(inputId);
         form.appendChild(inputData);
         document.body.appendChild(form);
         form.submit();

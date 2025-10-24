@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos Mais Vendidos - Sistema de Autopeças{% endblock %}
+{% block page_title %}Produtos Mais Vendidos{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Filtros -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-filter"></i> Filtros
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Data Início</label>
+                        <input type="date" name="data_inicio" class="form-control" value="{{ data_inicio or '' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Data Fim</label>
+                        <input type="date" name="data_fim" class="form-control" value="{{ data_fim or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Quantidade de Produtos</label>
+                        <select name="limite" class="form-select">
+                            <option value="10" {% if limite == 10 %}selected{% endif %}>Top 10</option>
+                            <option value="20" {% if limite == 20 %}selected{% endif %}>Top 20</option>
+                            <option value="50" {% if limite == 50 %}selected{% endif %}>Top 50</option>
+                            <option value="100" {% if limite == 100 %}selected{% endif %}>Top 100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary d-block w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if relatorio.erro %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao gerar relatório: {{ relatorio.erro }}
+            </div>
+        {% else %}
+            <!-- Ranking de Produtos -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trophy"></i> Ranking dos Produtos Mais Vendidos
+                    </h5>
+                    <button class="btn btn-sm btn-success" onclick="exportarCSV()">
+                        <i class="fas fa-download"></i> Exportar CSV
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if relatorio.produtos %}
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabelaProdutos">
+                                <thead>
+                                    <tr>
+                                        <th>Posição</th>
+                                        <th>Código</th>
+                                        <th>Produto</th>
+                                        <th>Qtd. Vendida</th>
+                                        <th>Valor Total</th>
+                                        <th>Preço Médio</th>
+                                        <th>Nº de Vendas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for produto in relatorio.produtos %}
+                                        <tr>
+                                            <td>
+                                                <span class="badge {% if loop.index <= 3 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                                    {{ loop.index }}º
+                                                </span>
+                                            </td>
+                                            <td>{{ produto.codigo }}</td>
+                                            <td>{{ produto.nome }}</td>
+                                            <td>
+                                                <strong>{{ produto.quantidade_vendida }}</strong>
+                                            </td>
+                                            <td>R$ {{ "%.2f"|format(produto.valor_total) }}</td>
+                                            <td>R$ {{ "%.2f"|format(produto.preco_medio) }}</td>
+                                            <td>{{ produto.numero_vendas }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Gráfico de barras simples -->
+                        <div class="mt-4">
+                            <h6>Visualização Gráfica</h6>
+                            <div class="row">
+                                {% for produto in relatorio.produtos[:10] %}
+                                    <div class="col-12 mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3" style="width: 200px; font-size: 0.9em;">
+                                                {{ produto.nome[:30] }}{% if produto.nome|length > 30 %}...{% endif %}
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar bg-success" 
+                                                         style="width: {{ (produto.quantidade_vendida / relatorio.produtos[0].quantidade_vendida * 100) }}%">
+                                                        {{ produto.quantidade_vendida }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhum produto vendido encontrado</h5>
+                            <p class="text-muted">Ajuste os filtros para visualizar produtos vendidos.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function exportarCSV() {
+    const table = document.getElementById('tabelaProdutos');
+    let csv = [];
+    
+    // Cabeçalhos
+    const headers = [];
+    table.querySelectorAll('thead th').forEach(th => {
+        headers.push(th.textContent);
+    });
+    csv.push(headers.join(','));
+    
+    // Dados
+    table.querySelectorAll('tbody tr').forEach(tr => {
+        const row = [];
+        tr.querySelectorAll('td').forEach(td => {
+            row.push('"' + td.textContent.replace(/"/g, '""') + '"');
+        });
+        csv.push(row.join(','));
+    });
+    
+    // Download
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'produtos_mais_vendidos.csv';
+    link.click();
+}
+</script>
+{% endblock %}

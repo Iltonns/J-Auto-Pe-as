@@ -15,7 +15,7 @@ from Minha_autopecas_web.logica_banco import (
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa,
     listar_contas_pagar_hoje, listar_contas_pagar_em_atraso, adicionar_conta_pagar, pagar_conta,
-    listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta,
+    listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta, adicionar_conta_receber,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda,
     popular_dados_exemplo,
@@ -23,7 +23,13 @@ from Minha_autopecas_web.logica_banco import (
     abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa,
     listar_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros,
     # Função de importação XML
-    importar_produtos_de_xml
+    importar_produtos_de_xml,
+    # Funções de relatórios
+    gerar_relatorio_vendas, gerar_relatorio_produtos_mais_vendidos,
+    gerar_relatorio_estoque, gerar_relatorio_financeiro,
+    # Funções de fornecedores
+    listar_fornecedores, buscar_fornecedor, adicionar_fornecedor, editar_fornecedor, 
+    deletar_fornecedor, obter_fornecedores_para_select, contar_fornecedores, listar_produtos_por_fornecedor
 )
 
 app = Flask(__name__)
@@ -507,12 +513,86 @@ def deletar_cliente_route(id):
     
     return redirect(url_for('clientes'))
 
+# FORNECEDORES
+@app.route('/fornecedores')
+@login_required
+def fornecedores():
+    fornecedores_lista = listar_fornecedores()
+    return render_template('fornecedores.html', fornecedores=fornecedores_lista)
+
+@app.route('/fornecedores/adicionar', methods=['POST'], endpoint='adicionar_fornecedor')
+@login_required
+def adicionar_fornecedor_route():
+    try:
+        nome = request.form['nome']
+        cnpj = request.form.get('cnpj', '').strip() or None
+        telefone = request.form.get('telefone', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        endereco = request.form.get('endereco', '').strip() or None
+        cidade = request.form.get('cidade', '').strip() or None
+        estado = request.form.get('estado', '').strip() or None
+        cep = request.form.get('cep', '').strip() or None
+        contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
+        observacoes = request.form.get('observacoes', '').strip() or None
+        
+        adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        flash('Fornecedor adicionado com sucesso!', 'success')
+    except Exception as e:
+        flash(f'Erro ao adicionar fornecedor: {str(e)}', 'error')
+    
+    return redirect(url_for('fornecedores'))
+
+@app.route('/fornecedores/editar/<int:id>', methods=['POST'], endpoint='atualizar_fornecedor')
+@login_required
+def editar_fornecedor_route(id):
+    try:
+        nome = request.form['nome']
+        cnpj = request.form.get('cnpj', '').strip() or None
+        telefone = request.form.get('telefone', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        endereco = request.form.get('endereco', '').strip() or None
+        cidade = request.form.get('cidade', '').strip() or None
+        estado = request.form.get('estado', '').strip() or None
+        cep = request.form.get('cep', '').strip() or None
+        contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
+        observacoes = request.form.get('observacoes', '').strip() or None
+        
+        editar_fornecedor(id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        flash('Fornecedor atualizado com sucesso!', 'success')
+    except Exception as e:
+        flash(f'Erro ao atualizar fornecedor: {str(e)}', 'error')
+    
+    return redirect(url_for('fornecedores'))
+
+@app.route('/fornecedores/deletar/<int:id>', methods=['POST'], endpoint='excluir_fornecedor')
+@login_required
+def deletar_fornecedor_route(id):
+    try:
+        deletar_fornecedor(id)
+        flash('Fornecedor excluído com sucesso!', 'success')
+    except Exception as e:
+        flash(f'Erro ao excluir fornecedor: {str(e)}', 'error')
+    
+    return redirect(url_for('fornecedores'))
+
+@app.route('/fornecedores/<int:id>/produtos')
+@login_required
+def produtos_fornecedor(id):
+    fornecedor = buscar_fornecedor(id)
+    if not fornecedor:
+        flash('Fornecedor não encontrado!', 'error')
+        return redirect(url_for('fornecedores'))
+    
+    produtos_lista = listar_produtos_por_fornecedor(id)
+    return render_template('produtos_fornecedor.html', fornecedor=fornecedor, produtos=produtos_lista)
+
 # PRODUTOS
 @app.route('/produtos')
 @login_required
 def produtos():
     produtos_lista = listar_produtos()
-    return render_template('produtos.html', produtos=produtos_lista)
+    fornecedores_lista = obter_fornecedores_para_select()
+    return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista)
 
 @app.route('/produtos/buscar')
 @login_required
@@ -855,8 +935,9 @@ def pagar_conta_route(id):
 @required_permission('financeiro')
 def contas_a_receber_hoje():
     contas = listar_contas_receber_hoje()
+    clientes = listar_clientes()
     hoje = date.today()
-    return render_template('contas_a_receber_hoje.html', contas=contas, hoje=hoje)
+    return render_template('contas_a_receber_hoje.html', contas=contas, clientes=clientes, hoje=hoje)
 
 @app.route('/recebimentos-em-atraso')
 @required_permission('financeiro')
@@ -872,6 +953,23 @@ def receber_conta_route(id):
         flash('Conta marcada como recebida!', 'success')
     except Exception as e:
         flash(f'Erro ao receber conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
+
+@app.route('/contas-receber/adicionar', methods=['POST'])
+@required_permission('financeiro')
+def adicionar_conta_receber():
+    try:
+        descricao = request.form.get('descricao')
+        valor = float(request.form.get('valor'))
+        data_vencimento = request.form.get('data_vencimento')
+        cliente_id = request.form.get('cliente_id') or None
+        observacoes = request.form.get('observacoes')
+        
+        adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id, observacoes)
+        flash('Conta a receber adicionada com sucesso!', 'success')
+    except Exception as e:
+        flash(f'Erro ao adicionar conta a receber: {str(e)}', 'error')
     
     return redirect(request.referrer or url_for('contas_a_receber_hoje'))
 
@@ -961,7 +1059,93 @@ def converter_orcamento_route(id):
 @app.route('/relatorios')
 @login_required
 def relatorios():
+    # Verificar se o usuário tem permissão para acessar relatórios
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
     return render_template('relatorios.html')
+
+@app.route('/relatorios/vendas')
+@login_required
+def relatorio_vendas():
+    # Verificar permissão
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obter parâmetros da URL
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    cliente_id = request.args.get('cliente_id')
+    
+    # Gerar relatório
+    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id)
+    
+    # Buscar lista de clientes para o filtro
+    clientes = listar_clientes()
+    
+    return render_template('relatorios/vendas.html', 
+                         relatorio=relatorio, 
+                         clientes=clientes,
+                         data_inicio=data_inicio,
+                         data_fim=data_fim,
+                         cliente_id=cliente_id)
+
+@app.route('/relatorios/produtos-mais-vendidos')
+@login_required
+def relatorio_produtos_mais_vendidos():
+    # Verificar permissão
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obter parâmetros da URL
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    limite = int(request.args.get('limite', 10))
+    
+    # Gerar relatório
+    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite)
+    
+    return render_template('relatorios/produtos_mais_vendidos.html', 
+                         relatorio=relatorio,
+                         data_inicio=data_inicio,
+                         data_fim=data_fim,
+                         limite=limite)
+
+@app.route('/relatorios/estoque')
+@login_required
+def relatorio_estoque():
+    # Verificar permissão
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Gerar relatório
+    relatorio = gerar_relatorio_estoque()
+    
+    return render_template('relatorios/estoque.html', relatorio=relatorio)
+
+@app.route('/relatorios/financeiro')
+@login_required
+def relatorio_financeiro():
+    # Verificar permissão
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Obter parâmetros da URL
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    
+    # Gerar relatório
+    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim)
+    
+    return render_template('relatorios/financeiro.html', 
+                         relatorio=relatorio,
+                         data_inicio=data_inicio,
+                         data_fim=data_fim)
 
 # TRATAMENTO DE ERROS
 @app.errorhandler(404)

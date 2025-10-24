@@ -72,9 +72,13 @@
                                     <i class="fas fa-search"></i> Resultados da Busca
                                 </h6>
                             </div>
+                            <!-- Controles de Paginação para Busca -->
+                            <div class="card-body p-2">
+                                <div id="controlesPaginacaoBusca"></div>
+                            </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover mb-0" id="tabelaBuscaProdutos">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>ID</th>
@@ -86,7 +90,7 @@
                                                 <th>Ação</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="tabelaBuscaProdutos">
+                                        <tbody>
                                         </tbody>
                                     </table>
                                 </div>

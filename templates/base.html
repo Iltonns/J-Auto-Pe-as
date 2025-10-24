@@ -13,6 +13,10 @@ simele <!DOCTYPE html>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- Tema Automotivo Personalizado -->
     <link href="{{ url_for('static', filename='css/automotive-theme.css') }}" rel="stylesheet">
+    <!-- Layout Compacto -->
+    <link href="{{ url_for('static', filename='css/compact-layout.css') }}" rel="stylesheet">
+    <!-- Layout Toggle -->
+    <link href="{{ url_for('static', filename='css/layout-toggle.css') }}" rel="stylesheet">
     
     <style>
         /* Paleta de Cores Automotiva */
@@ -323,6 +327,65 @@ simele <!DOCTYPE html>
                 transform: translateX(0);
             }
         }
+        
+        /* === LAYOUT COMPACTO ADICIONAL === */
+        
+        /* Container principal mais compacto */
+        .container-fluid {
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+        }
+        
+        /* Sidebar compacta */
+        .sidebar {
+            padding: 0 !important;
+        }
+        
+        .sidebar .brand-section {
+            margin: 8px !important;
+            padding: 12px !important;
+        }
+        
+        .sidebar .brand-icon {
+            font-size: 2rem !important;
+            margin-bottom: 8px !important;
+        }
+        
+        /* Header compacto */
+        .top-navbar {
+            min-height: 50px !important;
+            padding: 5px 15px !important;
+        }
+        
+        .navbar-brand {
+            font-size: 1.2rem !important;
+        }
+        
+        /* Ajustes para telas maiores - melhor aproveitamento */
+        @media (min-width: 1200px) {
+            .col-lg-2 {
+                flex: 0 0 auto;
+                width: 15% !important; /* Sidebar ainda menor em telas grandes */
+            }
+            
+            .col-md-9.col-lg-10 {
+                flex: 0 0 auto;
+                width: 85% !important; /* Mais espaço para conteúdo */
+            }
+        }
+        
+        /* Responsividade melhorada para layout compacto */
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding-left: 5px !important;
+                padding-right: 5px !important;
+            }
+            
+            .sidebar .brand-section {
+                margin: 5px !important;
+                padding: 8px !important;
+            }
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
@@ -368,6 +431,9 @@ simele <!DOCTYPE html>
                     <a class="nav-link" href="{{ url_for('clientes') }}">
                         <i class="fas fa-users"></i> Clientes
                     </a>
+                    <a class="nav-link" href="{{ url_for('fornecedores') }}">
+                        <i class="fas fa-truck"></i> Fornecedores
+                    </a>
                     <a class="nav-link" href="{{ url_for('produtos') }}">
                         <i class="fas fa-car-battery"></i> Peças & Produtos
                     </a>
@@ -405,9 +471,11 @@ simele <!DOCTYPE html>
                     
                     <hr class="section-divider">
                     
+                    {% if has_permission('relatorios') %}
                     <a class="nav-link" href="{{ url_for('relatorios') }}">
                         <i class="fas fa-chart-line"></i> Relatórios
                     </a>
+                    {% endif %}
                     
                     {% if has_permission('admin') %}
                     <hr class="section-divider">
@@ -444,6 +512,11 @@ simele <!DOCTYPE html>
                         </span>
                         
                         <div class="navbar-nav ms-auto d-flex align-items-center">
+                            <div class="navbar-text me-3">
+                                <button id="layout-toggle-btn" class="layout-toggle" type="button">
+                                    <i class="fas fa-compress"></i> Compacto
+                                </button>
+                            </div>
                             <div class="navbar-text me-4">
                                 <i class="fas fa-calendar-alt text-primary me-2"></i>
                                 <strong>{{ today.strftime('%d/%m/%Y') if today else '' }}</strong>
@@ -493,6 +566,8 @@ simele <!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- Sistema de Paginação -->
+    <script src="{{ url_for('static', filename='js/pagination.js') }}"></script>
     <!-- Tema Automotivo JavaScript -->
     <script src="{{ url_for('static', filename='js/automotive-theme.js') }}"></script>
     
@@ -512,6 +587,9 @@ simele <!DOCTYPE html>
             });
         });
     </script>
+    
+    <!-- Layout Toggle Script -->
+    <script src="{{ url_for('static', filename='js/layout-toggle.js') }}"></script>
     
     {% block extra_js %}{% endblock %}
 </body>
