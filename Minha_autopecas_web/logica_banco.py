@@ -148,6 +148,12 @@ def init_db():
     except:
         pass
     
+    # Adicionar coluna para foto do produto se não existir
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN foto_url TEXT")
+    except:
+        pass
+    
     # Tabela de vendas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vendas (
@@ -1095,7 +1101,7 @@ def listar_produtos():
     
     cursor.execute('''
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
-               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade
+               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url
         FROM produtos
         WHERE ativo = 1
         ORDER BY nome
@@ -1117,7 +1123,8 @@ def listar_produtos():
             'preco_custo': row[10] or 0,
             'margem_lucro': row[11] or 0,
             'ncm': row[12],
-            'unidade': row[13] or 'UN'
+            'unidade': row[13] or 'UN',
+            'foto_url': row[14]
         })
     
     conn.close()
@@ -1157,8 +1164,43 @@ def buscar_produto(termo_busca):
     conn.close()
     return produtos
 
+def obter_produto_por_id(produto_id):
+    """Obtém um produto específico pelo ID"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
+               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url
+        FROM produtos
+        WHERE id = ? AND ativo = 1
+    ''', (produto_id,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return {
+            'id': row[0],
+            'nome': row[1],
+            'preco': row[2],
+            'estoque': row[3],
+            'estoque_minimo': row[4],
+            'codigo_barras': row[5],
+            'descricao': row[6],
+            'categoria': row[7],
+            'ativo': row[8],
+            'codigo_fornecedor': row[9],
+            'preco_custo': row[10] or 0,
+            'margem_lucro': row[11] or 0,
+            'ncm': row[12],
+            'unidade': row[13] or 'UN',
+            'foto_url': row[14]
+        }
+    return None
+
 def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None, 
-                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0):
+                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None):
     """Adiciona um novo produto"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1171,10 +1213,10 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     
     cursor.execute('''
         INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                            codigo_fornecedor, preco_custo, margem_lucro)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            codigo_fornecedor, preco_custo, margem_lucro, foto_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro))
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url))
     
     produto_id = cursor.lastrowid
     conn.commit()
@@ -1182,7 +1224,7 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     return produto_id
 
 def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
-                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0):
+                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None):
     """Edita um produto existente"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1196,10 +1238,10 @@ def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=Non
         UPDATE produtos 
         SET nome = ?, preco = ?, estoque = ?, estoque_minimo = ?, 
             codigo_barras = ?, descricao = ?, categoria = ?,
-            codigo_fornecedor = ?, preco_custo = ?, margem_lucro = ?
+            codigo_fornecedor = ?, preco_custo = ?, margem_lucro = ?, foto_url = ?
         WHERE id = ?
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, id))
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url, id))
     
     conn.commit()
     conn.close()

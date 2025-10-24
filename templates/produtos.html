@@ -122,7 +122,7 @@
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="editarProduto({{ produto.id }}, '{{ produto.nome }}', {{ produto.preco }}, {{ produto.estoque }}, '{{ produto.codigo_barras or '' }}', '{{ produto.codigo_fornecedor or '' }}', {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }})"
+                                            onclick="editarProduto({{ produto.id }}, {{ produto.nome|tojson }}, {{ produto.preco }}, {{ produto.estoque }}, {{ (produto.codigo_barras or '')|tojson }}, {{ (produto.codigo_fornecedor or '')|tojson }}, {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }}, {{ (produto.foto_url or '')|tojson }})"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarProduto">
                                         <i class="fas fa-edit"></i>
@@ -163,8 +163,25 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('adicionar_produto') }}">
+            <form method="POST" action="{{ url_for('adicionar_produto') }}" enctype="multipart/form-data">
                 <div class="modal-body">
+                    <!-- Navegação por abas -->
+                    <ul class="nav nav-tabs mb-3" id="abas-produto" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="aba-info-basica" data-bs-toggle="tab" data-bs-target="#info-basica" type="button" role="tab">
+                                <i class="fas fa-info-circle"></i> Informações Básicas
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="aba-foto" data-bs-toggle="tab" data-bs-target="#foto-produto" type="button" role="tab">
+                                <i class="fas fa-camera"></i> Foto da Peça
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="conteudo-abas">
+                        <!-- Aba: Informações Básicas -->
+                        <div class="tab-pane fade show active" id="info-basica" role="tabpanel">
                     <!-- Informações básicas -->
                     <div class="row">
                         <div class="col-md-6">
@@ -257,6 +274,47 @@
                             </div>
                         </div>
                     </div>
+                        </div>
+
+                        <!-- Aba: Foto da Peça -->
+                        <div class="tab-pane fade" id="foto-produto" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="foto_produto" class="form-label">
+                                            <i class="fas fa-camera"></i> Foto da Peça
+                                        </label>
+                                        <input type="file" class="form-control" id="foto_produto" name="foto_produto" accept="image/*" onchange="visualizarFoto(this, 'preview-foto')">
+                                        <div class="form-text">
+                                            Selecione uma imagem da peça (JPG, PNG, GIF). Tamanho máximo: 5MB
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Pré-visualização</label>
+                                        <div class="border rounded p-3 text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa;">
+                                            <div id="preview-foto">
+                                                <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                                                <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Dicas para foto da peça:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Use boa iluminação para destacar os detalhes</li>
+                                    <li>Fotografe a peça de diferentes ângulos se necessário</li>
+                                    <li>Mantenha o fundo limpo e neutro</li>
+                                    <li>Certifique-se de que códigos e números estejam visíveis</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -279,9 +337,26 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" id="form-editar-produto" action="">
+            <form method="POST" id="form-editar-produto" action="" enctype="multipart/form-data">
                 <input type="hidden" id="edit_produto_id" name="produto_id">
                 <div class="modal-body">
+                    <!-- Navegação por abas -->
+                    <ul class="nav nav-tabs mb-3" id="abas-editar-produto" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="aba-edit-info-basica" data-bs-toggle="tab" data-bs-target="#edit-info-basica" type="button" role="tab">
+                                <i class="fas fa-info-circle"></i> Informações Básicas
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="aba-edit-foto" data-bs-toggle="tab" data-bs-target="#edit-foto-produto" type="button" role="tab">
+                                <i class="fas fa-camera"></i> Foto da Peça
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="conteudo-abas-editar">
+                        <!-- Aba: Informações Básicas -->
+                        <div class="tab-pane fade show active" id="edit-info-basica" role="tabpanel">
                     <!-- Informações básicas -->
                     <div class="row">
                         <div class="col-md-6">
@@ -373,10 +448,59 @@
                             </div>
                         </div>
                     </div>
+                        </div>
+
+                        <!-- Aba: Foto da Peça -->
+                        <div class="tab-pane fade" id="edit-foto-produto" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="edit_foto_produto" class="form-label">
+                                            <i class="fas fa-camera"></i> Foto da Peça
+                                        </label>
+                                        <input type="file" class="form-control" id="edit_foto_produto" name="foto_produto" accept="image/*" onchange="visualizarFoto(this, 'edit-preview-foto')">
+                                        <div class="form-text">
+                                            Selecione uma nova imagem para substituir a atual (JPG, PNG, GIF). Tamanho máximo: 5MB
+                                        </div>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="remover_foto" name="remover_foto" value="1">
+                                        <label class="form-check-label text-danger" for="remover_foto">
+                                            <i class="fas fa-trash"></i> Remover foto atual
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Pré-visualização</label>
+                                        <div class="border rounded p-3 text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa;">
+                                            <div id="edit-preview-foto">
+                                                <img id="edit-foto-atual" src="" alt="Foto atual" style="max-width: 100%; max-height: 180px; display: none;">
+                                                <div id="edit-sem-foto">
+                                                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                                                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Sobre a foto atual:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Se você selecionar uma nova foto, ela substituirá a atual</li>
+                                    <li>Para remover a foto completamente, marque a opção "Remover foto atual"</li>
+                                    <li>Se não fizer alterações, a foto atual será mantida</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" id="btn-atualizar-produto">
                         <i class="fas fa-save"></i> Atualizar Produto
                     </button>
                 </div>
@@ -464,6 +588,50 @@
 
 {% block extra_js %}
 <script>
+// Função para visualizar foto selecionada
+function visualizarFoto(input, previewId) {
+    const preview = document.getElementById(previewId);
+    
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        
+        // Verificar tamanho do arquivo (5MB = 5 * 1024 * 1024 bytes)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('O arquivo é muito grande. Tamanho máximo permitido: 5MB');
+            input.value = '';
+            return;
+        }
+        
+        // Verificar tipo do arquivo
+        if (!file.type.startsWith('image/')) {
+            alert('Por favor, selecione apenas arquivos de imagem.');
+            input.value = '';
+            return;
+        }
+        
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            preview.innerHTML = `
+                <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
+                <p class="text-success mt-2 mb-0">
+                    <i class="fas fa-check-circle"></i> Imagem selecionada
+                </p>
+            `;
+        };
+        
+        reader.readAsDataURL(file);
+    } else {
+        // Resetar preview
+        if (previewId === 'preview-foto') {
+            preview.innerHTML = `
+                <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+            `;
+        }
+    }
+}
+
 // Função para calcular preço de venda automaticamente (novo produto)
 function calcularPrecoVendaAutomatico() {
     const custo = parseFloat(document.getElementById('preco_custo').value) || 0;
@@ -529,7 +697,7 @@ function calcularPrecoVendaEdit() {
 
 
 // Função atualizada para editar produto
-function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo) {
+function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo, foto_url) {
     $('#edit_produto_id').val(id);
     $('#edit_nome').val(nome);
     $('#edit_preco').val(preco);
@@ -538,6 +706,9 @@ function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedo
     $('#edit_codigo_barras').val(codigo_barras || '');
     $('#edit_codigo_fornecedor').val(codigo_fornecedor || '');
     $('#edit_preco_custo').val(preco_custo || '');
+    
+    // Limpar checkbox de remover foto
+    $('#remover_foto').prop('checked', false);
     
     // Se temos margem salva, usar ela; senão, calcular a partir do preço e custo
     if (margem_lucro && margem_lucro > 0) {
@@ -548,6 +719,22 @@ function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedo
     } else {
         $('#edit_margem_lucro').val('');
     }
+    
+    // Carregar foto atual se existir
+    const editFotoAtual = document.getElementById('edit-foto-atual');
+    const editSemFoto = document.getElementById('edit-sem-foto');
+    
+    if (foto_url && foto_url !== 'None' && foto_url !== '') {
+        editFotoAtual.src = foto_url;
+        editFotoAtual.style.display = 'block';
+        editSemFoto.style.display = 'none';
+    } else {
+        editFotoAtual.style.display = 'none';
+        editSemFoto.style.display = 'block';
+    }
+    
+    // Limpar input de nova foto
+    document.getElementById('edit_foto_produto').value = '';
     
     // Recalcular o preço com as informações atuais
     calcularPrecoVendaEdit();
@@ -650,6 +837,51 @@ $(document).ready(function() {
     // Inicializar campos de cálculo
     $('#preco_custo, #margem_lucro').on('input', calcularPrecoVendaAutomatico);
     $('#edit_preco_custo, #edit_margem_lucro').on('input', calcularPrecoVendaEdit);
+    
+    // Adicionar validação para formulário de edição
+    $('#form-editar-produto').on('submit', function(e) {
+        // Verificar se todos os campos obrigatórios estão preenchidos
+        const nome = $('#edit_nome').val().trim();
+        const preco_custo = $('#edit_preco_custo').val();
+        const margem_lucro = $('#edit_margem_lucro').val();
+        const estoque = $('#edit_estoque').val();
+        
+        if (!nome) {
+            e.preventDefault();
+            alert('Nome do produto é obrigatório');
+            return false;
+        }
+        
+        if (!preco_custo || preco_custo <= 0) {
+            e.preventDefault();
+            alert('Preço de custo é obrigatório e deve ser maior que zero');
+            return false;
+        }
+        
+        if (!margem_lucro || margem_lucro < 0) {
+            e.preventDefault();
+            alert('Margem de lucro é obrigatória e deve ser maior ou igual a zero');
+            return false;
+        }
+        
+        if (!estoque || estoque < 0) {
+            e.preventDefault();
+            alert('Estoque é obrigatório e deve ser maior ou igual a zero');
+            return false;
+        }
+        
+        // Adicionar indicador visual de carregamento
+        const submitBtn = $('#btn-atualizar-produto');
+        const originalText = submitBtn.html();
+        submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Atualizando...').prop('disabled', true);
+        
+        // Restaurar botão após um tempo (fallback)
+        setTimeout(() => {
+            submitBtn.html(originalText).prop('disabled', false);
+        }, 10000);
+        
+        return true;
+    });
 });
 </script>
 

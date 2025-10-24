@@ -4,6 +4,8 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from datetime import datetime, date
 import json
 import os
+import uuid
+from werkzeug.utils import secure_filename
 from functools import wraps
 
 # Importar funções do banco de dados
@@ -12,7 +14,7 @@ from Minha_autopecas_web.logica_banco import (
     buscar_usuario_por_email, atualizar_senha_usuario,
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
-    listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto,
+    listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa,
     listar_contas_pagar_hoje, listar_contas_pagar_em_atraso, adicionar_conta_pagar, pagar_conta,
     listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta, adicionar_conta_receber,
@@ -34,6 +36,47 @@ from Minha_autopecas_web.logica_banco import (
 
 app = Flask(__name__)
 app.secret_key = 'sua_chave_secreta_aqui_mude_em_producao'
+
+# Configuração para upload de arquivos
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'produtos')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB máximo
+
+# Função para verificar se a extensão do arquivo é permitida
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Função para salvar foto do produto
+def salvar_foto_produto(file):
+    if file and allowed_file(file.filename):
+        # Gerar nome único para o arquivo
+        filename = secure_filename(file.filename)
+        unique_filename = str(uuid.uuid4()) + '_' + filename
+        
+        # Criar diretório se não existir
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Salvar arquivo
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(file_path)
+        
+        # Retornar URL relativa para armazenar no banco
+        return f'/static/images/produtos/{unique_filename}'
+    return None
+
+# Função para remover foto do produto
+def remover_foto_produto(foto_url):
+    if foto_url:
+        try:
+            # Converter URL relativa para caminho absoluto
+            filename = os.path.basename(foto_url)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            print(f"Erro ao remover foto: {e}")
 
 # Configuração do Flask-Login
 login_manager = LoginManager()
@@ -698,11 +741,23 @@ def adicionar_produto_route():
         except (ValueError, TypeError):
             preco = 0.0
     
+    # Processar upload de foto
+    foto_url = None
+    if 'foto_produto' in request.files:
+        file = request.files['foto_produto']
+        if file.filename != '':
+            foto_url = salvar_foto_produto(file)
+            if not foto_url:
+                flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
+    
     try:
         adicionar_produto(nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                         codigo_fornecedor, preco_custo, margem_lucro)
+                         codigo_fornecedor, preco_custo, margem_lucro, foto_url)
         flash('Produto adicionado com sucesso!', 'success')
     except Exception as e:
+        # Se houve erro ao adicionar no banco, remover a foto que foi salva
+        if foto_url:
+            remover_foto_produto(foto_url)
         flash(f'Erro ao adicionar produto: {str(e)}', 'error')
     
     return redirect(url_for('produtos'))
@@ -710,6 +765,10 @@ def adicionar_produto_route():
 @app.route('/produtos/editar/<int:id>', methods=['POST'], endpoint='atualizar_produto')
 @login_required
 def editar_produto_route(id):
+    print(f"DEBUG: Editando produto ID {id}")
+    print(f"DEBUG: Dados recebidos: {dict(request.form)}")
+    print(f"DEBUG: Arquivos recebidos: {dict(request.files)}")
+    
     nome = request.form['nome']
     codigo_barras = request.form.get('codigo_barras')
     codigo_fornecedor = request.form.get('codigo_fornecedor')
@@ -751,13 +810,62 @@ def editar_produto_route(id):
         except (ValueError, TypeError):
             preco = 0.0
     
+    
+    print(f"DEBUG: Processando foto...")
+    # Processar upload/remoção de foto
+    foto_url = None
+    remover_foto = request.form.get('remover_foto') == '1'
+    
+    # Obter produto atual para verificar foto existente
+    produto_atual = obter_produto_por_id(id)
+    foto_atual = produto_atual['foto_url'] if produto_atual else None
+    print(f"DEBUG: Foto atual: {foto_atual}")
+    print(f"DEBUG: Remover foto: {remover_foto}")
+    
+    if remover_foto:
+        # Remover foto existente
+        if foto_atual:
+            remover_foto_produto(foto_atual)
+        foto_url = None
+        print("DEBUG: Foto removida")
+    elif 'foto_produto' in request.files:
+        file = request.files['foto_produto']
+        print(f"DEBUG: Arquivo enviado: {file.filename}")
+        if file.filename != '':
+            # Nova foto foi enviada
+            nova_foto_url = salvar_foto_produto(file)
+            if nova_foto_url:
+                # Remover foto anterior se existir
+                if foto_atual:
+                    remover_foto_produto(foto_atual)
+                foto_url = nova_foto_url
+                print(f"DEBUG: Nova foto salva: {foto_url}")
+            else:
+                flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
+                foto_url = foto_atual  # Manter foto atual
+                print("DEBUG: Erro ao salvar nova foto")
+        else:
+            # Nenhuma nova foto, manter a atual
+            foto_url = foto_atual
+            print("DEBUG: Mantendo foto atual (nenhuma nova foto)")
+    else:
+        # Manter foto atual
+        foto_url = foto_atual
+        print("DEBUG: Mantendo foto atual (sem campo de arquivo)")
+    
+    print(f"DEBUG: Foto final: {foto_url}")
+    
     try:
+        print("DEBUG: Chamando editar_produto...")
         editar_produto(id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                      codigo_fornecedor, preco_custo, margem_lucro)
+                      codigo_fornecedor, preco_custo, margem_lucro, foto_url)
+        print("DEBUG: Produto editado com sucesso")
         flash('Produto editado com sucesso!', 'success')
     except Exception as e:
+        print(f"DEBUG: Erro ao editar produto: {e}")
         flash(f'Erro ao editar produto: {str(e)}', 'error')
     
+    print("DEBUG: Redirecionando...")
     return redirect(url_for('produtos'))
 
 @app.route('/produtos/deletar/<int:id>', methods=['POST'], endpoint='excluir_produto')
