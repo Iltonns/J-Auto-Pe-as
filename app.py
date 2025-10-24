@@ -1041,42 +1041,55 @@ def visualizar_venda(venda_id):
 @login_required
 def api_venda(venda_id):
     try:
+        print(f"API: Buscando venda {venda_id}")
         venda = obter_venda_por_id(venda_id)
         if not venda:
+            print(f"API: Venda {venda_id} não encontrada")
             return jsonify({'error': 'Venda não encontrada'}), 404
+        
+        print(f"API: Venda {venda_id} encontrada")
         
         # Converter para formato JSON serializable
         venda_json = {
             'id': venda['id'],
-            'cliente_nome': venda.get('cliente_nome'),
-            'forma_pagamento': venda['forma_pagamento'],
-            'total': float(venda['total']),
+            'cliente_nome': venda.get('cliente_nome', 'Cliente Avulso'),
+            'forma_pagamento': venda.get('forma_pagamento', 'dinheiro'),
+            'total': float(venda.get('total', 0)),
             'desconto': float(venda.get('desconto', 0)),
             'valor_pago': float(venda.get('valor_pago', 0)),
             'troco': float(venda.get('troco', 0)),
-            'created_at': venda['created_at'].isoformat() if hasattr(venda['created_at'], 'isoformat') else str(venda['created_at']),
+            'created_at': venda['created_at'].isoformat() if hasattr(venda.get('created_at'), 'isoformat') else str(venda.get('created_at', '')),
             'itens': []
         }
         
         # Adicionar itens da venda
         for item in venda.get('itens', []):
             venda_json['itens'].append({
-                'produto_nome': item['produto_nome'],
-                'quantidade': item['quantidade'],
-                'preco_unitario': float(item['preco_unitario'])
+                'produto_nome': item.get('produto_nome', ''),
+                'quantidade': int(item.get('quantidade', 0)),
+                'preco_unitario': float(item.get('preco_unitario', 0))
             })
         
+        print(f"API: Venda {venda_id} convertida para JSON com {len(venda_json['itens'])} itens")
         return jsonify(venda_json)
     except Exception as e:
+        print(f"API: Erro ao buscar venda {venda_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/configuracoes-empresa')
 @login_required
 def api_configuracoes_empresa():
     try:
+        print("API: Buscando configurações da empresa")
         config = obter_configuracoes_empresa()
+        print(f"API: Configurações carregadas: {config.get('nome_empresa', 'N/A')}")
         return jsonify(config)
     except Exception as e:
+        print(f"API: Erro ao buscar configurações da empresa: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/vendas/registrar', methods=['POST'], endpoint='registrar_venda')

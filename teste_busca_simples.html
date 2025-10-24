@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de Busca Simples</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Teste de Busca de Produtos</h1>
+    
+    <input type="text" id="busca" placeholder="Digite para buscar produtos...">
+    <button onclick="testarBusca()">Buscar</button>
+    
+    <div id="resultado" style="margin-top: 20px;"></div>
+    
+    <script>
+        function testarBusca() {
+            const termo = $('#busca').val().trim();
+            console.log('Testando busca para:', termo);
+            
+            if (!termo) {
+                alert('Digite alguma coisa para buscar');
+                return;
+            }
+            
+            fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(produtos => {
+                    console.log('Produtos encontrados:', produtos);
+                    
+                    let html = '<h3>Resultados:</h3>';
+                    if (produtos.length > 0) {
+                        html += '<ul>';
+                        produtos.forEach(produto => {
+                            html += `<li>${produto.nome} - R$ ${produto.preco}</li>`;
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += '<p>Nenhum produto encontrado</p>';
+                    }
+                    
+                    $('#resultado').html(html);
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    $('#resultado').html('<p style="color: red;">Erro: ' + error.message + '</p>');
+                });
+        }
+        
+        // Busca automática quando digitar
+        $('#busca').on('input', function() {
+            const termo = $(this).val().trim();
+            if (termo.length >= 2) {
+                testarBusca();
+            }
+        });
+    </script>
+</body>
+</html>

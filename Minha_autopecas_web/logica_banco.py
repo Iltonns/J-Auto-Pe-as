@@ -1426,7 +1426,10 @@ def obter_venda_por_id(venda_id):
         
         venda_data = cursor.fetchone()
         if not venda_data:
+            print(f"Venda {venda_id} não encontrada")
             return None
+        
+        print(f"Dados da venda {venda_id}: {venda_data}")
         
         # Buscar itens da venda
         cursor.execute('''
@@ -1442,35 +1445,40 @@ def obter_venda_por_id(venda_id):
             itens.append({
                 'produto_id': item_row[0],
                 'produto_nome': item_row[1],
-                'codigo_fornecedor': item_row[2],
-                'codigo_barras': item_row[3],
+                'codigo_fornecedor': item_row[2] or '',
+                'codigo_barras': item_row[3] or '',
                 'quantidade': item_row[4],
-                'preco_unitario': item_row[5],
-                'subtotal': item_row[6]
+                'preco_unitario': float(item_row[5]),
+                'subtotal': float(item_row[6])
             })
+        
+        print(f"Itens da venda {venda_id}: {len(itens)} itens")
         
         # Montar resultado
         venda = {
             'id': venda_data[0],
             'cliente_id': venda_data[1],
-            'cliente_nome': venda_data[2],
-            'cliente_telefone': venda_data[3],
-            'total': venda_data[4],
-            'forma_pagamento': venda_data[5],
-            'desconto': venda_data[6] or 0,
-            'observacoes': venda_data[7],
+            'cliente_nome': venda_data[2] or 'Cliente Avulso',
+            'cliente_telefone': venda_data[3] or '',
+            'total': float(venda_data[4]),
+            'forma_pagamento': venda_data[5] or 'dinheiro',
+            'desconto': float(venda_data[6] or 0),
+            'observacoes': venda_data[7] or '',
             'created_at': venda_data[8],
             'usuario_id': venda_data[9],
-            'valor_pago': venda_data[4],  # Para compatibilidade, usar o total
+            'valor_pago': float(venda_data[4]),  # Para compatibilidade, usar o total
             'troco': 0,  # Para compatibilidade 
-            'vendedor_nome': venda_data[10],
+            'vendedor_nome': venda_data[10] or 'Sistema',
             'itens': itens
         }
         
+        print(f"Venda {venda_id} processada com sucesso: {venda['total']} reais, {len(venda['itens'])} itens")
         return venda
         
     except Exception as e:
         print(f"Erro ao buscar venda {venda_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         conn.close()
@@ -3010,6 +3018,16 @@ def obter_configuracoes_empresa():
     cursor = conn.cursor()
     
     try:
+        # Primeiro, verificar se a tabela existe
+        cursor.execute('''
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='configuracoes_empresa'
+        ''')
+        
+        if not cursor.fetchone():
+            print("Tabela configuracoes_empresa não existe, retornando configurações padrão")
+            return obter_configuracoes_padrao()
+        
         cursor.execute('''
             SELECT nome_empresa, cnpj, endereco, cidade, estado, cep, 
                    telefone, email, website, logo_path, observacoes
@@ -3020,7 +3038,7 @@ def obter_configuracoes_empresa():
         
         resultado = cursor.fetchone()
         if resultado:
-            return {
+            config = {
                 'nome_empresa': resultado[0] or 'FG AUTO PEÇAS',
                 'cnpj': resultado[1] or '',
                 'endereco': resultado[2] or 'Rua Exemplo, 123 - Centro',
@@ -3030,42 +3048,38 @@ def obter_configuracoes_empresa():
                 'telefone': resultado[6] or '(00) 0000-0000',
                 'email': resultado[7] or 'contato@fgautopecas.com.br',
                 'website': resultado[8] or '',
-                'logo_path': resultado[9] or 'logo.jpg',
+                'logo_path': resultado[9] or '',
                 'observacoes': resultado[10] or ''
             }
+            print(f"Configurações da empresa carregadas: {config['nome_empresa']}")
+            return config
         else:
-            # Retornar configurações padrão se não existir
-            return {
-                'nome_empresa': 'FG AUTO PEÇAS',
-                'cnpj': '',
-                'endereco': 'Rua Exemplo, 123 - Centro',
-                'cidade': '',
-                'estado': '',
-                'cep': '',
-                'telefone': '(00) 0000-0000',
-                'email': 'contato@fgautopecas.com.br',
-                'website': '',
-                'logo_path': 'logo.jpg',
-                'observacoes': ''
-            }
+            print("Nenhuma configuração encontrada, retornando configurações padrão")
+            return obter_configuracoes_padrao()
+            
     except Exception as e:
-        print(f"Erro ao obter configurações da empresa: {e}")
-        # Retornar configurações padrão em caso de erro
-        return {
-            'nome_empresa': 'FG AUTO PEÇAS',
-            'cnpj': '',
-            'endereco': 'Rua Exemplo, 123 - Centro',
-            'cidade': '',
-            'estado': '',
-            'cep': '',
-            'telefone': '(00) 0000-0000',
-            'email': 'contato@fgautopecas.com.br',
-            'website': '',
-            'logo_path': 'logo.jpg',
-            'observacoes': ''
-        }
+        print(f"Erro ao buscar configurações da empresa: {e}")
+        import traceback
+        traceback.print_exc()
+        return obter_configuracoes_padrao()
     finally:
         conn.close()
+
+def obter_configuracoes_padrao():
+    """Retorna configurações padrão da empresa"""
+    return {
+        'nome_empresa': 'FG AUTO PEÇAS',
+        'cnpj': '',
+        'endereco': 'Rua Exemplo, 123 - Centro',
+        'cidade': '',
+        'estado': '',
+        'cep': '',
+        'telefone': '(00) 0000-0000',
+        'email': 'contato@fgautopecas.com.br',
+        'website': '',
+        'logo_path': '',
+        'observacoes': ''
+    }
 
 def atualizar_configuracoes_empresa(dados):
     """Atualiza as configurações da empresa"""

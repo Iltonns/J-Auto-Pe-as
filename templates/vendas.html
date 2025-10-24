@@ -27,6 +27,8 @@
     border-radius: 0.375rem;
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    position: relative;
 }
 
 .lista-produtos-busca {
@@ -40,6 +42,54 @@
 
 .lista-produtos-busca .list-group-item:hover {
     background-color: #f8f9fa;
+}
+
+/* Melhorias na tabela de busca */
+.produto-resultado:hover {
+    background-color: #f8f9fa !important;
+}
+
+.produto-resultado button:hover {
+    transform: scale(1.1);
+}
+
+/* Campo de busca com feedback visual */
+#busca_produto:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+#busca_produto.searching {
+    border-color: #ffc107;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23ffc107'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='10.5 10.5l-3-3'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+}
+
+/* Loading indicator */
+.btn-loading {
+    position: relative;
+}
+
+.btn-loading .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Indicador de limpar busca */
+#limparBusca {
+    background: #dc3545;
+    color: white;
+    border-left: none;
+}
+
+#limparBusca:hover {
+    background: #c82333;
 }
 
 /* Estilos para impressão de recibo */
@@ -180,7 +230,8 @@
                             </div>
                             <small class="text-muted">
                                 <i class="fas fa-info-circle"></i> 
-                                Digite para buscar em tempo real ou use Enter para busca rápida
+                                Digite para buscar em tempo real ou use Enter para busca rápida. 
+                                <strong>F3:</strong> focar na busca | <strong>ESC:</strong> limpar
                             </small>
                         </div>
                         <div class="col-md-4">
@@ -681,25 +732,45 @@ $('.produto-rapido').click(function() {
 function buscarProdutoTempoReal(termo) {
     console.log('Busca em tempo real para:', termo);
     
-    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
-        .then(response => {
-            console.log('Response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(produtos => {
-            console.log('Produtos encontrados:', produtos.length);
-            if (produtos.length > 0) {
-                mostrarResultadosBusca(produtos.slice(0, 10)); // Mostrar 10 resultados
-            } else {
+    // Cancelar busca anterior se existir
+    if (window.buscaTimeout) {
+        clearTimeout(window.buscaTimeout);
+    }
+    
+    // Aguardar um pouco antes de fazer a busca (debounce)
+    window.buscaTimeout = setTimeout(() => {
+        $('#busca_produto').addClass('searching');
+        
+        fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(produtos => {
+                console.log('Produtos encontrados:', produtos.length);
+                $('#busca_produto').removeClass('searching');
+                
+                if (produtos && produtos.length > 0) {
+                    mostrarResultadosBusca(produtos.slice(0, 10)); // Mostrar 10 resultados
+                } else {
+                    console.log('Nenhum produto encontrado, ocultando resultados');
+                    $('#resultadoBusca').hide();
+                }
+            })
+            .catch(error => {
+                console.error('Erro na busca em tempo real:', error);
+                $('#busca_produto').removeClass('searching');
                 $('#resultadoBusca').hide();
-            }
-        })
-        .catch(error => {
-            console.error('Erro na busca em tempo real:', error);
-        });
+                
+                // Mostrar erro apenas se não for erro de conectividade
+                if (!error.message.includes('fetch')) {
+                    console.warn('Erro na busca em tempo real, mas continuando silenciosamente');
+                }
+            });
+    }, 300); // Aguardar 300ms antes de buscar
 }
 
 // Busca detalhada
@@ -709,29 +780,49 @@ function buscarProdutoDetalhado() {
     
     if (!termo) {
         alert('Digite um termo para buscar');
+        $('#busca_produto').focus();
         return;
     }
+    
+    // Mostrar indicador de carregamento
+    const btnBusca = $('button[onclick="buscarProdutoDetalhado()"]');
+    const textOriginal = btnBusca.html();
+    btnBusca.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Buscando...');
     
     fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
         .then(response => {
             console.log('Response status busca detalhada:', response.status);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
         })
         .then(produtos => {
             console.log('Produtos encontrados na busca detalhada:', produtos.length);
-            if (produtos.length > 0) {
+            if (produtos && produtos.length > 0) {
                 mostrarResultadosBusca(produtos);
+                // Focar no primeiro resultado se houver apenas um
+                if (produtos.length === 1) {
+                    setTimeout(() => {
+                        const primeiroBtn = $('#tabelaBuscaProdutos tbody button').first();
+                        if (primeiroBtn.length) {
+                            primeiroBtn.focus();
+                        }
+                    }, 100);
+                }
             } else {
                 alert('Nenhum produto encontrado');
                 $('#resultadoBusca').hide();
+                $('#busca_produto').focus().select();
             }
         })
         .catch(error => {
             console.error('Erro na busca detalhada:', error);
             alert('Erro ao buscar produtos: ' + error.message);
+        })
+        .finally(() => {
+            // Restaurar botão
+            btnBusca.prop('disabled', false).html(textOriginal);
         });
 }
 
@@ -744,83 +835,136 @@ function mostrarResultadosBusca(produtos) {
     
     if (tbody.length === 0) {
         console.error('Tabela tbody não encontrada!');
+        alert('Erro: Tabela de resultados não encontrada na página');
         return;
     }
     
-    tbody.empty();
-    
-    produtos.forEach((produto, index) => {
-        console.log(`Adicionando produto ${index + 1}:`, produto.nome);
+    try {
+        tbody.empty();
         
-        const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
-                           produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
+        if (!produtos || produtos.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-3">
+                        <i class="fas fa-search"></i> Nenhum produto encontrado
+                    </td>
+                </tr>
+            `);
+            $('#resultadoBusca').show();
+            return;
+        }
         
-        const row = $(`
-            <tr>
-                <td>${produto.id}</td>
-                <td>
-                    <strong>${produto.nome}</strong>
-                    ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
-                </td>
-                <td>
-                    ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
-                </td>
-                <td>
-                    ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
-                </td>
-                <td>
-                    <span class="badge bg-${estoqueBadge}">${produto.estoque}</span>
-                </td>
-                <td><strong>R$ ${produto.preco.toFixed(2).replace('.', ',')}</strong></td>
-                <td>
-                    <button class="btn btn-sm btn-success" onclick="adicionarProdutoVenda(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${produto.preco}, ${produto.estoque})" 
-                            ${produto.estoque <= 0 ? 'disabled title="Sem estoque"' : ''}>
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </td>
-            </tr>
-        `);
-        tbody.append(row);
-    });
-    
-    console.log('Exibindo div de resultados');
-    $('#resultadoBusca').show();
+        produtos.forEach((produto, index) => {
+            console.log(`Adicionando produto ${index + 1}:`, produto.nome);
+            
+            // Verificar se produto tem propriedades necessárias
+            if (!produto.id || !produto.nome || produto.preco === undefined) {
+                console.warn('Produto com dados incompletos:', produto);
+                return;
+            }
+            
+            const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
+                               produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
+            
+            // Escapar aspas no nome do produto para onclick
+            const nomeEscapado = (produto.nome || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+            
+            const row = $(`
+                <tr class="produto-resultado">
+                    <td>${produto.id}</td>
+                    <td>
+                        <strong>${produto.nome}</strong>
+                        ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
+                    </td>
+                    <td>
+                        ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
+                    </td>
+                    <td>
+                        ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
+                    </td>
+                    <td>
+                        <span class="badge bg-${estoqueBadge}">${produto.estoque || 0}</span>
+                    </td>
+                    <td><strong>R$ ${(produto.preco || 0).toFixed(2).replace('.', ',')}</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-success" 
+                                onclick="adicionarProdutoVenda(${produto.id}, '${nomeEscapado}', ${produto.preco || 0}, ${produto.estoque || 0})" 
+                                ${(produto.estoque || 0) <= 0 ? 'disabled title="Sem estoque"' : 'title="Adicionar à venda"'}>
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+        
+        console.log('Exibindo div de resultados');
+        $('#resultadoBusca').show();
+        
+        // Scroll para o topo da tabela de resultados
+        $('#resultadoBusca')[0].scrollTop = 0;
+        
+    } catch (error) {
+        console.error('Erro ao mostrar resultados:', error);
+        alert('Erro ao exibir resultados da busca: ' + error.message);
+    }
 }
 
 // Adicionar produto da busca à venda
 function adicionarProdutoVenda(id, nome, preco, estoque) {
-    const quantidade = parseInt($('#quantidade_produto').val()) || 1;
-    
-    if (estoque < quantidade) {
-        alert(`Estoque insuficiente! Disponível: ${estoque}`);
-        return;
-    }
-    
-    // Verificar se produto já está na venda
-    const itemExistente = itensVenda.find(item => item.id === id);
-    
-    if (itemExistente) {
-        const novaQuantidade = itemExistente.quantidade + quantidade;
-        if (novaQuantidade > estoque) {
-            alert(`Estoque insuficiente! Disponível: ${estoque}, já adicionado: ${itemExistente.quantidade}`);
+    try {
+        console.log('Adicionando produto à venda:', {id, nome, preco, estoque});
+        
+        const quantidade = parseInt($('#quantidade_produto').val()) || 1;
+        
+        // Validações
+        if (!id || !nome || preco === undefined) {
+            alert('Dados do produto inválidos');
             return;
         }
-        itemExistente.quantidade = novaQuantidade;
-        itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
-    } else {
-        itensVenda.push({
-            id: id,
-            nome: nome,
-            preco: preco,
-            quantidade: quantidade,
-            subtotal: preco * quantidade
-        });
+        
+        if (quantidade <= 0) {
+            alert('Quantidade deve ser maior que zero');
+            return;
+        }
+        
+        if (estoque < quantidade) {
+            alert(`Estoque insuficiente! Disponível: ${estoque}`);
+            return;
+        }
+        
+        // Verificar se produto já está na venda
+        const itemExistente = itensVenda.find(item => item.id === id);
+        
+        if (itemExistente) {
+            const novaQuantidade = itemExistente.quantidade + quantidade;
+            if (novaQuantidade > estoque) {
+                alert(`Estoque insuficiente! Disponível: ${estoque}, já adicionado: ${itemExistente.quantidade}`);
+                return;
+            }
+            itemExistente.quantidade = novaQuantidade;
+            itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
+        } else {
+            itensVenda.push({
+                id: id,
+                nome: nome,
+                preco: preco,
+                quantidade: quantidade,
+                subtotal: preco * quantidade
+            });
+        }
+        
+        atualizarTabelaVenda();
+        $('#busca_produto').val('').focus();
+        $('#quantidade_produto').val(1);
+        $('#resultadoBusca').hide();
+        
+        console.log('Produto adicionado com sucesso');
+        
+    } catch (error) {
+        console.error('Erro ao adicionar produto:', error);
+        alert('Erro ao adicionar produto: ' + error.message);
     }
-    
-    atualizarTabelaVenda();
-    $('#busca_produto').val('');
-    $('#quantidade_produto').val(1);
-    $('#resultadoBusca').hide();
 }
 
 // Event listeners
@@ -837,11 +981,14 @@ $(document).ready(function() {
             return;
         }
         
+        console.log('Campo de busca encontrado, configurando eventos...');
+        
         // Enter na busca
-        $('#busca_produto').off('keypress').keypress(function(e) {
-            console.log('Tecla pressionada:', e.which);
+        $('#busca_produto').off('keypress').on('keypress', function(e) {
+            console.log('Tecla pressionada no campo busca:', e.which);
             if (e.which === 13) {
                 e.preventDefault();
+                console.log('Enter pressionado, iniciando busca detalhada...');
                 buscarProdutoDetalhado();
             }
         });
@@ -849,16 +996,54 @@ $(document).ready(function() {
         // Busca em tempo real
         $('#busca_produto').off('input').on('input', function() {
             const termo = $(this).val().trim();
-            console.log('Input mudou:', termo);
+            console.log('Input mudou para:', termo);
+            
+            // Adicionar classe visual de busca
             if (termo.length >= 2) {
+                $(this).addClass('searching');
+                console.log('Iniciando busca em tempo real...');
                 buscarProdutoTempoReal(termo);
             } else {
+                $(this).removeClass('searching');
+                console.log('Termo muito curto, ocultando resultados...');
                 $('#resultadoBusca').hide();
             }
         });
         
+        // Adicionar evento para limpar busca ao clicar no X
+        $('#busca_produto').after('<span class="input-group-text" id="limparBusca" style="cursor: pointer; display: none;"><i class="fas fa-times"></i></span>');
+        
+        $('#busca_produto').on('input', function() {
+            if ($(this).val().trim()) {
+                $('#limparBusca').show();
+            } else {
+                $('#limparBusca').hide();
+            }
+        });
+        
+        $(document).on('click', '#limparBusca', function() {
+            $('#busca_produto').val('').focus().removeClass('searching');
+            $('#resultadoBusca').hide();
+            $(this).hide();
+        });
+        
+        // Teclas de atalho
+        $(document).on('keydown', function(e) {
+            // F3 para focar na busca
+            if (e.which === 114) { // F3
+                e.preventDefault();
+                $('#busca_produto').focus().select();
+            }
+            // ESC para limpar busca
+            if (e.which === 27) { // ESC
+                $('#busca_produto').val('').removeClass('searching');
+                $('#resultadoBusca').hide();
+                $('#limparBusca').hide();
+            }
+        });
+        
         console.log('Event listeners configurados com sucesso');
-    }, 500); // Aumentar timeout para 500ms
+    }, 100); // Reduzir timeout para 100ms
     
     // Calcular troco quando valor pago muda
     $('#valor_pago').off('input').on('input', calcularTroco);
@@ -959,238 +1144,310 @@ function visualizarVenda(vendaId) {
     window.location.href = `/vendas/${vendaId}`;
 }
 
+// Função alternativa simples para impressão
+function imprimirReciboSimples(vendaId) {
+    console.log('Iniciando impressão simples do recibo para venda:', vendaId);
+    
+    // Criar um iframe invisível para impressão
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    // URL para impressão direta
+    iframe.src = `/vendas/${vendaId}/imprimir`;
+    
+    iframe.onload = function() {
+        setTimeout(() => {
+            iframe.contentWindow.print();
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        }, 500);
+    };
+}
+
 // Função para imprimir recibo de venda
 function imprimirRecibo(vendaId) {
     console.log('Iniciando impressão do recibo para venda:', vendaId);
     
-    // Buscar dados da venda e configurações da empresa
-    Promise.all([
-        fetch(`/api/venda/${vendaId}`).then(response => {
-            console.log('Response venda status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Erro ao carregar venda: HTTP ${response.status}`);
+    // Mostrar indicador de carregamento
+    const originalContent = document.body.innerHTML;
+    
+    try {
+        // Buscar dados da venda e configurações da empresa
+        Promise.all([
+            fetch(`/api/venda/${vendaId}`)
+                .then(response => {
+                    console.log('Response venda status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`Erro ao carregar venda: HTTP ${response.status}`);
+                    }
+                    return response.json();
+                }),
+            fetch('/api/configuracoes-empresa')
+                .then(response => {
+                    console.log('Response config status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`Erro ao carregar configurações: HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+        ])
+        .then(([venda, config]) => {
+            console.log('Dados carregados - Venda:', venda, 'Config:', config);
+            
+            if (venda.error) {
+                alert('Erro ao carregar dados da venda: ' + venda.error);
+                return;
             }
-            return response.json();
-        }),
-        fetch('/api/configuracoes-empresa').then(response => {
-            console.log('Response config status:', response.status);
-            if (!response.ok) {
-                throw new Error(`Erro ao carregar configurações: HTTP ${response.status}`);
+            
+            if (config.error) {
+                console.log('Usando configurações padrão devido ao erro:', config.error);
+                // Usar configurações padrão se houver erro
+                config = {
+                    nome_empresa: 'FG AUTO PEÇAS',
+                    endereco: 'Rua Exemplo, 123 - Centro',
+                    cidade: '',
+                    estado: '',
+                    cep: '',
+                    telefone: '(00) 0000-0000',
+                    email: 'contato@fgautopecas.com.br',
+                    cnpj: '',
+                    logo_path: ''
+                };
             }
-            return response.json();
-        })
-    ])
-    .then(([venda, config]) => {
-        console.log('Dados carregados - Venda:', venda, 'Config:', config);
-        
-        if (venda.error) {
-            alert('Erro ao carregar dados da venda: ' + venda.error);
-            return;
-        }
-        
-        if (config.error) {
-            console.log('Usando configurações padrão devido ao erro:', config.error);
-            // Usar configurações padrão se houver erro
-            config = {
-                nome_empresa: 'FG AUTO PEÇAS',
-                endereco: 'Rua Exemplo, 123 - Centro',
-                cidade: '',
-                estado: '',
-                cep: '',
-                telefone: '(00) 0000-0000',
-                email: 'contato@fgautopecas.com.br',
-                cnpj: '',
-                logo_path: ''
-            };
-        }
-        
-        // Criar conteúdo do recibo
-        const reciboHTML = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Recibo de Venda #${venda.id}</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        margin: 0;
-                        padding: 20px;
-                        font-size: 12px;
-                    }
-                    .header {
-                        text-align: center;
-                        border-bottom: 2px solid #333;
-                        padding-bottom: 10px;
-                        margin-bottom: 20px;
-                    }
-                    .logo {
-                        max-height: 60px;
-                        max-width: 150px;
-                        margin-bottom: 10px;
-                    }
-                    .empresa-info {
-                        margin-bottom: 10px;
-                    }
-                    .empresa-info h2 {
-                        margin: 0;
-                        color: #007bff;
-                        font-size: 18px;
-                    }
-                    .empresa-info p {
-                        margin: 2px 0;
-                        font-size: 11px;
-                    }
-                    .venda-info {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 20px;
-                        border-bottom: 1px solid #ddd;
-                        padding-bottom: 10px;
-                    }
-                    .venda-info div {
-                        flex: 1;
-                    }
-                    .items-table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-bottom: 20px;
-                    }
-                    .items-table th,
-                    .items-table td {
-                        border: 1px solid #ddd;
-                        padding: 5px;
-                        text-align: left;
-                    }
-                    .items-table th {
-                        background-color: #f8f9fa;
-                        font-weight: bold;
-                    }
-                    .items-table td.number {
-                        text-align: right;
-                    }
-                    .totals {
-                        float: right;
-                        width: 250px;
-                        border: 1px solid #ddd;
-                        padding: 10px;
-                    }
-                    .totals .total-line {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 5px;
-                    }
-                    .totals .final-total {
-                        border-top: 2px solid #333;
-                        padding-top: 5px;
-                        font-weight: bold;
-                        font-size: 14px;
-                    }
-                    .footer {
-                        clear: both;
-                        text-align: center;
-                        margin-top: 40px;
-                        padding-top: 20px;
-                        border-top: 1px solid #ddd;
-                        font-size: 10px;
-                        color: #666;
-                    }
-                    @media print {
-                        body { margin: 0; padding: 10px; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    ${config.logo_path ? `<img src="/static/images/${config.logo_path}" alt="Logo" class="logo">` : ''}
-                    <div class="empresa-info">
-                        <h2>${config.nome_empresa}</h2>
-                        <p>${config.endereco}</p>
-                        ${config.cidade && config.estado ? `<p>${config.cidade} - ${config.estado}${config.cep ? ' - CEP: ' + config.cep : ''}</p>` : ''}
-                        <p>Tel: ${config.telefone} | Email: ${config.email}</p>
-                        ${config.cnpj ? `<p>CNPJ: ${config.cnpj}</p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="venda-info">
-                    <div>
-                        <strong>RECIBO DE VENDA #${venda.id}</strong><br>
-                        <strong>Cliente:</strong> ${venda.cliente_nome || 'Cliente Avulso'}<br>
-                        <strong>Data:</strong> ${new Date(venda.created_at).toLocaleDateString('pt-BR')}<br>
-                        <strong>Hora:</strong> ${new Date(venda.created_at).toLocaleTimeString('pt-BR')}
-                    </div>
-                    <div style="text-align: right;">
-                        <strong>Forma de Pagamento:</strong><br>
-                        ${venda.forma_pagamento.replace('_', ' ').toUpperCase()}<br>
-                        ${venda.valor_pago ? `<strong>Valor Pago:</strong> R$ ${venda.valor_pago.toFixed(2).replace('.', ',')}<br>` : ''}
-                        ${venda.troco ? `<strong>Troco:</strong> R$ ${venda.troco.toFixed(2).replace('.', ',')}` : ''}
-                    </div>
-                </div>
-                
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th>Produto</th>
-                            <th style="width: 60px;">Qtd</th>
-                            <th style="width: 80px;">Preço Unit.</th>
-                            <th style="width: 80px;">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${venda.itens.map(item => `
-                            <tr>
-                                <td>${item.produto_nome}</td>
-                                <td class="number">${item.quantidade}</td>
-                                <td class="number">R$ ${item.preco_unitario.toFixed(2).replace('.', ',')}</td>
-                                <td class="number">R$ ${(item.quantidade * item.preco_unitario).toFixed(2).replace('.', ',')}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                
-                <div class="totals">
-                    <div class="total-line">
-                        <span>Subtotal:</span>
-                        <span>R$ ${(venda.total + (venda.desconto || 0)).toFixed(2).replace('.', ',')}</span>
-                    </div>
-                    ${venda.desconto > 0 ? `
+            
+            // Criar conteúdo do recibo
+            let itensHTML = '';
+            venda.itens.forEach(item => {
+                itensHTML += `
+                    <tr>
+                        <td>${item.produto_nome}</td>
+                        <td class="number">${item.quantidade}</td>
+                        <td class="number">R$ ${item.preco_unitario.toFixed(2).replace('.', ',')}</td>
+                        <td class="number">R$ ${(item.quantidade * item.preco_unitario).toFixed(2).replace('.', ',')}</td>
+                    </tr>
+                `;
+            });
+            
+            let descontoHTML = '';
+            if (venda.desconto > 0) {
+                descontoHTML = `
                     <div class="total-line" style="color: #dc3545;">
                         <span>Desconto:</span>
                         <span>- R$ ${venda.desconto.toFixed(2).replace('.', ',')}</span>
-                    </div>` : ''}
-                    <div class="total-line final-total">
-                        <span>TOTAL GERAL:</span>
-                        <span>R$ ${venda.total.toFixed(2).replace('.', ',')}</span>
                     </div>
-                </div>
+                `;
+            }
+            
+            const reciboHTML = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Recibo de Venda #${venda.id}</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 0;
+                            padding: 20px;
+                            font-size: 12px;
+                        }
+                        .header {
+                            text-align: center;
+                            border-bottom: 2px solid #333;
+                            padding-bottom: 10px;
+                            margin-bottom: 20px;
+                        }
+                        .logo {
+                            max-height: 60px;
+                            max-width: 150px;
+                            margin-bottom: 10px;
+                        }
+                        .empresa-info {
+                            margin-bottom: 10px;
+                        }
+                        .empresa-info h2 {
+                            margin: 0;
+                            color: #007bff;
+                            font-size: 18px;
+                        }
+                        .empresa-info p {
+                            margin: 2px 0;
+                            font-size: 11px;
+                        }
+                        .venda-info {
+                            display: flex;
+                            justify-content: space-between;
+                            margin-bottom: 20px;
+                            border-bottom: 1px solid #ddd;
+                            padding-bottom: 10px;
+                        }
+                        .venda-info div {
+                            flex: 1;
+                        }
+                        .items-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 20px;
+                        }
+                        .items-table th,
+                        .items-table td {
+                            border: 1px solid #ddd;
+                            padding: 5px;
+                            text-align: left;
+                        }
+                        .items-table th {
+                            background-color: #f8f9fa;
+                            font-weight: bold;
+                        }
+                        .items-table td.number {
+                            text-align: right;
+                        }
+                        .totals {
+                            float: right;
+                            width: 250px;
+                            border: 1px solid #ddd;
+                            padding: 10px;
+                        }
+                        .totals .total-line {
+                            display: flex;
+                            justify-content: space-between;
+                            margin-bottom: 5px;
+                        }
+                        .totals .final-total {
+                            border-top: 2px solid #333;
+                            padding-top: 5px;
+                            font-weight: bold;
+                            font-size: 14px;
+                        }
+                        .footer {
+                            clear: both;
+                            text-align: center;
+                            margin-top: 40px;
+                            padding-top: 20px;
+                            border-top: 1px solid #ddd;
+                            font-size: 10px;
+                            color: #666;
+                        }
+                        @media print {
+                            body { margin: 0; padding: 10px; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        ${config.logo_path ? `<img src="/static/images/${config.logo_path}" alt="Logo" class="logo">` : ''}
+                        <div class="empresa-info">
+                            <h2>${config.nome_empresa}</h2>
+                            <p>${config.endereco}</p>
+                            ${config.cidade && config.estado ? `<p>${config.cidade} - ${config.estado}${config.cep ? ' - CEP: ' + config.cep : ''}</p>` : ''}
+                            <p>Tel: ${config.telefone} | Email: ${config.email}</p>
+                            ${config.cnpj ? `<p>CNPJ: ${config.cnpj}</p>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="venda-info">
+                        <div>
+                            <strong>RECIBO DE VENDA #${venda.id}</strong><br>
+                            <strong>Cliente:</strong> ${venda.cliente_nome || 'Cliente Avulso'}<br>
+                            <strong>Data:</strong> ${new Date(venda.created_at).toLocaleDateString('pt-BR')}<br>
+                            <strong>Hora:</strong> ${new Date(venda.created_at).toLocaleTimeString('pt-BR')}
+                        </div>
+                        <div style="text-align: right;">
+                            <strong>Forma de Pagamento:</strong><br>
+                            ${venda.forma_pagamento.replace('_', ' ').toUpperCase()}<br>
+                            ${venda.valor_pago ? `<strong>Valor Pago:</strong> R$ ${venda.valor_pago.toFixed(2).replace('.', ',')}<br>` : ''}
+                            ${venda.troco ? `<strong>Troco:</strong> R$ ${venda.troco.toFixed(2).replace('.', ',')}` : ''}
+                        </div>
+                    </div>
+                    
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th style="width: 60px;">Qtd</th>
+                                <th style="width: 80px;">Preço Unit.</th>
+                                <th style="width: 80px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itensHTML}
+                        </tbody>
+                    </table>
+                    
+                    <div class="totals">
+                        <div class="total-line">
+                            <span>Subtotal:</span>
+                            <span>R$ ${(venda.total + (venda.desconto || 0)).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        ${descontoHTML}
+                        <div class="total-line final-total">
+                            <span>TOTAL GERAL:</span>
+                            <span>R$ ${venda.total.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Obrigado pela preferência!</p>
+                        <p>Sistema de Autopeças - Recibo gerado em ${new Date().toLocaleString('pt-BR')}</p>
+                    </div>
+                    
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            // Voltar à página anterior após impressão
+                            setTimeout(function() { 
+                                window.close();
+                            }, 1000);
+                        }
+                    </script>
+                </body>
+                </html>
+            `;
+            
+            // Tentar abrir nova janela, com fallback para impressão na mesma página
+            try {
+                const reciboWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
                 
-                <div class="footer">
-                    <p>Obrigado pela preferência!</p>
-                    <p>Sistema de Autopeças - Recibo gerado em ${new Date().toLocaleString('pt-BR')}</p>
-                </div>
+                if (reciboWindow && !reciboWindow.closed) {
+                    // Janela aberta com sucesso
+                    reciboWindow.document.write(reciboHTML);
+                    reciboWindow.document.close();
+                    console.log('Janela de impressão aberta com sucesso');
+                } else {
+                    // Pop-up bloqueado, usar método alternativo
+                    throw new Error('Pop-up bloqueado');
+                }
+            } catch (popupError) {
+                console.log('Pop-up bloqueado, usando método alternativo');
                 
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        // Fechar janela após impressão (opcional)
-                        setTimeout(function() { window.close(); }, 1000);
-                    }
-                </script>
-            </body>
-            </html>
-        `;
-        
-        // Abrir nova janela com o recibo
-        console.log('Abrindo janela de impressão...');
-        const reciboWindow = window.open('', '_blank');
-        reciboWindow.document.write(reciboHTML);
-        reciboWindow.document.close();
-        console.log('Janela de impressão aberta com sucesso');
-    })
-    .catch(error => {
-        console.error('Erro ao carregar dados para impressão:', error);
-        alert('Erro ao carregar dados para impressão: ' + error.message);
-    });
+                // Método alternativo: substituir conteúdo da página atual
+                if (confirm('O pop-up foi bloqueado. Deseja imprimir na mesma janela? (A página será recarregada após a impressão)')) {
+                    // Salvar conteúdo atual
+                    const currentContent = document.documentElement.outerHTML;
+                    
+                    // Substituir conteúdo
+                    document.open();
+                    document.write(reciboHTML);
+                    document.close();
+                    
+                    // Configurar volta ao conteúdo original após impressão
+                    setTimeout(() => {
+                        // Recarregar página original
+                        window.location.reload();
+                    }, 2000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar dados para impressão:', error);
+            alert('Erro ao carregar dados para impressão: ' + error.message);
+        });
+    } catch (error) {
+        console.error('Erro geral na função de impressão:', error);
+        alert('Erro na impressão: ' + error.message);
+    }
 }
 </script>
 {% endblock %}
