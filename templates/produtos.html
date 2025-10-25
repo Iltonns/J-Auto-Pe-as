@@ -173,7 +173,18 @@
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="editarProduto({{ produto.id }}, {{ produto.nome|tojson }}, {{ produto.preco }}, {{ produto.estoque }}, {{ (produto.codigo_barras or '')|tojson }}, {{ (produto.codigo_fornecedor or '')|tojson }}, {{ produto.preco_custo or 0 }}, {{ produto.margem_lucro or 0 }}, {{ produto.estoque_minimo or 5 }}, {{ (produto.foto_url or '')|tojson }}, {{ (produto.marca or '')|tojson }})"
+                                            data-produto-id="{{ produto.id }}"
+                                            data-produto-nome="{{ produto.nome }}"
+                                            data-produto-preco="{{ produto.preco }}"
+                                            data-produto-estoque="{{ produto.estoque }}"
+                                            data-produto-codigo-barras="{{ produto.codigo_barras or '' }}"
+                                            data-produto-codigo-fornecedor="{{ produto.codigo_fornecedor or '' }}"
+                                            data-produto-preco-custo="{{ produto.preco_custo or 0 }}"
+                                            data-produto-margem-lucro="{{ produto.margem_lucro or 0 }}"
+                                            data-produto-estoque-minimo="{{ produto.estoque_minimo or 5 }}"
+                                            data-produto-foto-url="{{ produto.foto_url or '' }}"
+                                            data-produto-marca="{{ produto.marca or '' }}"
+                                            onclick="editarProdutoComData(this)"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarProduto">
                                         <i class="fas fa-edit"></i>
@@ -396,6 +407,7 @@
             </div>
             <form method="POST" id="form-editar-produto" action="" enctype="multipart/form-data">
                 <input type="hidden" id="edit_produto_id" name="produto_id">
+                <input type="hidden" name="_method" value="POST">
                 <div class="modal-body">
                     <!-- Navegação por abas -->
                     <ul class="nav nav-tabs mb-3" id="abas-editar-produto" role="tablist">
@@ -419,7 +431,7 @@
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="edit_nome" class="form-label">Nome do Produto *</label>
-                                <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                                <input type="text" class="form-control" id="edit_nome" name="nome">
                             </div>
                         </div>
                         <div class="col-md-2">
@@ -456,7 +468,7 @@
                                         <label for="edit_preco_custo" class="form-label">
                                             <i class="fas fa-tag text-info"></i> Preço de Custo (R$) *
                                         </label>
-                                        <input type="number" class="form-control" id="edit_preco_custo" name="preco_custo" step="0.01" min="0" required oninput="calcularPrecoVendaEdit()">
+                                        <input type="number" class="form-control" id="edit_preco_custo" name="preco_custo" step="0.01" min="0" oninput="calcularPrecoVendaEdit()">
                                         <div class="form-text">Valor que você pagou pelo produto</div>
                                     </div>
                                 </div>
@@ -465,7 +477,7 @@
                                         <label for="edit_margem_lucro" class="form-label">
                                             <i class="fas fa-percentage text-success"></i> Margem de Lucro (%) *
                                         </label>
-                                        <input type="number" class="form-control" id="edit_margem_lucro" name="margem_lucro" step="0.01" min="0" required oninput="calcularPrecoVendaEdit()">
+                                        <input type="number" class="form-control" id="edit_margem_lucro" name="margem_lucro" step="0.01" min="0" oninput="calcularPrecoVendaEdit()">
                                         <div class="form-text">Ex: 100 para dobrar o valor (100% de lucro)</div>
                                     </div>
                                 </div>
@@ -474,7 +486,7 @@
                                         <label for="edit_preco" class="form-label">
                                             <i class="fas fa-dollar-sign text-warning"></i> Preço de Venda (R$) *
                                         </label>
-                                        <input type="number" class="form-control bg-light" id="edit_preco" name="preco" step="0.01" min="0" required readonly>
+                                        <input type="number" class="form-control bg-light" id="edit_preco" name="preco" step="0.01" min="0" readonly>
                                         <div class="form-text text-success" id="edit_info_calculo_display">Calculado automaticamente</div>
                                     </div>
                                 </div>
@@ -501,7 +513,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="edit_estoque" class="form-label">Quantidade em Estoque *</label>
-                                <input type="number" class="form-control" id="edit_estoque" name="estoque" min="0" required>
+                                <input type="number" class="form-control" id="edit_estoque" name="estoque" min="0">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -675,9 +687,49 @@ function visualizarFoto(input, previewId) {
         const reader = new FileReader();
         
         reader.onload = function(e) {
+            // Desmarcar a opção de remover foto se estiver marcada
+            if (previewId === 'edit-preview-foto') {
+                $('#remover_foto').prop('checked', false);
+            }
+            
             preview.innerHTML = `
                 <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
                 <p class="text-success mt-2 mb-0">
+                    <i class="fas fa-check-circle"></i> Imagem selecionada
+                </p>
+            `;
+        };
+        
+        reader.readAsDataURL(file);
+    } else {
+        // Se no input de edição, restaurar foto atual ou mostrar "sem foto"
+        if (previewId === 'edit-preview-foto') {
+            const editFotoAtual = document.getElementById('edit-foto-atual');
+            if (editFotoAtual.src && editFotoAtual.src !== '') {
+                preview.innerHTML = `
+                    <img src="${editFotoAtual.src}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
+                    <p class="text-success mt-2 mb-0">
+                        <i class="fas fa-check-circle"></i> Imagem atual
+                    </p>
+                `;
+            } else {
+                preview.innerHTML = `
+                    <div id="edit-sem-foto">
+                        <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                    </div>
+                `;
+            }
+        } else {
+            preview.innerHTML = `
+                <div>
+                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                </div>
+            `;
+        }
+    }
+}
                     <i class="fas fa-check-circle"></i> Imagem selecionada
                 </p>
             `;
@@ -726,85 +778,325 @@ function calcularPrecoVendaAutomatico() {
     }
 }
 
-// Função para calcular preço de venda automaticamente (editar produto)
+// Função para calcular preço de venda automaticamente (editar produto) - MELHORADA
 function calcularPrecoVendaEdit() {
-    const custo = parseFloat(document.getElementById('edit_preco_custo').value) || 0;
-    const margem = parseFloat(document.getElementById('edit_margem_lucro').value) || 0;
+    console.log('Calculando preço de venda...');
+    
+    const custoInput = document.getElementById('edit_preco_custo');
+    const margemInput = document.getElementById('edit_margem_lucro');
+    const precoInput = document.getElementById('edit_preco');
+    const infoDisplay = document.getElementById('edit_info_calculo_display');
+    
+    if (!custoInput || !margemInput || !precoInput) {
+        console.error('Campos necessários para cálculo não encontrados');
+        return;
+    }
+    
+    const custo = parseFloat(custoInput.value) || 0;
+    const margem = parseFloat(margemInput.value) || 0;
+    
+    console.log('Valores para cálculo:', { custo, margem });
     
     if (custo > 0 && margem >= 0) {
         // Fórmula: Preço = Custo + (Custo * Margem/100)
         const precoVenda = custo + (custo * margem / 100);
-        document.getElementById('edit_preco').value = precoVenda.toFixed(2);
+        precoInput.value = precoVenda.toFixed(2);
         
         // Atualizar informações de cálculo
         const lucroValor = precoVenda - custo;
-        if (margem > 0) {
-            document.getElementById('edit_info_calculo_display').innerHTML = 
-                `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
-            document.getElementById('edit_info_calculo_display').className = 'form-text text-success';
-        } else {
-            document.getElementById('edit_info_calculo_display').textContent = 'Preço igual ao custo (sem lucro)';
-            document.getElementById('edit_info_calculo_display').className = 'form-text text-warning';
+        if (infoDisplay) {
+            if (margem > 0) {
+                infoDisplay.innerHTML = `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
+                infoDisplay.className = 'form-text text-success';
+            } else {
+                infoDisplay.textContent = 'Preço igual ao custo (sem lucro)';
+                infoDisplay.className = 'form-text text-warning';
+            }
         }
+        
+        console.log('Preço calculado:', precoVenda.toFixed(2));
     } else if (custo > 0) {
-        document.getElementById('edit_preco').value = custo.toFixed(2);
-        document.getElementById('edit_info_calculo_display').textContent = 'Informe a margem desejada';
-        document.getElementById('edit_info_calculo_display').className = 'form-text text-muted';
+        precoInput.value = custo.toFixed(2);
+        if (infoDisplay) {
+            infoDisplay.textContent = 'Informe a margem desejada';
+            infoDisplay.className = 'form-text text-muted';
+        }
     } else {
-        document.getElementById('edit_preco').value = '';
-        document.getElementById('edit_info_calculo_display').textContent = 'Calculado automaticamente';
-        document.getElementById('edit_info_calculo_display').className = 'form-text text-success';
+        precoInput.value = '';
+        if (infoDisplay) {
+            infoDisplay.textContent = 'Calculado automaticamente';
+            infoDisplay.className = 'form-text text-success';
+        }
     }
 }
 
 
 
+// Função atualizada para editar produto usando data attributes
+function editarProdutoComData(botao) {
+    console.log('=== INICIANDO EDIÇÃO DE PRODUTO ===');
+    
+    try {
+        // Extrair dados dos atributos data
+        const dadosProduto = {
+            id: botao.getAttribute('data-produto-id'),
+            nome: botao.getAttribute('data-produto-nome') || '',
+            preco: parseFloat(botao.getAttribute('data-produto-preco')) || 0,
+            estoque: parseInt(botao.getAttribute('data-produto-estoque')) || 0,
+            codigo_barras: botao.getAttribute('data-produto-codigo-barras') || '',
+            codigo_fornecedor: botao.getAttribute('data-produto-codigo-fornecedor') || '',
+            preco_custo: parseFloat(botao.getAttribute('data-produto-preco-custo')) || 0,
+            margem_lucro: parseFloat(botao.getAttribute('data-produto-margem-lucro')) || 0,
+            estoque_minimo: parseInt(botao.getAttribute('data-produto-estoque-minimo')) || 5,
+            foto_url: botao.getAttribute('data-produto-foto-url') || '',
+            marca: botao.getAttribute('data-produto-marca') || ''
+        };
+        
+        console.log('Dados extraídos do botão:', dadosProduto);
+        
+        // Verificar se o ID existe
+        if (!dadosProduto.id) {
+            alert('Erro: ID do produto não encontrado!');
+            return;
+        }
+        
+        // Preencher campos do formulário
+        preencherFormularioEdicao(dadosProduto);
+        
+    } catch (error) {
+        console.error('Erro ao extrair dados do produto:', error);
+        alert('Erro ao carregar dados do produto. Tente novamente.');
+    }
+}
+
+// Função para preencher o formulário de edição
+function preencherFormularioEdicao(dados) {
+    console.log('Preenchendo formulário com dados:', dados);
+    
+    // Definir valores nos campos
+    const campos = {
+        'edit_produto_id': dados.id,
+        'edit_nome': dados.nome,
+        'edit_preco_custo': dados.preco_custo || '',
+        'edit_margem_lucro': dados.margem_lucro || 100,
+        'edit_estoque': dados.estoque,
+        'edit_estoque_minimo': dados.estoque_minimo,
+        'edit_codigo_barras': dados.codigo_barras,
+        'edit_codigo_fornecedor': dados.codigo_fornecedor,
+        'edit_marca': dados.marca
+    };
+    
+    // Preencher cada campo
+    for (const [campo, valor] of Object.entries(campos)) {
+        const elemento = document.getElementById(campo);
+        if (elemento) {
+            elemento.value = valor;
+            console.log(`Campo ${campo} preenchido com:`, valor);
+        } else {
+            console.error(`Campo ${campo} não encontrado!`);
+        }
+    }
+    
+    // Calcular preço de venda
+    calcularPrecoVendaEdit();
+    
+    // Configurar ação do formulário
+    const formAction = `/produtos/editar/${dados.id}`;
+    const form = document.getElementById('form-editar-produto');
+    if (form) {
+        form.action = formAction;
+        console.log('Action do formulário definida:', formAction);
+    }
+    
+    // Gerenciar foto
+    gerenciarFotoEdicao(dados.foto_url);
+    
+    // Resetar checkbox de remover foto
+    const removerFoto = document.getElementById('remover_foto');
+    if (removerFoto) {
+        removerFoto.checked = false;
+    }
+    
+    console.log('Formulário preenchido com sucesso!');
+}
+
+// Função para gerenciar a foto na edição
+function gerenciarFotoEdicao(foto_url) {
+    const editPreviewContainer = document.getElementById('edit-preview-foto');
+    const editFotoInput = document.getElementById('edit_foto_produto');
+    
+    if (editFotoInput) {
+        editFotoInput.value = '';
+    }
+    
+    if (editPreviewContainer) {
+        if (foto_url && foto_url !== 'None' && foto_url !== '' && foto_url !== 'null') {
+            console.log('Carregando foto atual:', foto_url);
+            editPreviewContainer.innerHTML = `
+                <img src="${foto_url}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
+                <p class="text-success mt-2 mb-0">
+                    <i class="fas fa-check-circle"></i> Imagem atual
+                </p>
+            `;
+        } else {
+            console.log('Nenhuma foto atual');
+            editPreviewContainer.innerHTML = `
+                <div>
+                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                </div>
+            `;
+        }
+    }
+}
+
 // Função atualizada para editar produto
 function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo, foto_url, marca) {
-    $('#edit_produto_id').val(id);
-    $('#edit_nome').val(nome);
-    $('#edit_preco').val(preco);
-    $('#edit_estoque').val(estoque);
-    $('#edit_estoque_minimo').val(estoque_minimo || 5);
-    $('#edit_codigo_barras').val(codigo_barras || '');
-    $('#edit_codigo_fornecedor').val(codigo_fornecedor || '');
-    $('#edit_preco_custo').val(preco_custo || '');
-    $('#edit_marca').val(marca || '');
+    console.log('=== DEBUG EDITAR PRODUTO ===');
+    console.log('Parâmetros recebidos:', {
+        id: id,
+        nome: nome,
+        preco: preco,
+        estoque: estoque,
+        codigo_barras: codigo_barras,
+        codigo_fornecedor: codigo_fornecedor,
+        preco_custo: preco_custo,
+        margem_lucro: margem_lucro,
+        estoque_minimo: estoque_minimo,
+        foto_url: foto_url,
+        marca: marca
+    });
+    
+    // Verificar se os elementos existem
+    const elementos = {
+        edit_produto_id: document.getElementById('edit_produto_id'),
+        edit_nome: document.getElementById('edit_nome'),
+        edit_preco: document.getElementById('edit_preco'),
+        edit_estoque: document.getElementById('edit_estoque'),
+        edit_estoque_minimo: document.getElementById('edit_estoque_minimo'),
+        edit_codigo_barras: document.getElementById('edit_codigo_barras'),
+        edit_codigo_fornecedor: document.getElementById('edit_codigo_fornecedor'),
+        edit_preco_custo: document.getElementById('edit_preco_custo'),
+        edit_marca: document.getElementById('edit_marca'),
+        edit_margem_lucro: document.getElementById('edit_margem_lucro')
+    };
+    
+    console.log('Elementos do DOM:', elementos);
+    
+    // Verificar se algum elemento está faltando
+    for (let [key, element] of Object.entries(elementos)) {
+        if (!element) {
+            console.error(`Elemento ${key} não encontrado!`);
+            alert(`Erro: Elemento ${key} não encontrado no formulário!`);
+            return;
+        }
+    }
+    
+    // Preencher todos os campos do formulário com os valores atuais
+    elementos.edit_produto_id.value = id || '';
+    elementos.edit_nome.value = nome || '';
+    elementos.edit_preco.value = preco || '';
+    elementos.edit_estoque.value = estoque || 0;
+    elementos.edit_estoque_minimo.value = estoque_minimo || 5;
+    elementos.edit_codigo_barras.value = codigo_barras || '';
+    elementos.edit_codigo_fornecedor.value = codigo_fornecedor || '';
+    elementos.edit_preco_custo.value = preco_custo || '';
+    elementos.edit_marca.value = marca || '';
+    
+    console.log('Valores preenchidos nos campos:', {
+        edit_produto_id: elementos.edit_produto_id.value,
+        edit_nome: elementos.edit_nome.value,
+        edit_preco: elementos.edit_preco.value,
+        edit_estoque: elementos.edit_estoque.value,
+        edit_estoque_minimo: elementos.edit_estoque_minimo.value,
+        edit_codigo_barras: elementos.edit_codigo_barras.value,
+        edit_codigo_fornecedor: elementos.edit_codigo_fornecedor.value,
+        edit_preco_custo: elementos.edit_preco_custo.value,
+        edit_marca: elementos.edit_marca.value
+    });
     
     // Limpar checkbox de remover foto
     $('#remover_foto').prop('checked', false);
     
-    // Se temos margem salva, usar ela; senão, calcular a partir do preço e custo
+    // Configurar margem de lucro
     if (margem_lucro && margem_lucro > 0) {
-        $('#edit_margem_lucro').val(margem_lucro);
+        elementos.edit_margem_lucro.value = parseFloat(margem_lucro).toFixed(2);
     } else if (preco > 0 && preco_custo > 0) {
         const margemCalculada = ((preco - preco_custo) / preco_custo) * 100;
-        $('#edit_margem_lucro').val(margemCalculada.toFixed(2));
+        elementos.edit_margem_lucro.value = margemCalculada.toFixed(2);
     } else {
-        $('#edit_margem_lucro').val('');
+        elementos.edit_margem_lucro.value = '100.00'; // Margem padrão de 100%
     }
     
-    // Carregar foto atual se existir
+    console.log('Margem de lucro definida:', elementos.edit_margem_lucro.value);
+    
+    // Gerenciar exibição da foto atual
     const editFotoAtual = document.getElementById('edit-foto-atual');
     const editSemFoto = document.getElementById('edit-sem-foto');
-    
-    if (foto_url && foto_url !== 'None' && foto_url !== '') {
-        editFotoAtual.src = foto_url;
-        editFotoAtual.style.display = 'block';
-        editSemFoto.style.display = 'none';
-    } else {
-        editFotoAtual.style.display = 'none';
-        editSemFoto.style.display = 'block';
-    }
+    const editPreviewContainer = document.getElementById('edit-preview-foto');
     
     // Limpar input de nova foto
     document.getElementById('edit_foto_produto').value = '';
+    
+    // Verificar e carregar foto atual
+    if (foto_url && foto_url !== 'None' && foto_url !== '' && foto_url !== 'null') {
+        console.log('Carregando foto atual:', foto_url);
+        if (editFotoAtual) {
+            editFotoAtual.src = foto_url;
+            editFotoAtual.style.display = 'block';
+        }
+        if (editSemFoto) {
+            editSemFoto.style.display = 'none';
+        }
+        
+        // Adicionar indicação de sucesso
+        if (editPreviewContainer) {
+            editPreviewContainer.innerHTML = `
+                <img src="${foto_url}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
+                <p class="text-success mt-2 mb-0">
+                    <i class="fas fa-check-circle"></i> Imagem selecionada
+                </p>
+            `;
+        }
+    } else {
+        console.log('Nenhuma foto atual encontrada');
+        if (editFotoAtual) {
+            editFotoAtual.style.display = 'none';
+        }
+        if (editSemFoto) {
+            editSemFoto.style.display = 'block';
+        }
+        if (editPreviewContainer) {
+            editPreviewContainer.innerHTML = `
+                <div id="edit-sem-foto">
+                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                </div>
+            `;
+        }
+    }
     
     // Recalcular o preço com as informações atuais
     calcularPrecoVendaEdit();
     
     // Definir a action do formulário com o ID correto
-    $('#form-editar-produto').attr('action', '/produtos/editar/' + id);
+    const formAction = '/produtos/editar/' + id;
+    console.log('Definindo action do formulário:', formAction);
+    document.getElementById('form-editar-produto').action = formAction;
+    
+    // Verificar se a action foi definida
+    console.log('Action definida:', document.getElementById('form-editar-produto').action);
+    
+    // Ir para a primeira aba (informações básicas) automaticamente
+    try {
+        const firstTab = new bootstrap.Tab(document.getElementById('aba-edit-info-basica'));
+        firstTab.show();
+    } catch (e) {
+        console.log('Erro ao mudar aba:', e);
+    }
+    
+    console.log('=== FIM DEBUG EDITAR PRODUTO ===');
+    console.log('Produto carregado para edição');
 }
 
 function confirmarExclusao(id, nome) {
@@ -902,42 +1194,119 @@ $(document).ready(function() {
     $('#preco_custo, #margem_lucro').on('input', calcularPrecoVendaAutomatico);
     $('#edit_preco_custo, #edit_margem_lucro').on('input', calcularPrecoVendaEdit);
     
+    // Gerenciar checkbox de remover foto
+    $('#remover_foto').on('change', function() {
+        const isChecked = $(this).is(':checked');
+        const preview = document.getElementById('edit-preview-foto');
+        
+        if (isChecked) {
+            // Limpar input de arquivo e preview
+            document.getElementById('edit_foto_produto').value = '';
+            preview.innerHTML = `
+                <div class="text-center p-3">
+                    <i class="fas fa-trash fa-3x text-danger mb-2"></i>
+                    <p class="text-danger mb-0">Foto será removida</p>
+                </div>
+            `;
+        } else {
+            // Restaurar foto atual se existir
+            const editFotoAtual = document.getElementById('edit-foto-atual');
+            if (editFotoAtual.src && editFotoAtual.src !== '') {
+                preview.innerHTML = `
+                    <img src="${editFotoAtual.src}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
+                    <p class="text-success mt-2 mb-0">
+                        <i class="fas fa-check-circle"></i> Imagem atual
+                    </p>
+                `;
+            } else {
+                preview.innerHTML = `
+                    <div id="edit-sem-foto">
+                        <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+                    </div>
+                `;
+            }
+        }
+    });
+    
+    // Adicionar evento para quando o modal de edição é aberto
+    $('#modalEditarProduto').on('show.bs.modal', function() {
+        console.log('Modal de edição sendo aberto...');
+        // Resetar formulário
+        const form = document.getElementById('form-editar-produto');
+        if (form) {
+            form.action = '';
+        }
+    });
+    
+    // Adicionar evento para quando o modal de edição é fechado
+    $('#modalEditarProduto').on('hidden.bs.modal', function() {
+        console.log('Modal de edição foi fechado');
+        // Limpar formulário
+        const form = document.getElementById('form-editar-produto');
+        if (form) {
+            form.reset();
+            form.action = '';
+        }
+    });
+    
     // Adicionar validação para formulário de edição
     $('#form-editar-produto').on('submit', function(e) {
-        // Verificar se todos os campos obrigatórios estão preenchidos
-        const nome = $('#edit_nome').val().trim();
-        const preco_custo = $('#edit_preco_custo').val();
-        const margem_lucro = $('#edit_margem_lucro').val();
-        const estoque = $('#edit_estoque').val();
+        console.log('Submetendo formulário de edição...');
         
+        // Obter valores dos campos
+        const nome = $('#edit_nome').val().trim();
+        const preco_custo = parseFloat($('#edit_preco_custo').val()) || 0;
+        const margem_lucro = parseFloat($('#edit_margem_lucro').val()) || 0;
+        const estoque = parseInt($('#edit_estoque').val()) || 0;
+        const formAction = document.getElementById('form-editar-produto').action;
+        
+        console.log('Dados do formulário antes de enviar:', {
+            action: formAction,
+            produto_id: $('#edit_produto_id').val(),
+            nome: nome,
+            preco_custo: preco_custo,
+            margem_lucro: margem_lucro,
+            preco: $('#edit_preco').val(),
+            estoque: estoque,
+            estoque_minimo: $('#edit_estoque_minimo').val(),
+            codigo_barras: $('#edit_codigo_barras').val(),
+            codigo_fornecedor: $('#edit_codigo_fornecedor').val(),
+            marca: $('#edit_marca').val(),
+            remover_foto: $('#remover_foto').is(':checked')
+        });
+        
+        // Validações básicas
         if (!nome) {
             e.preventDefault();
             alert('Nome do produto é obrigatório');
+            $('#edit_nome').focus();
             return false;
         }
         
-        if (!preco_custo || preco_custo <= 0) {
+        if (!formAction || formAction === '' || formAction.endsWith('produtos/editar/')) {
+            e.preventDefault();
+            alert('Erro: ID do produto não foi definido corretamente. Tente abrir o modal novamente.');
+            console.error('Action do formulário inválida:', formAction);
+            return false;
+        }
+        
+        if (preco_custo <= 0) {
             e.preventDefault();
             alert('Preço de custo é obrigatório e deve ser maior que zero');
+            $('#edit_preco_custo').focus();
             return false;
         }
         
-        if (!margem_lucro || margem_lucro < 0) {
-            e.preventDefault();
-            alert('Margem de lucro é obrigatória e deve ser maior ou igual a zero');
-            return false;
-        }
-        
-        if (!estoque || estoque < 0) {
-            e.preventDefault();
-            alert('Estoque é obrigatório e deve ser maior ou igual a zero');
-            return false;
-        }
+        // Recalcular preço final antes de enviar para garantir
+        calcularPrecoVendaEdit();
         
         // Adicionar indicador visual de carregamento
         const submitBtn = $('#btn-atualizar-produto');
         const originalText = submitBtn.html();
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Atualizando...').prop('disabled', true);
+        
+        console.log('Formulário sendo enviado para:', formAction);
         
         // Restaurar botão após um tempo (fallback)
         setTimeout(() => {
