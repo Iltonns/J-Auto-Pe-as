@@ -58,16 +58,16 @@
                 </div>
             </div>
             {% else %}
-            <div class="card border-warning">
-                <div class="card-header bg-warning text-dark">
+            <div class="card" style="border-color: #1a237e;">
+                <div class="card-header text-white" style="background-color: #1a237e;">
                     <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <i class="fas fa-lock me-2" style="color: #ffffff;"></i>
                         Caixa Fechado
                     </h5>
                 </div>
                 <div class="card-body text-center">
-                    <p class="mb-3">O caixa está fechado. Abra o caixa para começar as operações.</p>
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#abrirCaixaModal">
+                    <p class="mb-3" style="color: #1a237e; font-weight: 500;">O caixa está fechado. Abra o caixa para começar as operações.</p>
+                    <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#abrirCaixaModal" style="background-color: #1a237e; color: white; border: none;">
                         <i class="fas fa-play me-2"></i>Abrir Caixa
                     </button>
                 </div>
@@ -127,7 +127,7 @@
                     <h6 class="mb-0">Ações do Caixa</h6>
                 </div>
                 <div class="card-body">
-                    <button type="button" class="btn btn-primary btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#movimentacaoModal">
+                    <button type="button" class="btn btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#movimentacaoModal" style="background-color: #1a237e; color: white; border: none;">
                         <i class="fas fa-plus me-2"></i>Nova Movimentação
                     </button>
                     <form method="POST" action="{{ url_for('sincronizar_vendas_caixa') }}" class="mb-2">
@@ -142,7 +142,7 @@
                         </button>
                     </form>
                     {% endif %}
-                    <button type="button" class="btn btn-danger btn-sm w-100" data-bs-toggle="modal" data-bs-target="#fecharCaixaModal">
+                    <button type="button" class="btn btn-sm w-100" data-bs-toggle="modal" data-bs-target="#fecharCaixaModal" style="background-color: #d32f2f; color: white; border: none;">
                         <i class="fas fa-stop me-2"></i>Fechar Caixa
                     </button>
                 </div>
@@ -236,7 +236,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn" style="background-color: #1a237e; color: white; border: none;">
                         <i class="fas fa-play me-2"></i>Abrir Caixa
                     </button>
                 </div>
@@ -269,7 +269,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">
+                    <button type="submit" class="btn" style="background-color: #d32f2f; color: white; border: none;">
                         <i class="fas fa-stop me-2"></i>Fechar Caixa
                     </button>
                 </div>
@@ -336,7 +336,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn" style="background-color: #1a237e; color: white; border: none;">
                         <i class="fas fa-save me-2"></i>Registrar
                     </button>
                 </div>

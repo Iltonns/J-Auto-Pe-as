@@ -15,7 +15,8 @@ from Minha_autopecas_web.logica_banco import (
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
-    registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id,
+    deletar_todos_os_produtos, limpar_completamente_produtos,
+    registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id, deletar_venda,
     obter_configuracoes_empresa, atualizar_configuracoes_empresa,
     listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta,
     listar_contas_receber_hoje, receber_conta, adicionar_conta_receber,
@@ -794,39 +795,327 @@ def produtos_fornecedor(id):
     return render_template('produtos_fornecedor.html', fornecedor=fornecedor, produtos=produtos_lista)
 
 # PRODUTOS
+# === ROTAS DE PRODUTOS ===
+
 @app.route('/produtos')
 @login_required
 def produtos():
-    produtos_lista = listar_produtos()
-    fornecedores_lista = obter_fornecedores_para_select()
-    return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista)
+    """Exibe a página de gerenciamento de produtos"""
+    try:
+        produtos_lista = listar_produtos()
+        fornecedores_lista = obter_fornecedores_para_select()
+        return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista)
+    except Exception as e:
+        flash(f'Erro ao carregar produtos: {str(e)}', 'error')
+        return render_template('produtos.html', produtos=[], fornecedores=[])
 
 @app.route('/produtos/buscar')
 @login_required
 def buscar_produto_route():
-    termo = request.args.get('termo', '')
-    produtos = buscar_produto(termo)
-    return jsonify(produtos)
+    """API para buscar produtos"""
+    try:
+        termo = request.args.get('termo', '').strip()
+        if not termo:
+            return jsonify([])
+        
+        produtos = buscar_produto(termo)
+        return jsonify(produtos)
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/api/produtos/buscar')
 @login_required
 def api_buscar_produtos():
-    termo = request.args.get('q', '').strip().lower()
-    produtos = listar_produtos()
-    
-    if termo:
-        produtos_filtrados = []
+    """API avançada para buscar produtos com filtros"""
+    try:
+        termo = request.args.get('q', '').strip().lower()
+        categoria = request.args.get('categoria', '')
+        
+        produtos = listar_produtos()
+        
+        # Filtrar por categoria se especificada
+        if categoria and categoria != 'todas':
+            produtos = [p for p in produtos if p.get('categoria') == categoria]
+        
+        # Filtrar por termo de busca se especificado
+        if termo:
+            produtos_filtrados = []
+            for produto in produtos:
+                if (termo in produto['nome'].lower() or 
+                    termo in str(produto['id']) or
+                    (produto.get('codigo_barras') and termo in produto['codigo_barras'].lower()) or
+                    (produto.get('codigo_fornecedor') and termo in produto['codigo_fornecedor'].lower()) or
+                    (produto.get('categoria') and termo in produto['categoria'].lower()) or
+                    (produto.get('descricao') and termo in produto['descricao'].lower())):
+                    produtos_filtrados.append(produto)
+            produtos = produtos_filtrados
+        
+        return jsonify(produtos[:50])  # Limitar a 50 resultados
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/api/produto/<termo>')
+@login_required
+def api_buscar_produto_unico(termo):
+    """Busca um produto específico pelo termo"""
+    try:
+        produtos = listar_produtos()
+        
+        # Primeiro tenta encontrar por ID exato
+        try:
+            produto_id = int(termo)
+            for produto in produtos:
+                if produto['id'] == produto_id:
+                    return jsonify(produto)
+        except ValueError:
+            pass
+        
+        # Depois busca por código de barras exato
         for produto in produtos:
-            if (termo in produto['nome'].lower() or 
-                termo in str(produto['id']) or
-                (produto.get('codigo_barras') and termo in produto['codigo_barras'].lower()) or
-                (produto.get('codigo_fornecedor') and termo in produto['codigo_fornecedor'].lower()) or
-                (produto.get('categoria') and termo in produto['categoria'].lower()) or
-                (produto.get('descricao') and termo in produto['descricao'].lower())):
-                produtos_filtrados.append(produto)
-        produtos = produtos_filtrados
+            if produto.get('codigo_barras') and produto['codigo_barras'].lower() == termo.lower():
+                return jsonify(produto)
+        
+        # Depois busca por código de fornecedor exato
+        for produto in produtos:
+            if produto.get('codigo_fornecedor') and produto['codigo_fornecedor'].lower() == termo.lower():
+                return jsonify(produto)
+        
+        # Por último, busca por nome (primeiro que contenha o termo)
+        termo_lower = termo.lower()
+        for produto in produtos:
+            if termo_lower in produto['nome'].lower():
+                return jsonify(produto)
+        
+        return jsonify({'error': 'Produto não encontrado'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/produtos/adicionar', methods=['POST'])
+@login_required
+def adicionar_produto_route():
+    """Adiciona um novo produto"""
+    try:
+        # Função auxiliar para conversão segura
+        def safe_float(value, default=0.0):
+            try:
+                return float(value) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        def safe_int(value, default=0):
+            try:
+                return int(float(value)) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        # Coletar dados do formulário
+        nome = request.form.get('nome', '').strip()
+        if not nome:
+            flash('Nome do produto é obrigatório!', 'error')
+            return redirect(url_for('produtos'))
+
+        codigo_barras = request.form.get('codigo_barras', '').strip()
+        codigo_fornecedor = request.form.get('codigo_fornecedor', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        categoria = request.form.get('categoria', '').strip()
+        marca = request.form.get('marca', '').strip()
+        
+        # Campos numéricos
+        estoque = safe_int(request.form.get('estoque', 0))
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        preco_custo = safe_float(request.form.get('preco_custo', 0))
+        margem_lucro = safe_float(request.form.get('margem_lucro', 0))
+        
+        # Calcular preço de venda
+        if preco_custo > 0 and margem_lucro >= 0:
+            preco = preco_custo + (preco_custo * margem_lucro / 100)
+        else:
+            preco = safe_float(request.form.get('preco', 0))
+        
+        if preco <= 0:
+            flash('Preço do produto deve ser maior que zero!', 'error')
+            return redirect(url_for('produtos'))
+
+        # Processar upload de foto
+        foto_url = None
+        if 'foto_produto' in request.files:
+            file = request.files['foto_produto']
+            if file.filename:
+                foto_url = salvar_foto_produto(file)
+                if not foto_url:
+                    flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
+
+        # Adicionar produto ao banco
+        produto_id = adicionar_produto(
+            nome=nome,
+            preco=preco,
+            estoque=estoque,
+            estoque_minimo=estoque_minimo,
+            codigo_barras=codigo_barras if codigo_barras else None,
+            descricao=descricao if descricao else None,
+            categoria=categoria if categoria else None,
+            codigo_fornecedor=codigo_fornecedor if codigo_fornecedor else None,
+            preco_custo=preco_custo,
+            margem_lucro=margem_lucro,
+            foto_url=foto_url,
+            marca=marca if marca else None
+        )
+        
+        flash('Produto adicionado com sucesso!', 'success')
+        return redirect(url_for('produtos'))
+        
+    except Exception as e:
+        # Se houve erro e foto foi salva, remove a foto
+        if 'foto_url' in locals() and foto_url:
+            remover_foto_produto(foto_url)
+        flash(f'Erro ao adicionar produto: {str(e)}', 'error')
+        return redirect(url_for('produtos'))
+
+@app.route('/produtos/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_produto_route(id):
+    """Edita um produto existente"""
+    try:
+        # Função auxiliar para conversão segura
+        def safe_float(value, default=0.0):
+            try:
+                return float(value) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        def safe_int(value, default=0):
+            try:
+                return int(float(value)) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        # Verificar se produto existe
+        produto_atual = obter_produto_por_id(id)
+        if not produto_atual:
+            flash('Produto não encontrado!', 'error')
+            return redirect(url_for('produtos'))
+
+        # Coletar dados do formulário
+        nome = request.form.get('nome', '').strip()
+        if not nome:
+            flash('Nome do produto é obrigatório!', 'error')
+            return redirect(url_for('produtos'))
+
+        codigo_barras = request.form.get('codigo_barras', '').strip()
+        codigo_fornecedor = request.form.get('codigo_fornecedor', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        categoria = request.form.get('categoria', '').strip()
+        marca = request.form.get('marca', '').strip()
+        
+        # Campos numéricos
+        estoque = safe_int(request.form.get('estoque', 0))
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        preco_custo = safe_float(request.form.get('preco_custo', 0))
+        margem_lucro = safe_float(request.form.get('margem_lucro', 0))
+        
+        # Calcular preço de venda
+        if preco_custo > 0 and margem_lucro >= 0:
+            preco = preco_custo + (preco_custo * margem_lucro / 100)
+        else:
+            preco = safe_float(request.form.get('preco', 0))
+        
+        if preco <= 0:
+            flash('Preço do produto deve ser maior que zero!', 'error')
+            return redirect(url_for('produtos'))
+
+        # Processar foto
+        foto_url = produto_atual.get('foto_url')  # Manter foto atual por padrão
+        remover_foto = request.form.get('remover_foto') == '1'
+        
+        if remover_foto:
+            # Remover foto existente
+            if foto_url:
+                remover_foto_produto(foto_url)
+            foto_url = None
+        elif 'foto_produto' in request.files:
+            file = request.files['foto_produto']
+            if file.filename:
+                # Nova foto foi enviada
+                nova_foto_url = salvar_foto_produto(file)
+                if nova_foto_url:
+                    # Remover foto anterior se existir
+                    if foto_url:
+                        remover_foto_produto(foto_url)
+                    foto_url = nova_foto_url
+                else:
+                    flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
+
+        # Atualizar produto no banco
+        editar_produto(
+            id=id,
+            nome=nome,
+            preco=preco,
+            estoque=estoque,
+            estoque_minimo=estoque_minimo,
+            codigo_barras=codigo_barras if codigo_barras else None,
+            descricao=descricao if descricao else None,
+            categoria=categoria if categoria else None,
+            codigo_fornecedor=codigo_fornecedor if codigo_fornecedor else None,
+            preco_custo=preco_custo,
+            margem_lucro=margem_lucro,
+            foto_url=foto_url,
+            marca=marca if marca else None
+        )
+        
+        flash('Produto editado com sucesso!', 'success')
+        return redirect(url_for('produtos'))
+        
+    except Exception as e:
+        flash(f'Erro ao editar produto: {str(e)}', 'error')
+        return redirect(url_for('produtos'))
+
+@app.route('/produtos/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_produto_route(id):
+    """Deleta um produto (marca como inativo)"""
+    try:
+        produto = obter_produto_por_id(id)
+        if not produto:
+            flash('Produto não encontrado!', 'error')
+            return redirect(url_for('produtos'))
+        
+        deletar_produto(id)
+        flash('Produto excluído com sucesso!', 'success')
+        
+    except Exception as e:
+        flash(f'Erro ao excluir produto: {str(e)}', 'error')
     
-    return jsonify(produtos[:50])  # Limitar a 50 resultados
+    return redirect(url_for('produtos'))
+
+@app.route('/produtos/deletar-todos', methods=['POST'])
+@login_required
+def deletar_todos_produtos_route():
+    """Deleta todos os produtos (função de teste)"""
+    try:
+        total_deletados = deletar_todos_os_produtos()
+        flash(f'Todos os produtos foram removidos com sucesso! ({total_deletados} produtos)', 'success')
+    except Exception as e:
+        flash(f'Erro ao deletar todos os produtos: {str(e)}', 'error')
+    
+    return redirect(url_for('produtos'))
+
+@app.route('/produtos/limpar-completamente', methods=['POST'])
+@login_required
+def limpar_produtos_completamente_route():
+    """Remove completamente todos os produtos do banco (cuidado!)"""
+    try:
+        limpar_completamente_produtos()
+        flash('Todos os produtos foram removidos completamente do banco de dados!', 'success')
+    except Exception as e:
+        flash(f'Erro ao limpar produtos: {str(e)}', 'error')
+    
+    return redirect(url_for('produtos'))
+
+# === FIM DAS ROTAS DE PRODUTOS ===
+
+
+
+
 
 # Rota de teste para desconto
 @app.route('/teste-desconto')
@@ -862,227 +1151,25 @@ def teste_direto():
 def api_test():
     return jsonify({"status": "ok", "message": "API funcionando"})
 
-@app.route('/api/produto/<termo>')
-@login_required
-def api_buscar_produto_unico(termo):
-    """Busca um produto específico pelo termo"""
-    produtos = listar_produtos()
-    
-    # Primeiro tenta encontrar por ID exato
-    try:
-        produto_id = int(termo)
-        for produto in produtos:
-            if produto['id'] == produto_id:
-                return jsonify(produto)
-    except ValueError:
-        pass
-    
-    # Depois busca por código de barras exato
-    for produto in produtos:
-        if produto.get('codigo_barras') and produto['codigo_barras'].lower() == termo.lower():
-            return jsonify(produto)
-    
-    # Depois busca por código de fornecedor exato
-    for produto in produtos:
-        if produto.get('codigo_fornecedor') and produto['codigo_fornecedor'].lower() == termo.lower():
-            return jsonify(produto)
-    
-    # Por último, busca por nome (primeiro que contenha o termo)
-    termo_lower = termo.lower()
-    for produto in produtos:
-        if termo_lower in produto['nome'].lower():
-            return jsonify(produto)
-    
-    return jsonify({'error': 'Produto não encontrado'})
 
-@app.route('/produtos/adicionar', methods=['POST'], endpoint='adicionar_produto')
-@login_required
-def adicionar_produto_route():
-    nome = request.form['nome']
-    codigo_barras = request.form.get('codigo_barras')
-    codigo_fornecedor = request.form.get('codigo_fornecedor')
-    descricao = request.form.get('descricao')
-    categoria = request.form.get('categoria')
-    marca = request.form.get('marca')
-    
-    # Validação segura para campos numéricos
-    try:
-        estoque = int(request.form.get('estoque', 0))
-    except (ValueError, TypeError):
-        estoque = 0
-    
-    try:
-        estoque_minimo_value = request.form.get('estoque_minimo', '5').strip()
-        if estoque_minimo_value == '':
-            estoque_minimo = 5
-        else:
-            estoque_minimo = int(estoque_minimo_value)
-    except (ValueError, TypeError):
-        estoque_minimo = 5
-    
-    # O novo sistema sempre usa custo + margem
-    try:
-        preco_custo = float(request.form.get('preco_custo', 0))
-    except (ValueError, TypeError):
-        preco_custo = 0.0
-        
-    try:
-        margem_lucro = float(request.form.get('margem_lucro', 0))
-    except (ValueError, TypeError):
-        margem_lucro = 0.0
-    
-    # O preço já vem calculado do frontend, mas vamos recalcular para garantir
-    if preco_custo > 0 and margem_lucro >= 0:
-        preco = preco_custo + (preco_custo * margem_lucro / 100)
-    else:
-        try:
-            preco = float(request.form.get('preco', 0))
-        except (ValueError, TypeError):
-            preco = 0.0
-    
-    # Processar upload de foto
-    foto_url = None
-    if 'foto_produto' in request.files:
-        file = request.files['foto_produto']
-        if file.filename != '':
-            foto_url = salvar_foto_produto(file)
-            if not foto_url:
-                flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
-    
-    try:
-        adicionar_produto(nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                         codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
-        flash('Produto adicionado com sucesso!', 'success')
-    except Exception as e:
-        # Se houve erro ao adicionar no banco, remover a foto que foi salva
-        if foto_url:
-            remover_foto_produto(foto_url)
-        flash(f'Erro ao adicionar produto: {str(e)}', 'error')
-    
-    return redirect(url_for('produtos'))
 
-@app.route('/produtos/editar/<int:id>', methods=['POST'], endpoint='atualizar_produto')
-@login_required
-def editar_produto_route(id):
-    print(f"DEBUG: Editando produto ID {id}")
-    print(f"DEBUG: Dados recebidos: {dict(request.form)}")
-    print(f"DEBUG: Arquivos recebidos: {dict(request.files)}")
-    
-    nome = request.form['nome']
-    codigo_barras = request.form.get('codigo_barras')
-    codigo_fornecedor = request.form.get('codigo_fornecedor')
-    descricao = request.form.get('descricao')
-    categoria = request.form.get('categoria')
-    marca = request.form.get('marca')
-    
-    # Validação segura para campos numéricos
-    try:
-        estoque = int(request.form.get('estoque', 0))
-    except (ValueError, TypeError):
-        estoque = 0
-    
-    try:
-        estoque_minimo_value = request.form.get('estoque_minimo', '5').strip()
-        if estoque_minimo_value == '':
-            estoque_minimo = 5
-        else:
-            estoque_minimo = int(estoque_minimo_value)
-    except (ValueError, TypeError):
-        estoque_minimo = 5
-    
-    # O novo sistema sempre usa custo + margem
-    try:
-        preco_custo = float(request.form.get('preco_custo', 0))
-    except (ValueError, TypeError):
-        preco_custo = 0.0
-        
-    try:
-        margem_lucro = float(request.form.get('margem_lucro', 0))
-    except (ValueError, TypeError):
-        margem_lucro = 0.0
-    
-    # O preço já vem calculado do frontend, mas vamos recalcular para garantir
-    if preco_custo > 0 and margem_lucro >= 0:
-        preco = preco_custo + (preco_custo * margem_lucro / 100)
-    else:
-        try:
-            preco = float(request.form.get('preco', 0))
-        except (ValueError, TypeError):
-            preco = 0.0
-    
-    
-    print(f"DEBUG: Processando foto...")
-    # Processar upload/remoção de foto
-    foto_url = None
-    remover_foto = request.form.get('remover_foto') == '1'
-    
-    # Obter produto atual para verificar foto existente
-    produto_atual = obter_produto_por_id(id)
-    foto_atual = produto_atual['foto_url'] if produto_atual else None
-    print(f"DEBUG: Foto atual: {foto_atual}")
-    print(f"DEBUG: Remover foto: {remover_foto}")
-    
-    if remover_foto:
-        # Remover foto existente
-        if foto_atual:
-            remover_foto_produto(foto_atual)
-        foto_url = None
-        print("DEBUG: Foto removida")
-    elif 'foto_produto' in request.files:
-        file = request.files['foto_produto']
-        print(f"DEBUG: Arquivo enviado: {file.filename}")
-        if file.filename != '':
-            # Nova foto foi enviada
-            nova_foto_url = salvar_foto_produto(file)
-            if nova_foto_url:
-                # Remover foto anterior se existir
-                if foto_atual:
-                    remover_foto_produto(foto_atual)
-                foto_url = nova_foto_url
-                print(f"DEBUG: Nova foto salva: {foto_url}")
-            else:
-                flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
-                foto_url = foto_atual  # Manter foto atual
-                print("DEBUG: Erro ao salvar nova foto")
-        else:
-            # Nenhuma nova foto, manter a atual
-            foto_url = foto_atual
-            print("DEBUG: Mantendo foto atual (nenhuma nova foto)")
-    else:
-        # Manter foto atual
-        foto_url = foto_atual
-        print("DEBUG: Mantendo foto atual (sem campo de arquivo)")
-    
-    print(f"DEBUG: Foto final: {foto_url}")
-    
-    try:
-        print("DEBUG: Chamando editar_produto...")
-        editar_produto(id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                      codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
-        print("DEBUG: Produto editado com sucesso")
-        flash('Produto editado com sucesso!', 'success')
-    except Exception as e:
-        print(f"DEBUG: Erro ao editar produto: {e}")
-        flash(f'Erro ao editar produto: {str(e)}', 'error')
-    
-    print("DEBUG: Redirecionando...")
-    return redirect(url_for('produtos'))
 
-@app.route('/produtos/deletar/<int:id>', methods=['POST'], endpoint='excluir_produto')
-@login_required
-def deletar_produto_route(id):
-    try:
-        deletar_produto(id)
-        flash('Produto excluído com sucesso!', 'success')
-    except Exception as e:
-        flash(f'Erro ao excluir produto: {str(e)}', 'error')
-    
-    return redirect(url_for('produtos'))
+
+
+
+
+
+
+
+
+
 
 @app.route('/produtos/importar-xml', methods=['POST'], endpoint='importar_produtos_xml')
 @login_required
 def importar_produtos_xml_route():
-    """Rota para importar produtos via arquivo XML de NFe"""
+    """Rota para importar produtos via arquivo XML de NFe com configurações avançadas"""
+    from Minha_autopecas_web.logica_banco import importar_produtos_de_xml_avancado
+    
     try:
         # Verificar se arquivo foi enviado
         if 'arquivo_xml' not in request.files:
@@ -1097,26 +1184,44 @@ def importar_produtos_xml_route():
         
         if arquivo and arquivo.filename.lower().endswith('.xml'):
             try:
+                # Obter configurações do formulário
+                margem_padrao = float(request.form.get('margem_padrao', 100))
+                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 5))
+                usar_preco_nfe = request.form.get('usar_preco_nfe') == 'on'
+                acao_existente = request.form.get('acao_existente', 'atualizar_estoque')
+                
                 # Ler conteúdo do arquivo
                 conteudo_xml = arquivo.read().decode('utf-8')
                 
-                # Processar XML
-                resultado = importar_produtos_de_xml(conteudo_xml)
+                # Processar XML com configurações avançadas
+                resultado = importar_produtos_de_xml_avancado(
+                    conteudo_xml=conteudo_xml,
+                    margem_padrao=margem_padrao,
+                    estoque_minimo=estoque_minimo_padrao,
+                    usar_preco_nfe=usar_preco_nfe,
+                    acao_existente=acao_existente
+                )
                 
                 if resultado['sucesso']:
-                    # Montar mensagem de sucesso
+                    # Montar mensagem de sucesso detalhada
                     mensagem_partes = []
                     
-                    if resultado['produtos_importados']:
-                        mensagem_partes.append(f"{len(resultado['produtos_importados'])} produtos importados")
+                    if resultado['produtos_importados'] > 0:
+                        mensagem_partes.append(f"{resultado['produtos_importados']} novo(s) produto(s) importado(s)")
                     
-                    if resultado['produtos_atualizados']:
-                        mensagem_partes.append(f"{len(resultado['produtos_atualizados'])} produtos atualizados")
+                    if resultado['produtos_atualizados'] > 0:
+                        mensagem_partes.append(f"{resultado['produtos_atualizados']} produto(s) atualizado(s)")
+                    
+                    if resultado['produtos_ignorados'] > 0:
+                        mensagem_partes.append(f"{resultado['produtos_ignorados']} produto(s) ignorado(s)")
                     
                     if mensagem_partes:
                         flash(f"Importação concluída! {', '.join(mensagem_partes)}.", 'success')
                     else:
                         flash('Nenhum produto foi processado.', 'warning')
+                    
+                    # Mostrar configurações utilizadas
+                    flash(f"Configurações: Margem {margem_padrao}%, Estoque mín. {estoque_minimo_padrao}, Ação: {acao_existente}", 'info')
                     
                     # Mostrar erros se houver
                     if resultado['erros']:
@@ -1124,7 +1229,7 @@ def importar_produtos_xml_route():
                             flash(f"Aviso: {erro}", 'warning')
                         
                         if len(resultado['erros']) > 5:
-                            flash(f"... e mais {len(resultado['erros']) - 5} avisos.", 'warning')
+                            flash(f"... e mais {len(resultado['erros']) - 5} erro(s)", 'warning')
                 
                 else:
                     flash(f"Erro ao processar XML: {resultado['erro']}", 'error')
@@ -1404,6 +1509,67 @@ def registrar_venda_route():
         flash(f'Erro ao registrar venda: {str(e)}', 'error')
     
     return redirect(url_for('vendas'))
+
+@app.route('/vendas/<int:venda_id>/deletar', methods=['POST'])
+@login_required
+def deletar_venda_route(venda_id):
+    """
+    Rota para deletar uma venda específica
+    """
+    try:
+        # Verificar se o usuário tem permissão para vendas ou é admin
+        if not verificar_permissao(current_user.id, 'vendas') and not current_user.is_admin:
+            return jsonify({
+                'success': False,
+                'error': 'Você não tem permissão para deletar vendas.'
+            }), 403
+        
+        # Verificar se a venda existe antes de tentar deletar
+        venda = obter_venda_por_id(venda_id)
+        if not venda:
+            return jsonify({
+                'success': False,
+                'error': f'Venda #{venda_id} não encontrada.'
+            }), 404
+        
+        # Executar a deleção
+        resultado = deletar_venda(venda_id, restaurar_estoque=True)
+        
+        if resultado['success']:
+            # Log da operação
+            app.logger.info(f'Venda #{venda_id} deletada pelo usuário {current_user.username}')
+            
+            # Criar mensagem de sucesso detalhada
+            msg_detalhes = []
+            if resultado['itens_deletados'] > 0:
+                msg_detalhes.append(f"{resultado['itens_deletados']} itens removidos")
+            if resultado['estoque_restaurado']:
+                produtos_restaurados = len(resultado['estoque_restaurado'])
+                msg_detalhes.append(f"estoque de {produtos_restaurados} produtos restaurado")
+            if resultado['movimentacoes_caixa_deletadas'] > 0:
+                msg_detalhes.append(f"{resultado['movimentacoes_caixa_deletadas']} movimentações de caixa removidas")
+            
+            mensagem = f'Venda #{venda_id} deletada com sucesso'
+            if msg_detalhes:
+                mensagem += f' ({", ".join(msg_detalhes)})'
+            
+            return jsonify({
+                'success': True,
+                'message': mensagem,
+                'detalhes': resultado
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': resultado.get('erro', 'Erro desconhecido ao deletar venda.')
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f'Erro ao deletar venda #{venda_id}: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': f'Erro interno do servidor: {str(e)}'
+        }), 500
 
 # CONTAS A PAGAR
 @app.route('/contas-a-pagar-hoje')

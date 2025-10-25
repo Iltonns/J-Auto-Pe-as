@@ -83,11 +83,11 @@
 <div class="modal fade" id="modalAdicionarFornecedor" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
                     <i class="fas fa-truck"></i> Novo Fornecedor
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('adicionar_fornecedor') }}">
                 <div class="modal-body">
@@ -204,11 +204,11 @@
 <div class="modal fade" id="modalEditarFornecedor" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
                     <i class="fas fa-edit"></i> Editar Fornecedor
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="formEditarFornecedor">
                 <div class="modal-body">
@@ -322,11 +322,11 @@
 <div class="modal fade" id="modalConfirmarExclusao" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle text-danger"></i> Confirmar Exclusão
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Confirmar Exclusão
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p>Tem certeza que deseja excluir o fornecedor <strong id="nomeFornecedorExcluir"></strong>?</p>

@@ -386,6 +386,33 @@ simele <!DOCTYPE html>
                 padding: 8px !important;
             }
         }
+        
+        /* Estilo Padronizado para Modais */
+        .modal-header {
+            background-color: #1a237e !important;
+            color: white !important;
+            border-bottom: none;
+        }
+        
+        .modal-header .modal-title {
+            color: white !important;
+            font-weight: 600;
+        }
+        
+        .modal-header .btn-close {
+            filter: invert(1);
+        }
+        
+        .modal-content {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(26, 35, 126, 0.2);
+        }
+        
+        .modal-header {
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
     </style>
     
     {% block extra_css %}{% endblock %}

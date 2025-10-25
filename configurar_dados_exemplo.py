@@ -146,7 +146,7 @@ def criar_vendas_exemplo():
                 subtotal = preco * quantidade
                 
                 cursor.execute('''
-                    INSERT INTO venda_itens (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                    INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
                     VALUES (?, ?, ?, ?, ?)
                 ''', (venda_id, produto_id, quantidade, preco, subtotal))
                 

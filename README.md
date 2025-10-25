@@ -33,11 +33,23 @@ Sistema completo de gestão para lojas de autopeças com design moderno e profis
 
 ### 📦 Gestão de Produtos
 - Cadastro manual de produtos com código de barras
-- **🆕 Importação automática via XML de NFe**
+- **🆕 Importação automática via XML de NFe** com configurações avançadas
 - Controle de estoque com NCM e unidade de medida
-- Categorização de produtos
+- Categorização automática baseada em NCM
 - Alertas de estoque baixo
 - Detecção automática de produtos duplicados
+- Calculadora de preços com margem de lucro
+
+#### 📥 Importação de Produtos via XML de NFe
+- **Upload de arquivos XML** de Nota Fiscal Eletrônica
+- **Extração automática** de dados dos produtos (código, nome, código de barras, NCM, preços)
+- **Configurações flexíveis**:
+  - Margem de lucro personalizada
+  - Estoque mínimo padrão
+  - Ação para produtos existentes (atualizar, sobrescrever ou ignorar)
+- **Categorização inteligente** baseada no código NCM
+- **Relatórios detalhados** de importação com produtos processados
+- **Validação de dados** e tratamento de erros
 
 ### 💰 Sistema de Vendas
 - PDV (Ponto de Venda) integrado
@@ -118,7 +130,7 @@ Sistema completo de gestão para lojas de autopeças com design moderno e profis
 - **Detecção de duplicatas**: Por código de barras e nome
 - **Relatório completo**: Sucessos e erros detalhados
 
-📄 Ver documentação completa em [`IMPORTACAO_XML.md`](IMPORTACAO_XML.md)
+📄 Ver documentação completa em [`GUIA_IMPORTACAO_XML.md`](GUIA_IMPORTACAO_XML.md)
 
 ## 📱 Como Usar
 

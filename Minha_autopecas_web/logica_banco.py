@@ -543,7 +543,7 @@ def popular_dados_exemplo():
                         subtotal = preco * quantidade
                         
                         cursor.execute('''
-                            INSERT INTO venda_itens (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                            INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
                             VALUES (?, ?, ?, ?, ?)
                         ''', (venda_id, produto_id, quantidade, preco, subtotal))
                         
@@ -1426,6 +1426,55 @@ def deletar_produto(id):
     cursor.execute("UPDATE produtos SET ativo = 0 WHERE id = ?", (id,))
     conn.commit()
     conn.close()
+
+def deletar_todos_os_produtos():
+    """Marca todos os produtos como inativos - FUNÇÃO DE TESTE"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Marcar todos os produtos como inativos
+        cursor.execute("UPDATE produtos SET ativo = 0")
+        
+        # Contar quantos produtos foram marcados como inativos
+        cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 0")
+        total_deletados = cursor.fetchone()[0]
+        
+        conn.commit()
+        print(f"✓ {total_deletados} produtos marcados como inativos")
+        return total_deletados
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"✗ Erro ao deletar produtos: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def limpar_completamente_produtos():
+    """Remove completamente todos os produtos do banco - CUIDADO!"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Deletar primeiro os itens de venda relacionados
+        cursor.execute("DELETE FROM itens_venda")
+        
+        # Deletar todos os produtos
+        cursor.execute("DELETE FROM produtos")
+        
+        # Reset do auto increment
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='produtos'")
+        
+        conn.commit()
+        print("✓ Todos os produtos removidos completamente do banco")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"✗ Erro ao limpar produtos: {e}")
+        raise e
+    finally:
+        conn.close()
 
 def atualizar_estoque(produto_id, quantidade):
     """Atualiza o estoque de um produto (diminui)"""
@@ -2521,12 +2570,241 @@ def mapear_ncm_para_categoria(ncm):
     else:
         return "Geral"
 
-def importar_produtos_de_xml(conteudo_xml):
+def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=5, usar_preco_nfe=True, acao_existente='atualizar_estoque'):
     """
-    Importa produtos de um arquivo XML de NFe
+    Importa produtos de um arquivo XML de NFe com configurações avançadas
+    
+    Args:
+        conteudo_xml: Conteúdo do arquivo XML como string
+        margem_padrao: Margem de lucro padrão (%)
+        estoque_minimo: Estoque mínimo padrão
+        usar_preco_nfe: Se deve usar preço da NFe como custo
+        acao_existente: 'atualizar_estoque', 'substituir_dados' ou 'ignorar'
     """
     import xml.etree.ElementTree as ET
-    from decimal import Decimal
+    
+    produtos_importados = 0
+    produtos_atualizados = 0
+    produtos_ignorados = 0
+    erros = []
+    
+    try:
+        # Parse do XML
+        root = ET.fromstring(conteudo_xml)
+        
+        # Namespace da NFe
+        ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        
+        # Buscar todos os produtos (det)
+        produtos_xml = root.findall('.//nfe:det', ns)
+        
+        if not produtos_xml:
+            raise ValueError("Nenhum produto encontrado no XML")
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        for det in produtos_xml:
+            try:
+                # Extrair dados do produto
+                prod = det.find('nfe:prod', ns)
+                if prod is None:
+                    continue
+                
+                # Dados básicos do produto
+                codigo_produto = prod.find('nfe:cProd', ns)
+                codigo_produto = codigo_produto.text if codigo_produto is not None else ''
+                
+                codigo_ean = prod.find('nfe:cEAN', ns)
+                codigo_ean = codigo_ean.text if codigo_ean is not None else ''
+                if codigo_ean in ['SEM GTIN', '']:
+                    codigo_ean = ''
+                
+                nome_produto = prod.find('nfe:xProd', ns)
+                nome_produto = nome_produto.text if nome_produto is not None else ''
+                
+                valor_unitario = prod.find('nfe:vUnCom', ns)
+                valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
+                
+                quantidade = prod.find('nfe:qCom', ns)
+                quantidade = int(float(quantidade.text)) if quantidade is not None else 0
+                
+                ncm = prod.find('nfe:NCM', ns)
+                ncm = ncm.text if ncm is not None else ''
+                
+                unidade = prod.find('nfe:uCom', ns)
+                unidade = unidade.text if unidade is not None else 'UN'
+                
+                if not nome_produto:
+                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+                    continue
+                
+                # Calcular preços
+                preco_custo = valor_unitario if usar_preco_nfe else 0.0
+                preco_venda = preco_custo + (preco_custo * margem_padrao / 100) if preco_custo > 0 else 0.0
+                
+                # Determinar categoria baseada no NCM
+                categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else "Geral"
+                
+                # Verificar se produto já existe (por código de barras ou código do produto)
+                produto_existente = None
+                if codigo_ean:
+                    cursor.execute('''
+                        SELECT id, nome, preco, estoque 
+                        FROM produtos 
+                        WHERE codigo_barras = ?
+                    ''', (codigo_ean,))
+                    produto_existente = cursor.fetchone()
+                
+                if not produto_existente and codigo_produto:
+                    cursor.execute('''
+                        SELECT id, nome, preco, estoque 
+                        FROM produtos 
+                        WHERE codigo_fornecedor = ? OR nome LIKE ?
+                    ''', (codigo_produto, f'%{codigo_produto}%'))
+                    produto_existente = cursor.fetchone()
+                
+                if produto_existente:
+                    if acao_existente == 'ignorar':
+                        produtos_ignorados += 1
+                        continue
+                    elif acao_existente == 'atualizar_estoque':
+                        # Atualizar apenas estoque
+                        produto_id = produto_existente[0]
+                        novo_estoque = produto_existente[3] + quantidade
+                        cursor.execute('''
+                            UPDATE produtos 
+                            SET estoque = ?
+                            WHERE id = ?
+                        ''', (novo_estoque, produto_id))
+                        produtos_atualizados += 1
+                        continue
+                    elif acao_existente == 'substituir_dados':
+                        # Substituir todos os dados
+                        produto_id = produto_existente[0]
+                        cursor.execute('''
+                            UPDATE produtos 
+                            SET nome = ?, codigo_fornecedor = ?, codigo_barras = ?, categoria = ?, 
+                                preco_custo = ?, preco = ?, estoque = ?, estoque_minimo = ?,
+                                unidade = ?, ncm = ?
+                            WHERE id = ?
+                        ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
+                             preco_custo, preco_venda, quantidade, estoque_minimo, 
+                             unidade, ncm, produto_id))
+                        produtos_atualizados += 1
+                        continue
+                
+                # Inserir novo produto
+                cursor.execute('''
+                    INSERT INTO produtos (nome, codigo_fornecedor, codigo_barras, categoria, descricao,
+                                        preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
+                     "Importado via NFe XML", preco_custo, preco_venda, 
+                     quantidade, estoque_minimo, unidade, ncm, 1))
+                
+                produtos_importados += 1
+                
+            except Exception as e:
+                erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            'sucesso': True,
+            'produtos_importados': produtos_importados,
+            'produtos_atualizados': produtos_atualizados,
+            'produtos_ignorados': produtos_ignorados,
+            'total_processados': produtos_importados + produtos_atualizados + produtos_ignorados,
+            'erros': erros
+        }
+        
+    except ET.ParseError as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro ao analisar XML: {str(e)}',
+            'produtos_importados': 0,
+            'produtos_atualizados': 0,
+            'produtos_ignorados': 0,
+            'erros': [f'XML inválido: {str(e)}']
+        }
+    except Exception as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro geral: {str(e)}',
+            'produtos_importados': 0,
+            'produtos_atualizados': 0,
+            'produtos_ignorados': 0,
+            'erros': [str(e)]
+        }
+
+def obter_categoria_por_ncm_avancado(ncm):
+    """
+    Determina a categoria do produto baseada no código NCM (versão avançada)
+    """
+    if not ncm or len(ncm) < 4:
+        return "Geral"
+    
+    # Mapeamento mais abrangente de prefixos NCM para categorias
+    categorias_ncm = {
+        "8708": "Autopeças",
+        "8409": "Motor",
+        "8716": "Reboque/Carretinha", 
+        "4016": "Borracha",
+        "7318": "Parafusos/Fixadores",
+        "8536": "Elétrica/Eletrônica",
+        "3926": "Plásticos",
+        "8544": "Cabos Elétricos",
+        "7326": "Metalúrgica",
+        "3917": "Tubos/Conexões",
+        "8481": "Válvulas",
+        "8421": "Filtros",
+        "7308": "Estruturas Metálicas",
+        "4009": "Mangueiras",
+        "8483": "Transmissão",
+        "8511": "Sistema Elétrico",
+        "8412": "Hidráulica",
+        "3403": "Lubrificantes",
+        "2710": "Combustíveis",
+        "9401": "Assentos",
+        "7309": "Reservatórios",
+        "8414": "Compressores",
+        "8482": "Rolamentos",
+        "7616": "Alumínio",
+        "8418": "Refrigeração",
+        "8525": "Telecomunicações",
+        "8703": "Automóveis",
+        "8704": "Veículos de Carga"
+    }
+    
+    # Buscar por prefixo de 4 dígitos
+    prefixo = ncm[:4]
+    categoria = categorias_ncm.get(prefixo)
+    
+    if categoria:
+        return categoria
+    
+    # Se não encontrou, tentar com 2 dígitos (capítulos mais gerais)
+    prefixo_2 = ncm[:2]
+    categorias_gerais = {
+        "84": "Máquinas/Equipamentos",
+        "87": "Veículos",
+        "73": "Ferro/Aço", 
+        "39": "Plásticos",
+        "40": "Borracha",
+        "76": "Alumínio",
+        "94": "Móveis"
+    }
+    
+    return categorias_gerais.get(prefixo_2, "Geral")
+
+def importar_produtos_de_xml(conteudo_xml):
+    """
+    Importa produtos de um arquivo XML de NFe (função original mantida para compatibilidade)
+    """
+    import xml.etree.ElementTree as ET
     
     produtos_importados = []
     produtos_atualizados = []
@@ -2597,8 +2875,8 @@ def importar_produtos_de_xml(conteudo_xml):
                     cursor.execute('''
                         SELECT id, nome, preco, estoque 
                         FROM produtos 
-                        WHERE codigo_fornecedor = ? OR nome LIKE ? OR codigo_barras LIKE ?
-                    ''', (codigo_produto, f'%{codigo_produto}%', f'%{codigo_produto}%'))
+                        WHERE codigo_fornecedor = ? OR nome LIKE ?
+                    ''', (codigo_produto, f'%{codigo_produto}%'))
                     produto_existente = cursor.fetchone()
                 
                 if produto_existente:
@@ -2609,9 +2887,9 @@ def importar_produtos_de_xml(conteudo_xml):
                     
                     cursor.execute('''
                         UPDATE produtos 
-                        SET estoque = ?, preco = ?, ncm = ?, unidade = ?, codigo_fornecedor = ?, categoria = ?
+                        SET estoque = ?, preco = ?, ncm = ?, unidade = ?, categoria = ?
                         WHERE id = ?
-                    ''', (novo_estoque, valor_unitario, ncm, unidade, codigo_produto, categoria, produto_id))
+                    ''', (novo_estoque, valor_unitario, ncm, unidade, categoria, produto_id))
                     
                     produtos_atualizados.append({
                         'id': produto_id,
@@ -3638,6 +3916,91 @@ def deletar_lancamento_financeiro_db(lancamento_id):
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao deletar lançamento: {str(e)}"
+    finally:
+        conn.close()
+
+def deletar_venda(venda_id, restaurar_estoque=True):
+    """
+    Deleta uma venda específica do sistema
+    
+    Args:
+        venda_id (int): ID da venda a ser deletada
+        restaurar_estoque (bool): Se True, restaura o estoque dos produtos vendidos
+    
+    Returns:
+        dict: Informações sobre a operação realizada
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        resultado = {
+            'success': False,
+            'venda_deletada': False,
+            'itens_deletados': 0,
+            'movimentacoes_caixa_deletadas': 0,
+            'contas_receber_deletadas': 0,
+            'estoque_restaurado': {},
+            'erro': None
+        }
+        
+        # Verificar se a venda existe
+        cursor.execute('SELECT id, total, forma_pagamento FROM vendas WHERE id = ?', (venda_id,))
+        venda = cursor.fetchone()
+        
+        if not venda:
+            resultado['erro'] = f'Venda #{venda_id} não encontrada'
+            return resultado
+        
+        # Se deve restaurar estoque, primeiro obter todos os itens da venda
+        if restaurar_estoque:
+            cursor.execute('''
+                SELECT iv.produto_id, p.nome, iv.quantidade
+                FROM itens_venda iv
+                JOIN produtos p ON iv.produto_id = p.id
+                WHERE iv.venda_id = ?
+            ''', (venda_id,))
+            itens_venda = cursor.fetchall()
+            
+            # Restaurar estoque de cada produto
+            for produto_id, nome_produto, quantidade in itens_venda:
+                cursor.execute('''
+                    UPDATE produtos 
+                    SET estoque = estoque + ?
+                    WHERE id = ?
+                ''', (quantidade, produto_id))
+                
+                resultado['estoque_restaurado'][nome_produto] = quantidade
+        
+        # Contar e deletar itens da venda
+        cursor.execute('SELECT COUNT(*) FROM itens_venda WHERE venda_id = ?', (venda_id,))
+        resultado['itens_deletados'] = cursor.fetchone()[0]
+        cursor.execute('DELETE FROM itens_venda WHERE venda_id = ?', (venda_id,))
+        
+        # Contar e deletar movimentações de caixa relacionadas à venda
+        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id = ?', (venda_id,))
+        resultado['movimentacoes_caixa_deletadas'] = cursor.fetchone()[0]
+        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id = ?', (venda_id,))
+        
+        # Contar e deletar contas a receber relacionadas à venda
+        cursor.execute('SELECT COUNT(*) FROM contas_receber WHERE venda_id = ?', (venda_id,))
+        resultado['contas_receber_deletadas'] = cursor.fetchone()[0]
+        cursor.execute('DELETE FROM contas_receber WHERE venda_id = ?', (venda_id,))
+        
+        # Deletar a venda
+        cursor.execute('DELETE FROM vendas WHERE id = ?', (venda_id,))
+        
+        if cursor.rowcount > 0:
+            resultado['venda_deletada'] = True
+            resultado['success'] = True
+        
+        conn.commit()
+        return resultado
+        
+    except Exception as e:
+        conn.rollback()
+        resultado['erro'] = str(e)
+        return resultado
     finally:
         conn.close()
 

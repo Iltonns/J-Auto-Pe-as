@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfe>
+    <NFe>
+        <infNFe>
+            <det nItem="1">
+                <prod>
+                    <cProd>001</cProd>
+                    <cEAN>7891000000001</cEAN>
+                    <xProd>Vela de Ignição NGK BPR6ES</xProd>
+                    <NCM>85111000</NCM>
+                    <uCom>UN</uCom>
+                    <qCom>10.0000</qCom>
+                    <vUnCom>18.5000</vUnCom>
+                    <vProd>185.00</vProd>
+                </prod>
+            </det>
+            <det nItem="2">
+                <prod>
+                    <cProd>002</cProd>
+                    <cEAN>7891000000002</cEAN>
+                    <xProd>Filtro de Óleo Mann W712/75</xProd>
+                    <NCM>84219990</NCM>
+                    <uCom>UN</uCom>
+                    <qCom>5.0000</qCom>
+                    <vUnCom>32.0000</vUnCom>
+                    <vProd>160.00</vProd>
+                </prod>
+            </det>
+            <det nItem="3">
+                <prod>
+                    <cProd>003</cProd>
+                    <cEAN>7891000000003</cEAN>
+                    <xProd>Pastilha de Freio Bosch BB1234</xProd>
+                    <NCM>87083010</NCM>
+                    <uCom>JG</uCom>
+                    <qCom>2.0000</qCom>
+                    <vUnCom>75.0000</vUnCom>
+                    <vProd>150.00</vProd>
+                </prod>
+            </det>
+            <det nItem="4">
+                <prod>
+                    <cProd>004</cProd>
+                    <cEAN>7891000000004</cEAN>
+                    <xProd>Amortecedor Cofap B52010</xProd>
+                    <NCM>87089300</NCM>
+                    <uCom>UN</uCom>
+                    <qCom>1.0000</qCom>
+                    <vUnCom>120.0000</vUnCom>
+                    <vProd>120.00</vProd>
+                </prod>
+            </det>
+            <det nItem="5">
+                <prod>
+                    <cProd>005</cProd>
+                    <cEAN>7891000000005</cEAN>
+                    <xProd>Correia Dentada Gates 5M365</xProd>
+                    <NCM>40103900</NCM>
+                    <uCom>UN</uCom>
+                    <qCom>3.0000</qCom>
+                    <vUnCom>45.0000</vUnCom>
+                    <vProd>135.00</vProd>
+                </prod>
+            </det>
+        </infNFe>
+    </NFe>
+</nfe>

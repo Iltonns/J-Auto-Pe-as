@@ -1,28 +1,291 @@
 {% extends "base.html" %}
 
 {% block title %}Produtos - Sistema de Autopeças{% endblock %}
-{% block page_title %}🔧 Gerenciamento de Autopeças{% endblock %}
+{% block page_title %}🔧 Gerenciamento de Produtos{% endblock %}
 
 {% block extra_css %}
 <style>
     .product-card {
-        border: 2px solid transparent;
-        /* Removido hover desnecessário dos cards de produto */
+        border: 1px solid #e9ecef;
+        transition: none;
     }
     
     .stock-badge {
         position: absolute;
         top: 10px;
         right: 10px;
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: white;
+        color: #495057;
+        border: 1px solid #dee2e6;
+    }
+    
+    .category-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8f9fa;
+        color: #495057;
+        font-size: 1.2rem;
+        border: 1px solid #dee2e6;
+    }
+    
+    .product-photo {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .modal-product-photo {
+        width: 200px;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        margin-bottom: 15px;
+    }
+    
+    .photo-preview {
+        max-width: 250px;
+        max-height: 250px;
+        margin-top: 15px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        display: none;
+    }
+    
+    .photo-container {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .table-header-professional {
+        background: #1a237e !important;
+        border-bottom: 2px solid #1a237e;
+    }
+    
+    .table-header-professional th {
+        color: white !important;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 15px 12px;
+        border: none !important;
+        text-transform: none;
+        letter-spacing: normal;
+        background: #1a237e !important;
+        display: table-cell !important;
+        visibility: visible !important;
+    }
+    
+    .professional-badge {
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: #f8f9fa;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    
+    /* Classes de status apenas com cores de texto */
+    .status-disponivel {
+        color: #28a745;
         font-weight: 600;
     }
     
-    .stock-high { background: #d4edda; color: #155724; }
-    .stock-medium { background: #fff3cd; color: #856404; }
-    .stock-low { background: #f8d7da; color: #721c24; }
+    .status-baixo {
+        color: #ffc107;
+        font-weight: 600;
+    }
+    
+    .status-indisponivel {
+        color: #dc3545;
+        font-weight: 600;
+    }
+    
+    /* Botões de ação na tabela */
+    .btn-group .btn {
+        border-radius: 6px !important;
+        margin: 0 1px;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+    }
+    
+    .btn-group .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .btn-add-product {
+        background: #28a745;
+        border: none;
+        color: white;
+        font-weight: 500;
+    }
+    
+    .price-calculator {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    .form-control:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* Cards de Estatísticas Melhorados */
+    .stats-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stats-card .card-icon {
+        width: 50px;
+        height: 50px;
+        margin: 0 auto 15px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 1.5rem;
+    }
+    
+    .stats-card .card-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #495057;
+        margin-bottom: 5px;
+    }
+    
+    .stats-card .card-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stats-card.primary .card-icon { background: #e3f2fd; color: #1976d2; }
+    .stats-card.success .card-icon { background: #e8f5e8; color: #388e3c; }
+    .stats-card.warning .card-icon { background: #fff3e0; color: #f57c00; }
+    .stats-card.danger .card-icon { background: #ffebee; color: #d32f2f; }
+    
+    /* Cabeçalho da Tabela */
+    .table-header-professional {
+        background: #1a237e;
+        border-bottom: 2px solid #1a237e;
+    }
+    
+    .table-header-professional th {
+        color: white;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 15px 12px;
+        border: none;
+        text-transform: none;
+        letter-spacing: normal;
+    }
+    
+    /* Remove efeitos desnecessários */
+    .product-card:hover,
+    .product-photo:hover,
+    .btn-add-product:hover {
+        transform: none;
+        box-shadow: none;
+    }
+    
+    /* Tabela limpa */
+    .table th, .table td {
+        vertical-align: middle;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    /* Cabeçalho Principal */
+    .page-header {
+        background: #1a237e;
+        color: white;
+        padding: 20px 0;
+        margin: -20px -15px 30px -15px;
+        border-radius: 0;
+    }
+    
+    .page-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .page-header p {
+        margin: 5px 0 0 0;
+        opacity: 0.9;
+    }
+    
+    /* Cards de Estatísticas Menores */
+    .stats-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 10px;
+        text-align: center;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .stats-card .card-icon {
+        width: 30px;
+        height: 30px;
+        margin: 0 auto 8px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 1rem;
+    }
+    
+    .stats-card .card-number {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #495057;
+        margin-bottom: 2px;
+    }
+    
+    .stats-card .card-label {
+        color: #6c757d;
+        font-size: 0.7rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
     
     .category-icon {
         width: 40px;
@@ -36,358 +299,541 @@
         font-size: 1.2rem;
     }
     
-    /* Estilo para o cabeçalho da tabela de catálogo de autopeças */
-    #tabelaProdutos thead {
-        background: #000000;
-        position: relative;
+    /* Tabela - Layout Corrigido */
+    #tabelaProdutos {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
     }
     
-    #tabelaProdutos thead::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: #000000;
+    .table-responsive {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
+    #tabelaProdutos thead tr,
     #tabelaProdutos thead th {
-        background: transparent !important;
+        background: #1a237e !important;
         color: white !important;
         font-weight: 600;
-        border-bottom: 2px solid #333333;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-        position: relative;
-        padding: 15px 12px;
-        font-size: 0.9rem;
-        letter-spacing: 0.5px;
+        font-size: 0.85rem;
+        padding: 12px 8px;
+        border: none !important;
+        text-align: center;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    
+    /* Larguras específicas das colunas */
+    #tabelaProdutos th:nth-child(1) { width: 60px; }  /* Foto */
+    #tabelaProdutos th:nth-child(2) { width: 50px; }  /* ID */
+    #tabelaProdutos th:nth-child(3) { width: 220px; text-align: left; } /* Nome */
+    #tabelaProdutos th:nth-child(4) { width: 100px; } /* Marca */
+    #tabelaProdutos th:nth-child(5) { width: 120px; } /* Categoria */
+    #tabelaProdutos th:nth-child(6) { width: 120px; } /* Preço */
+    #tabelaProdutos th:nth-child(7) { width: 100px; } /* Estoque */
+    #tabelaProdutos th:nth-child(8) { width: 120px; } /* Código */
+    #tabelaProdutos th:nth-child(9) { width: 120px; } /* Cód. Fornecedor */
+    #tabelaProdutos th:nth-child(10) { width: 100px; } /* Status */
+    #tabelaProdutos th:nth-child(11) { width: 140px; } /* Ações */
+    
+    /* Células da tabela */
+    #tabelaProdutos td {
+        padding: 12px 8px;
+        vertical-align: middle;
+        border-bottom: 1px solid #dee2e6;
+        font-size: 0.875rem;
+        word-wrap: break-word;
+        overflow: hidden;
+    }
+    
+    /* Ajustes específicos por coluna */
+    #tabelaProdutos td:nth-child(1) { text-align: center; } /* Foto */
+    #tabelaProdutos td:nth-child(2) { text-align: center; } /* ID */
+    #tabelaProdutos td:nth-child(3) { text-align: left; }   /* Nome */
+    #tabelaProdutos td:nth-child(4) { text-align: center; } /* Marca */
+    #tabelaProdutos td:nth-child(5) { text-align: center; } /* Categoria */
+    #tabelaProdutos td:nth-child(6) { text-align: right; }  /* Preço */
+    #tabelaProdutos td:nth-child(7) { text-align: center; } /* Estoque */
+    #tabelaProdutos td:nth-child(8) { text-align: center; } /* Código */
+    #tabelaProdutos td:nth-child(9) { text-align: center; } /* Cód. Fornecedor */
+    #tabelaProdutos td:nth-child(10) { text-align: center; } /* Status */
+    #tabelaProdutos td:nth-child(11) { text-align: center; } /* Ações */
+    
+    /* Hover nas linhas */
+    #tabelaProdutos tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .btn-add-product {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+    
+    .btn-add-product:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+    }
+    
+    .product-photo {
+        width: 45px;
+        height: 45px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .product-photo:hover {
+        transform: scale(1.05);
+        border-color: #1a237e;
+    }
+    
+    .modal-product-photo {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        margin-bottom: 15px;
+    }
+    
+    .photo-preview {
+        max-width: 250px;
+        max-height: 250px;
+        margin-top: 15px;
+        border-radius: 12px;
+        border: 2px solid #dee2e6;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        display: none;
+    }
+    
+    .photo-container {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .photo-container:hover {
+        border-color: var(--accent-orange);
+        background: #fff3e0;
+    }
+    
+    .professional-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border: 2px solid transparent;
     }
     
-    #tabelaProdutos thead th:first-child {
-        border-left: 4px solid #000000;
+    .marca-badge {
+        background: linear-gradient(135deg, #6f42c1 0%, #8e44ad 100%);
+        color: white;
+        border-color: #6f42c1;
     }
     
-    #tabelaProdutos thead th::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+    .price-calculator {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    .form-control:focus {
+        border-color: var(--accent-orange);
+        box-shadow: 0 0 0 0.2rem rgba(255, 152, 0, 0.25);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-car-battery"></i> Catálogo de Autopeças
-                </h5>
-                <div>
-                    <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
-                        <i class="fas fa-file-import"></i> Importar XML
-                    </button>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoProduto">
-                        <i class="fas fa-plus-circle"></i> Nova Autopeça
-                    </button>
+<div class="container-fluid">
+    <!-- Cabeçalho Principal -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-8">
+                    <h2>
+                        <i class="fas fa-cogs me-2"></i>
+                        Catálogo de Produtos
+                    </h2>
+                    <p>Gerencie seu estoque de autopeças</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-success btn-add-product" data-bs-toggle="modal" data-bs-target="#modalAdicionarProduto">
+                            <i class="fas fa-plus me-2"></i>Adicionar Produto
+                        </button>
+                        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
+                            <i class="fas fa-file-import me-2"></i>Importar XML
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div class="card-body">
-                <!-- Controles de Paginação -->
-                <div id="controlesPaginacao"></div>
-                
-                {% if produtos %}
-                <div class="table-responsive">
-                    <table class="table table-hover" id="tabelaProdutos">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Produto</th>
-                                <th>Marca</th>
-                                <th>Categoria</th>
-                                <th>Cód. Fornecedor</th>
-                                <th>Preço</th>
-                                <th>Estoque</th>
-                                <th>Código de Barras</th>
-                                <th>Status</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for produto in produtos %}
-                            <tr>
-                                <td>{{ produto.id }}</td>
-                                <td>
-                                    <div>{{ produto.nome }}</div>
-                                    {% if produto.codigo_fornecedor %}
-                                    <small class="text-muted">Cód: {{ produto.codigo_fornecedor }}</small>
+        </div>
+    </div>
+
+    <!-- Filtros e Busca -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, marca, código, categoria...">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select id="categoriaFilter" class="form-select">
+                <option value="">Todas as categorias</option>
+                <option value="Motor">Motor</option>
+                <option value="Freios">Freios</option>
+                <option value="Suspensão">Suspensão</option>
+                <option value="Elétrica">Elétrica</option>
+                <option value="Transmissão">Transmissão</option>
+                <option value="Carroceria">Carroceria</option>
+                <option value="Filtros">Filtros</option>
+                <option value="Óleos">Óleos</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select id="statusFilter" class="form-select">
+                <option value="">Todos os status</option>
+                <option value="disponivel">Disponível</option>
+                <option value="estoque_baixo">Estoque Baixo</option>
+                <option value="indisponivel">Indisponível</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Estatísticas Rápidas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card primary">
+                <div class="card-icon">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="card-number" id="totalProdutos">{{ produtos|length }}</div>
+                <div class="card-label">Total de Produtos</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card success">
+                <div class="card-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="card-number" id="produtosAtivos">
+                    {{ produtos|selectattr('ativo')|list|length }}
+                </div>
+                <div class="card-label">Produtos Ativos</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card warning">
+                <div class="card-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="card-number" id="estoqueBaixo">
+                    {{ produtos|selectattr('estoque', 'lt', produtos[0].estoque_minimo if produtos else 5)|list|length }}
+                </div>
+                <div class="card-label">Estoque Baixo</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card danger">
+                <div class="card-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="card-number" id="semEstoque">
+                    {{ produtos|selectattr('estoque', 'eq', 0)|list|length }}
+                </div>
+                <div class="card-label">Sem Estoque</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Produtos -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="tabelaProdutos">
+                    <thead class="table-header-professional">
+                        <tr>
+                            <th>Foto</th>
+                            <th>ID</th>
+                            <th>Nome do Produto</th>
+                            <th>Marca</th>
+                            <th>Categoria</th>
+                            <th>Preço</th>
+                            <th>Estoque</th>
+                            <th>Código</th>
+                            <th>Cód. Fornecedor</th>
+                            <th>Status</th>
+                            <th width="140">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for produto in produtos %}
+                        {% if produto.ativo %}
+                        <tr>
+                            <td>
+                                {% if produto.foto_url %}
+                                    <img src="{{ produto.foto_url }}" alt="Foto do produto" class="product-photo" 
+                                         data-bs-toggle="tooltip" title="Clique para ampliar">
+                                {% else %}
+                                    <div class="product-photo d-flex align-items-center justify-content-center bg-light">
+                                        <i class="fas fa-image text-muted"></i>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                #{{ produto.id }}
+                            </td>
+                            <td>
+                                <div>
+                                    <span>{{ produto.nome }}</span>
+                                    {% if produto.descricao %}
+                                        <br><small class="text-muted">{{ produto.descricao[:50] }}{% if produto.descricao|length > 50 %}...{% endif %}</small>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    {% if produto.marca %}
-                                        <span class="text-dark">{{ produto.marca }}</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if produto.categoria %}
-                                        <span class="text-dark">{{ produto.categoria }}</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if produto.codigo_fornecedor %}
-                                        <span class="text-dark">{{ produto.codigo_fornecedor }}</span>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div>R$ {{ "%.2f"|format(produto.preco) }}</div>
-                                    {% if produto.preco_custo > 0 %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if produto.marca %}
+                                    {{ produto.marca }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if produto.categoria %}
+                                    {{ produto.categoria }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="text-success">R$ {{ "%.2f"|format(produto.preco) }}</div>
+                                {% if produto.preco_custo and produto.preco_custo > 0 %}
                                     <small class="text-muted">Custo: R$ {{ "%.2f"|format(produto.preco_custo) }}</small>
+                                    {% if produto.margem_lucro %}
+                                        <br><small class="text-muted">Margem: {{ "%.1f"|format(produto.margem_lucro) }}%</small>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <span class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= 5 %}text-warning{% else %}text-success{% endif %}">
-                                        {{ produto.estoque }}
-                                    </span>
-                                </td>
-                                <td>{{ produto.codigo_barras or '-' }}</td>
-                                <td>
-                                    {% if produto.estoque <= 0 %}
-                                        <span class="text-danger">Sem Estoque</span>
-                                    {% elif produto.estoque <= 5 %}
-                                        <span class="text-warning">Estoque Baixo</span>
-                                    {% else %}
-                                        <span class="text-success">Disponível</span>
-                                    {% endif %}
-                                </td>
-                                <td>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ produto.estoque }}
+                                {% if produto.estoque <= produto.estoque_minimo and produto.estoque > 0 %}
+                                    <i class="fas fa-exclamation-triangle text-warning ms-1"></i>
+                                {% elif produto.estoque == 0 %}
+                                    <i class="fas fa-times text-danger ms-1"></i>
+                                {% endif %}
+                                <br><small class="text-muted">Mín: {{ produto.estoque_minimo }}</small>
+                            </td>
+                            <td>
+                                {% if produto.codigo_barras %}
+                                    <small class="font-monospace">{{ produto.codigo_barras }}</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if produto.codigo_fornecedor %}
+                                    <small class="font-monospace">{{ produto.codigo_fornecedor }}</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if produto.estoque > produto.estoque_minimo %}
+                                    <span class="status-disponivel">Disponível</span>
+                                {% elif produto.estoque > 0 %}
+                                    <span class="status-baixo">Estoque Baixo</span>
+                                {% else %}
+                                    <span class="status-indisponivel">Indisponível</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            data-produto-id="{{ produto.id }}"
-                                            data-produto-nome="{{ produto.nome }}"
-                                            data-produto-preco="{{ produto.preco }}"
-                                            data-produto-estoque="{{ produto.estoque }}"
-                                            data-produto-codigo-barras="{{ produto.codigo_barras or '' }}"
-                                            data-produto-codigo-fornecedor="{{ produto.codigo_fornecedor or '' }}"
-                                            data-produto-preco-custo="{{ produto.preco_custo or 0 }}"
-                                            data-produto-margem-lucro="{{ produto.margem_lucro or 0 }}"
-                                            data-produto-estoque-minimo="{{ produto.estoque_minimo or 5 }}"
-                                            data-produto-foto-url="{{ produto.foto_url or '' }}"
-                                            data-produto-marca="{{ produto.marca or '' }}"
-                                            onclick="editarProdutoComData(this)"
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#modalEditarProduto">
+                                            onclick="editarProduto({{ produto.id }})" 
+                                            title="Editar Produto"
+                                            data-bs-toggle="tooltip">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-info" 
-                                            onclick="verDetalhes({{ produto.id }})">
+                                            onclick="visualizarProduto({{ produto.id }})" 
+                                            title="Visualizar Detalhes"
+                                            data-bs-toggle="tooltip">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" 
-                                            onclick="confirmarExclusao({{ produto.id }}, '{{ produto.nome }}')">
+                                            onclick="confirmarExclusao({{ produto.id }}, '{{ produto.nome }}')" 
+                                            title="Excluir Produto"
+                                            data-bs-toggle="tooltip">
                                         <i class="fas fa-trash"></i>
                                     </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">Nenhum produto cadastrado</h5>
-                    <p class="text-muted">Clique em "Novo Produto" ou "Importar XML" para começar.</p>
-                </div>
-                {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Novo Produto -->
-<div class="modal fade" id="modalNovoProduto" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+<!-- Modal Adicionar Produto -->
+<div class="modal fade" id="modalAdicionarProduto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
-                    <i class="fas fa-plus"></i> Novo Produto
+                    <i class="fas fa-plus me-2"></i>Adicionar Novo Produto
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('adicionar_produto') }}" enctype="multipart/form-data">
+            <form action="{{ url_for('adicionar_produto_route') }}" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
-                    <!-- Navegação por abas -->
-                    <ul class="nav nav-tabs mb-3" id="abas-produto" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="aba-info-basica" data-bs-toggle="tab" data-bs-target="#info-basica" type="button" role="tab">
-                                <i class="fas fa-info-circle"></i> Informações Básicas
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="aba-foto" data-bs-toggle="tab" data-bs-target="#foto-produto" type="button" role="tab">
-                                <i class="fas fa-camera"></i> Foto da Peça
-                            </button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content" id="conteudo-abas">
-                        <!-- Aba: Informações Básicas -->
-                        <div class="tab-pane fade show active" id="info-basica" role="tabpanel">
-                    <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="nome" class="form-label">Nome do Produto *</label>
-                                <input type="text" class="form-control" id="nome" name="nome" required>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="marca" class="form-label">Marca</label>
-                                <input type="text" class="form-control" id="marca" name="marca" placeholder="Ex: Bosch, NGK">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="codigo_fornecedor" class="form-label">Código do Fornecedor</label>
-                                <input type="text" class="form-control" id="codigo_fornecedor" name="codigo_fornecedor" placeholder="Código interno">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="codigo_barras" class="form-label">Código de Barras</label>
-                                <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="EAN-13">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Cálculo de preço -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0">
-                                <i class="fas fa-calculator"></i> Controle de Preço e Margem
+                        <!-- Informações Básicas -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-info-circle me-2"></i>Informações Básicas
                             </h6>
-                        </div>
-                        <div class="card-body">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Nome do Produto *</label>
+                                <input type="text" class="form-control" name="nome" required>
+                            </div>
+                            
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="preco_custo" class="form-label">
-                                            <i class="fas fa-tag text-info"></i> Preço de Custo (R$) *
-                                        </label>
-                                        <input type="number" class="form-control" id="preco_custo" name="preco_custo" step="0.01" min="0" required oninput="calcularPrecoVendaAutomatico()">
-                                        <div class="form-text">Valor que você pagou pelo produto</div>
+                                        <label class="form-label">Categoria</label>
+                                        <select class="form-select" name="categoria">
+                                            <option value="">Selecione...</option>
+                                            <option value="Motor">Motor</option>
+                                            <option value="Freios">Freios</option>
+                                            <option value="Suspensão">Suspensão</option>
+                                            <option value="Elétrica">Elétrica</option>
+                                            <option value="Transmissão">Transmissão</option>
+                                            <option value="Carroceria">Carroceria</option>
+                                            <option value="Filtros">Filtros</option>
+                                            <option value="Óleos">Óleos</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="margem_lucro" class="form-label">
-                                            <i class="fas fa-percentage text-success"></i> Margem de Lucro (%) *
-                                        </label>
-                                        <input type="number" class="form-control" id="margem_lucro" name="margem_lucro" step="0.01" min="0" required oninput="calcularPrecoVendaAutomatico()">
-                                        <div class="form-text">Ex: 100 para dobrar o valor (100% de lucro)</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="preco" class="form-label">
-                                            <i class="fas fa-dollar-sign text-warning"></i> Preço de Venda (R$) *
-                                        </label>
-                                        <input type="number" class="form-control bg-light" id="preco" name="preco" step="0.01" min="0" required readonly>
-                                        <div class="form-text text-success" id="info_calculo_display">Calculado automaticamente</div>
+                                        <label class="form-label">Marca</label>
+                                        <input type="text" class="form-control" name="marca">
                                     </div>
                                 </div>
                             </div>
                             
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <div class="alert alert-info d-flex align-items-center">
-                                        <i class="fas fa-info-circle me-2"></i>
-                                        <div>
-                                            Como funciona: 
-                                            Informe o custo e a margem desejada. 
-                                            O preço de venda será calculado automaticamente.
-                                            <br>
-                                            <small class="text-muted">Exemplo: Custo R$ 20,00 + Margem 100% = Preço de Venda R$ 40,00</small>
-                                        </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descrição</label>
+                                <textarea class="form-control" name="descricao" rows="3"></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Códigos e Estoque -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-barcode me-2"></i>Códigos e Estoque
+                            </h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Código de Barras</label>
+                                        <input type="text" class="form-control" name="codigo_barras">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Código Fornecedor</label>
+                                        <input type="text" class="form-control" name="codigo_fornecedor">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Estoque Atual</label>
+                                        <input type="number" class="form-control" name="estoque" value="0" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Estoque Mínimo</label>
+                                        <input type="number" class="form-control" name="estoque_minimo" value="5" min="1">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-camera me-2"></i>Foto do Produto
+                                </label>
+                                <div class="photo-container">
+                                    <div class="text-center">
+                                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted mb-2">Clique para selecionar uma foto</p>
+                                        <input type="file" class="form-control" name="foto_produto" accept="image/*" onchange="previewImage(this, 'preview-add')">
+                                        <small class="text-muted">Formatos aceitos: PNG, JPG, JPEG, GIF (máx. 5MB)</small>
+                                    </div>
+                                    <div class="text-center mt-3">
+                                        <img id="preview-add" class="photo-preview">
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Estoque -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="estoque" class="form-label">Quantidade em Estoque *</label>
-                                <input type="number" class="form-control" id="estoque" name="estoque" min="0" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="estoque_minimo" class="form-label">Estoque Mínimo</label>
-                                <input type="number" class="form-control" id="estoque_minimo" name="estoque_minimo" value="5" min="0">
-                            </div>
-                        </div>
-                    </div>
-                        </div>
-
-                        <!-- Aba: Foto da Peça -->
-                        <div class="tab-pane fade" id="foto-produto" role="tabpanel">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="foto_produto" class="form-label">
-                                            <i class="fas fa-camera"></i> Foto da Peça
-                                        </label>
-                                        <input type="file" class="form-control" id="foto_produto" name="foto_produto" accept="image/*" onchange="visualizarFoto(this, 'preview-foto')">
-                                        <div class="form-text">
-                                            Selecione uma imagem da peça (JPG, PNG, GIF). Tamanho máximo: 5MB
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Pré-visualização</label>
-                                        <div class="border rounded p-3 text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa;">
-                                            <div id="preview-foto">
-                                                <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                                                <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                    <!-- Calculadora de Preços -->
+                    <div class="price-calculator">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-calculator me-2"></i>Calculadora de Preços
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Preço de Custo (R$)</label>
+                                    <input type="number" class="form-control" name="preco_custo" step="0.01" min="0" id="preco_custo_add" oninput="calcularPreco('add')">
                                 </div>
                             </div>
-                            
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle"></i>
-                                Dicas para foto da peça:
-                                <ul class="mb-0 mt-2">
-                                    <li>Use boa iluminação para destacar os detalhes</li>
-                                    <li>Fotografe a peça de diferentes ângulos se necessário</li>
-                                    <li>Mantenha o fundo limpo e neutro</li>
-                                    <li>Certifique-se de que códigos e números estejam visíveis</li>
-                                </ul>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Margem de Lucro (%)</label>
+                                    <input type="number" class="form-control" name="margem_lucro" step="0.01" min="0" id="margem_lucro_add" oninput="calcularPreco('add')">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Preço de Venda (R$) *</label>
+                                    <input type="number" class="form-control" name="preco" step="0.01" min="0.01" id="preco_venda_add" required>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Salvar Produto
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Salvar Produto
                     </button>
                 </div>
             </form>
@@ -397,186 +843,160 @@
 
 <!-- Modal Editar Produto -->
 <div class="modal fade" id="modalEditarProduto" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
-                    <i class="fas fa-edit"></i> Editar Produto
+                    <i class="fas fa-edit me-2"></i>Editar Produto
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" id="form-editar-produto" action="" enctype="multipart/form-data">
-                <input type="hidden" id="edit_produto_id" name="produto_id">
-                <input type="hidden" name="_method" value="POST">
+            <form id="formEditarProduto" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
-                    <!-- Navegação por abas -->
-                    <ul class="nav nav-tabs mb-3" id="abas-editar-produto" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="aba-edit-info-basica" data-bs-toggle="tab" data-bs-target="#edit-info-basica" type="button" role="tab">
-                                <i class="fas fa-info-circle"></i> Informações Básicas
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="aba-edit-foto" data-bs-toggle="tab" data-bs-target="#edit-foto-produto" type="button" role="tab">
-                                <i class="fas fa-camera"></i> Foto da Peça
-                            </button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content" id="conteudo-abas-editar">
-                        <!-- Aba: Informações Básicas -->
-                        <div class="tab-pane fade show active" id="edit-info-basica" role="tabpanel">
-                    <!-- Informações básicas -->
                     <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="edit_nome" class="form-label">Nome do Produto *</label>
-                                <input type="text" class="form-control" id="edit_nome" name="nome">
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="mb-3">
-                                <label for="edit_marca" class="form-label">Marca</label>
-                                <input type="text" class="form-control" id="edit_marca" name="marca" placeholder="Ex: Bosch, NGK">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="edit_codigo_fornecedor" class="form-label">Código do Fornecedor</label>
-                                <input type="text" class="form-control" id="edit_codigo_fornecedor" name="codigo_fornecedor">
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="mb-3">
-                                <label for="edit_codigo_barras" class="form-label">Código de Barras</label>
-                                <input type="text" class="form-control" id="edit_codigo_barras" name="codigo_barras">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Preços -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0">
-                                <i class="fas fa-calculator"></i> Controle de Preço e Margem
+                        <!-- Informações Básicas -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-info-circle me-2"></i>Informações Básicas
                             </h6>
-                        </div>
-                        <div class="card-body">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Nome do Produto *</label>
+                                <input type="text" class="form-control" name="nome" id="edit_nome" required>
+                            </div>
+                            
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="edit_preco_custo" class="form-label">
-                                            <i class="fas fa-tag text-info"></i> Preço de Custo (R$) *
-                                        </label>
-                                        <input type="number" class="form-control" id="edit_preco_custo" name="preco_custo" step="0.01" min="0" oninput="calcularPrecoVendaEdit()">
-                                        <div class="form-text">Valor que você pagou pelo produto</div>
+                                        <label class="form-label">Categoria</label>
+                                        <select class="form-select" name="categoria" id="edit_categoria">
+                                            <option value="">Selecione...</option>
+                                            <option value="Motor">Motor</option>
+                                            <option value="Freios">Freios</option>
+                                            <option value="Suspensão">Suspensão</option>
+                                            <option value="Elétrica">Elétrica</option>
+                                            <option value="Transmissão">Transmissão</option>
+                                            <option value="Carroceria">Carroceria</option>
+                                            <option value="Filtros">Filtros</option>
+                                            <option value="Óleos">Óleos</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="edit_margem_lucro" class="form-label">
-                                            <i class="fas fa-percentage text-success"></i> Margem de Lucro (%) *
-                                        </label>
-                                        <input type="number" class="form-control" id="edit_margem_lucro" name="margem_lucro" step="0.01" min="0" oninput="calcularPrecoVendaEdit()">
-                                        <div class="form-text">Ex: 100 para dobrar o valor (100% de lucro)</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="edit_preco" class="form-label">
-                                            <i class="fas fa-dollar-sign text-warning"></i> Preço de Venda (R$) *
-                                        </label>
-                                        <input type="number" class="form-control bg-light" id="edit_preco" name="preco" step="0.01" min="0" readonly>
-                                        <div class="form-text text-success" id="edit_info_calculo_display">Calculado automaticamente</div>
+                                        <label class="form-label">Marca</label>
+                                        <input type="text" class="form-control" name="marca" id="edit_marca">
                                     </div>
                                 </div>
                             </div>
                             
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <div class="alert alert-info d-flex align-items-center">
-                                        <i class="fas fa-info-circle me-2"></i>
-                                        <div>
-                                            <strong>Margem Editável:</strong> 
-                                            Altere a margem a qualquer momento para ajustar o preço de venda.
-                                            <br>
-                                            <small class="text-muted">O preço será recalculado automaticamente conforme sua margem</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Estoque -->
-                    <div class="row">
-                        <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="edit_estoque" class="form-label">Quantidade em Estoque *</label>
-                                <input type="number" class="form-control" id="edit_estoque" name="estoque" min="0">
+                                <label class="form-label">Descrição</label>
+                                <textarea class="form-control" name="descricao" rows="3" id="edit_descricao"></textarea>
                             </div>
                         </div>
+                        
+                        <!-- Códigos e Estoque -->
                         <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edit_estoque_minimo" class="form-label">Estoque Mínimo</label>
-                                <input type="number" class="form-control" id="edit_estoque_minimo" name="estoque_minimo" value="5" min="0">
-                            </div>
-                        </div>
-                    </div>
-                        </div>
-
-                        <!-- Aba: Foto da Peça -->
-                        <div class="tab-pane fade" id="edit-foto-produto" role="tabpanel">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-barcode me-2"></i>Códigos e Estoque
+                            </h6>
+                            
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="edit_foto_produto" class="form-label">
-                                            <i class="fas fa-camera"></i> Foto da Peça
-                                        </label>
-                                        <input type="file" class="form-control" id="edit_foto_produto" name="foto_produto" accept="image/*" onchange="visualizarFoto(this, 'edit-preview-foto')">
-                                        <div class="form-text">
-                                            Selecione uma nova imagem para substituir a atual (JPG, PNG, GIF). Tamanho máximo: 5MB
-                                        </div>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="remover_foto" name="remover_foto" value="1">
-                                        <label class="form-check-label text-danger" for="remover_foto">
-                                            <i class="fas fa-trash"></i> Remover foto atual
-                                        </label>
+                                        <label class="form-label">Código de Barras</label>
+                                        <input type="text" class="form-control" name="codigo_barras" id="edit_codigo_barras">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Pré-visualização</label>
-                                        <div class="border rounded p-3 text-center" style="min-height: 200px; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa;">
-                                            <div id="edit-preview-foto">
-                                                <img id="edit-foto-atual" src="" alt="Foto atual" style="max-width: 100%; max-height: 180px; display: none;">
-                                                <div id="edit-sem-foto">
-                                                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                                                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
-                                                </div>
+                                        <label class="form-label">Código Fornecedor</label>
+                                        <input type="text" class="form-control" name="codigo_fornecedor" id="edit_codigo_fornecedor">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Estoque Atual</label>
+                                        <input type="number" class="form-control" name="estoque" id="edit_estoque" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Estoque Mínimo</label>
+                                        <input type="number" class="form-control" name="estoque_minimo" id="edit_estoque_minimo" min="1">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-camera me-2"></i>Foto do Produto
+                                </label>
+                                <div class="photo-container">
+                                    <div id="current_photo_container" style="display: none;">
+                                        <div class="text-center mb-3">
+                                            <img id="current_photo" class="modal-product-photo">
+                                            <div class="mt-2">
+                                                <span class="badge bg-success">Foto atual do produto</span>
                                             </div>
                                         </div>
+                                        <div class="form-check text-center">
+                                            <input class="form-check-input" type="checkbox" name="remover_foto" value="1" id="remover_foto">
+                                            <label class="form-check-label text-danger" for="remover_foto">
+                                                <i class="fas fa-trash me-1"></i>Remover foto atual
+                                            </label>
+                                        </div>
+                                        <hr>
+                                    </div>
+                                    <div class="text-center">
+                                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted mb-2">Clique para selecionar uma nova foto</p>
+                                        <input type="file" class="form-control" name="foto_produto" accept="image/*" onchange="previewImage(this, 'preview-edit')">
+                                        <small class="text-muted">Formatos aceitos: PNG, JPG, JPEG, GIF (máx. 5MB)</small>
+                                    </div>
+                                    <div class="text-center mt-3">
+                                        <img id="preview-edit" class="photo-preview">
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle"></i>
-                                <strong>Sobre a foto atual:</strong>
-                                <ul class="mb-0 mt-2">
-                                    <li>Se você selecionar uma nova foto, ela substituirá a atual</li>
-                                    <li>Para remover a foto completamente, marque a opção "Remover foto atual"</li>
-                                    <li>Se não fizer alterações, a foto atual será mantida</li>
-                                </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Calculadora de Preços -->
+                    <div class="price-calculator">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-calculator me-2"></i>Calculadora de Preços
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Preço de Custo (R$)</label>
+                                    <input type="number" class="form-control" name="preco_custo" step="0.01" min="0" id="preco_custo_edit" oninput="calcularPreco('edit')">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Margem de Lucro (%)</label>
+                                    <input type="number" class="form-control" name="margem_lucro" step="0.01" min="0" id="margem_lucro_edit" oninput="calcularPreco('edit')">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Preço de Venda (R$) *</label>
+                                    <input type="number" class="form-control" name="preco" step="0.01" min="0.01" id="preco_venda_edit" required>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btn-atualizar-produto">
-                        <i class="fas fa-save"></i> Atualizar Produto
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
                     </button>
                 </div>
             </form>
@@ -588,753 +1008,474 @@
 <div class="modal fade" id="modalImportarXML" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
                 <h5 class="modal-title">
-                    <i class="fas fa-file-import"></i> Importar Produtos via XML de NFe
+                    <i class="fas fa-file-import me-2"></i>Importar Produtos via XML de NFe
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('importar_produtos_xml') }}" enctype="multipart/form-data">
+            <form action="{{ url_for('importar_produtos_xml') }}" method="POST" enctype="multipart/form-data" id="formImportarXML">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="arquivo_xml" class="form-label">Arquivo XML da NFe *</label>
-                        <input type="file" class="form-control" id="arquivo_xml" name="arquivo_xml" accept=".xml" required>
-                        <div class="form-text">
-                            Selecione um arquivo XML de Nota Fiscal Eletrônica (NFe) para importar os produtos automaticamente.
+                    <!-- Instrução -->
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Como funciona:</strong> Selecione um arquivo XML de NFe para importar automaticamente os produtos contidos na nota fiscal. 
+                        O sistema extrairá informações como código, nome, código de barras, NCM e preços dos produtos.
+                    </div>
+
+                    <!-- Upload do arquivo -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-file-alt me-2"></i>Arquivo XML
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Selecionar arquivo XML de NFe *</label>
+                                <input type="file" class="form-control" name="arquivo_xml" accept=".xml" required>
+                                <small class="text-muted">Formato aceito: Arquivo XML de NFe (.xml)</small>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>O que será importado:</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>Nome do produto</li>
-                            <li>Preço unitário</li>
-                            <li>Quantidade (adicionada ao estoque)</li>
-                            <li>Código de barras (EAN)</li>
-                            <li>NCM (Nomenclatura Comum do Mercosul)</li>
-                            <li>Unidade de medida</li>
-                        </ul>
+
+                    <!-- Configurações de Importação -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-cog me-2"></i>Configurações de Importação
+                            </h6>
+                        </div>
                     </div>
-                    
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Importante:</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>Se o produto já existir (mesmo código de barras), o estoque será atualizado</li>
-                            <li>Produtos novos serão criados automaticamente</li>
-                            <li>O sistema detecta automaticamente produtos duplicados</li>
-                        </ul>
-                    </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-plus-circle text-success fa-2x mb-2"></i>
-                                    <h6>Produtos Novos</h6>
-                                    <small>Serão criados no sistema</small>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">Margem de Lucro Padrão (%)</label>
+                                <input type="number" class="form-control" name="margem_padrao" value="100" step="0.01" min="0">
+                                <small class="text-muted">Margem aplicada sobre o preço da NFe para calcular preço de venda</small>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-sync-alt text-warning fa-2x mb-2"></i>
-                                    <h6>Produtos Existentes</h6>
-                                    <small>Estoque será atualizado</small>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">Estoque Mínimo Padrão</label>
+                                <input type="number" class="form-control" name="estoque_minimo_padrao" value="5" min="0">
+                                <small class="text-muted">Quantidade mínima de estoque para novos produtos</small>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="usar_preco_nfe" checked id="usar_preco_nfe">
+                                    <label class="form-check-label" for="usar_preco_nfe">
+                                        Usar preço da NFe como base
+                                    </label>
+                                </div>
+                                <small class="text-muted">Se marcado, usará o preço unitário da NFe como preço de custo</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Ação para produtos existentes</label>
+                                <select class="form-select" name="acao_existente">
+                                    <option value="atualizar_estoque">Somar ao estoque atual</option>
+                                    <option value="sobrescrever">Sobrescrever dados</option>
+                                    <option value="ignorar">Ignorar produto</option>
+                                </select>
+                                <small class="text-muted">Como tratar produtos que já existem no sistema</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo de produtos que serão importados -->
+                    <div class="alert alert-light">
+                        <h6 class="mb-2"><i class="fas fa-list me-2"></i>Exemplo de dados que serão extraídos:</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Código do produto:</strong> Campo cProd</li>
+                            <li><strong>Nome:</strong> Campo xProd</li>
+                            <li><strong>Código de barras:</strong> Campo cEAN/cEANTrib</li>
+                            <li><strong>NCM:</strong> Campo NCM</li>
+                            <li><strong>Unidade:</strong> Campo uCom</li>
+                            <li><strong>Quantidade:</strong> Campo qCom</li>
+                            <li><strong>Preço unitário:</strong> Campo vUnCom</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-upload"></i> Importar Produtos
+                    <button type="submit" class="btn btn-info" id="btnImportar">
+                        <i class="fas fa-file-import me-2"></i>Importar Produtos
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Função para visualizar foto selecionada
-function visualizarFoto(input, previewId) {
-    const preview = document.getElementById(previewId);
+// Busca em tempo real
+document.getElementById('searchInput').addEventListener('input', function() {
+    filtrarTabela();
+});
+
+document.getElementById('categoriaFilter').addEventListener('change', function() {
+    filtrarTabela();
+});
+
+document.getElementById('statusFilter').addEventListener('change', function() {
+    filtrarTabela();
+});
+
+function filtrarTabela() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const categoriaFilter = document.getElementById('categoriaFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const rows = document.querySelectorAll('#tabelaProdutos tbody tr');
     
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
+    rows.forEach(row => {
+        const nome = row.cells[2].textContent.toLowerCase();
+        const marca = row.cells[3].textContent.toLowerCase();
+        const categoria = row.cells[4].textContent.toLowerCase();
+        const codigo = row.cells[7].textContent.toLowerCase();
+        const status = row.cells[9].textContent.toLowerCase(); // Corrigido: coluna Status é índice 9
         
-        // Verificar tamanho do arquivo (5MB = 5 * 1024 * 1024 bytes)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('O arquivo é muito grande. Tamanho máximo permitido: 5MB');
-            input.value = '';
-            return;
+        let showRow = true;
+        
+        // Filtro de busca (busca em nome, marca, categoria e código)
+        if (searchTerm && !nome.includes(searchTerm) && !marca.includes(searchTerm) && !categoria.includes(searchTerm) && !codigo.includes(searchTerm)) {
+            showRow = false;
         }
         
-        // Verificar tipo do arquivo
-        if (!file.type.startsWith('image/')) {
-            alert('Por favor, selecione apenas arquivos de imagem.');
-            input.value = '';
-            return;
+        // Filtro de categoria
+        if (categoriaFilter && !categoria.includes(categoriaFilter.toLowerCase())) {
+            showRow = false;
         }
         
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            // Desmarcar a opção de remover foto se estiver marcada
-            if (previewId === 'edit-preview-foto') {
-                $('#remover_foto').prop('checked', false);
+        // Filtro de status
+        if (statusFilter) {
+            const statusSpan = row.cells[9].querySelector('span'); // Corrigido: coluna Status é índice 9
+            const statusClass = statusSpan ? statusSpan.className : '';
+            
+            let matchesFilter = false;
+            if (statusFilter === 'disponivel' && statusClass.includes('status-disponivel')) {
+                matchesFilter = true;
+            } else if (statusFilter === 'estoque_baixo' && statusClass.includes('status-baixo')) {
+                matchesFilter = true;
+            } else if (statusFilter === 'indisponivel' && statusClass.includes('status-indisponivel')) {
+                matchesFilter = true;
             }
             
-            preview.innerHTML = `
-                <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
-                <p class="text-success mt-2 mb-0">
-                    <i class="fas fa-check-circle"></i> Imagem selecionada
-                </p>
-            `;
-        };
+            if (!matchesFilter) showRow = false;
+        }
         
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+// Calculadora de preços
+function calcularPreco(tipo) {
+    const custo = parseFloat(document.getElementById(`preco_custo_${tipo}`).value) || 0;
+    const margem = parseFloat(document.getElementById(`margem_lucro_${tipo}`).value) || 0;
+    
+    if (custo > 0 && margem >= 0) {
+        const precoVenda = custo + (custo * margem / 100);
+        document.getElementById(`preco_venda_${tipo}`).value = precoVenda.toFixed(2);
+    }
+}
+
+// Preview de imagem
+function previewImage(input, previewId) {
+    const file = input.files[0];
+    const preview = document.getElementById(previewId);
+    
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
         reader.readAsDataURL(file);
     } else {
-        // Se no input de edição, restaurar foto atual ou mostrar "sem foto"
-        if (previewId === 'edit-preview-foto') {
-            const editFotoAtual = document.getElementById('edit-foto-atual');
-            if (editFotoAtual.src && editFotoAtual.src !== '') {
-                preview.innerHTML = `
-                    <img src="${editFotoAtual.src}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
-                    <p class="text-success mt-2 mb-0">
-                        <i class="fas fa-check-circle"></i> Imagem atual
-                    </p>
-                `;
-            } else {
-                preview.innerHTML = `
-                    <div id="edit-sem-foto">
-                        <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+        preview.style.display = 'none';
+    }
+}
+
+// Visualizar produto (modal de detalhes)
+function visualizarProduto(id) {
+    fetch(`/api/produto/${id}`)
+        .then(response => response.json())
+        .then(produto => {
+            if (produto.error) {
+                alert('Produto não encontrado!');
+                return;
+            }
+            
+            // Criar modal de visualização dinamicamente
+            const modalHtml = `
+                <div class="modal fade" id="modalVisualizarProduto" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header text-white" style="background-color: #1a237e;">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-eye me-2"></i>Detalhes do Produto #${produto.id}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-4 text-center">
+                                        ${produto.foto_url ? 
+                                            `<img src="${produto.foto_url}" class="img-fluid rounded shadow" style="max-height: 300px;">` :
+                                            `<div class="bg-light rounded d-flex align-items-center justify-content-center" style="height: 200px;">
+                                                <i class="fas fa-image fa-4x text-muted"></i>
+                                            </div>`
+                                        }
+                                    </div>
+                                    <div class="col-md-8">
+                                        <h4 class="text-primary">${produto.nome}</h4>
+                                        ${produto.marca ? `<p class="text-muted mb-2"><strong>Marca:</strong> ${produto.marca}</p>` : ''}
+                                        ${produto.categoria ? `<p class="text-muted mb-2"><strong>Categoria:</strong> ${produto.categoria}</p>` : ''}
+                                        ${produto.descricao ? `<p class="text-muted mb-3"><strong>Descrição:</strong> ${produto.descricao}</p>` : ''}
+                                        
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="card bg-success text-white">
+                                                    <div class="card-body text-center">
+                                                        <h5>R$ ${produto.preco ? produto.preco.toFixed(2) : '0.00'}</h5>
+                                                        <small>Preço de Venda</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="card ${produto.estoque > produto.estoque_minimo ? 'bg-info' : (produto.estoque > 0 ? 'bg-warning' : 'bg-danger')} text-white">
+                                                    <div class="card-body text-center">
+                                                        <h5>${produto.estoque || 0}</h5>
+                                                        <small>Em Estoque</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            ${produto.codigo_barras ? `<p><strong>Código de Barras:</strong> <span class="font-monospace">${produto.codigo_barras}</span></p>` : ''}
+                                            ${produto.codigo_fornecedor ? `<p><strong>Código do Fornecedor:</strong> <span class="font-monospace">${produto.codigo_fornecedor}</span></p>` : ''}
+                                            ${produto.preco_custo ? `<p><strong>Preço de Custo:</strong> R$ ${produto.preco_custo.toFixed(2)}</p>` : ''}
+                                            ${produto.margem_lucro ? `<p><strong>Margem de Lucro:</strong> ${produto.margem_lucro.toFixed(1)}%</p>` : ''}
+                                            <p><strong>Estoque Mínimo:</strong> ${produto.estoque_minimo || 5}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-primary" onclick="editarProduto(${produto.id})" data-bs-dismiss="modal">
+                                    <i class="fas fa-edit me-2"></i>Editar Produto
+                                </button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                            </div>
+                        </div>
                     </div>
-                `;
-            }
-        } else {
-            preview.innerHTML = `
-                <div>
-                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
                 </div>
             `;
-        }
-    }
-}
-                    <i class="fas fa-check-circle"></i> Imagem selecionada
-                </p>
-            `;
-        };
-        
-        reader.readAsDataURL(file);
-    } else {
-        // Resetar preview
-        if (previewId === 'preview-foto') {
-            preview.innerHTML = `
-                <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
-            `;
-        }
-    }
-}
-
-// Função para calcular preço de venda automaticamente (novo produto)
-function calcularPrecoVendaAutomatico() {
-    const custo = parseFloat(document.getElementById('preco_custo').value) || 0;
-    const margem = parseFloat(document.getElementById('margem_lucro').value) || 0;
-    
-    if (custo > 0 && margem >= 0) {
-        // Fórmula: Preço = Custo + (Custo * Margem/100)
-        const precoVenda = custo + (custo * margem / 100);
-        document.getElementById('preco').value = precoVenda.toFixed(2);
-        
-        // Atualizar informações de cálculo
-        const lucroValor = precoVenda - custo;
-        if (margem > 0) {
-            document.getElementById('info_calculo_display').innerHTML = 
-                `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
-            document.getElementById('info_calculo_display').className = 'form-text text-success';
-        } else {
-            document.getElementById('info_calculo_display').textContent = 'Preço igual ao custo (sem lucro)';
-            document.getElementById('info_calculo_display').className = 'form-text text-warning';
-        }
-    } else if (custo > 0) {
-        document.getElementById('preco').value = custo.toFixed(2);
-        document.getElementById('info_calculo_display').textContent = 'Informe a margem desejada';
-        document.getElementById('info_calculo_display').className = 'form-text text-muted';
-    } else {
-        document.getElementById('preco').value = '';
-        document.getElementById('info_calculo_display').textContent = 'Calculado automaticamente';
-        document.getElementById('info_calculo_display').className = 'form-text text-success';
-    }
+            
+            // Remove modal existente se houver
+            const existingModal = document.getElementById('modalVisualizarProduto');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Adiciona o novo modal
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Abre o modal
+            new bootstrap.Modal(document.getElementById('modalVisualizarProduto')).show();
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados do produto!');
+        });
 }
 
-// Função para calcular preço de venda automaticamente (editar produto) - MELHORADA
-function calcularPrecoVendaEdit() {
-    console.log('Calculando preço de venda...');
-    
-    const custoInput = document.getElementById('edit_preco_custo');
-    const margemInput = document.getElementById('edit_margem_lucro');
-    const precoInput = document.getElementById('edit_preco');
-    const infoDisplay = document.getElementById('edit_info_calculo_display');
-    
-    if (!custoInput || !margemInput || !precoInput) {
-        console.error('Campos necessários para cálculo não encontrados');
-        return;
-    }
-    
-    const custo = parseFloat(custoInput.value) || 0;
-    const margem = parseFloat(margemInput.value) || 0;
-    
-    console.log('Valores para cálculo:', { custo, margem });
-    
-    if (custo > 0 && margem >= 0) {
-        // Fórmula: Preço = Custo + (Custo * Margem/100)
-        const precoVenda = custo + (custo * margem / 100);
-        precoInput.value = precoVenda.toFixed(2);
-        
-        // Atualizar informações de cálculo
-        const lucroValor = precoVenda - custo;
-        if (infoDisplay) {
-            if (margem > 0) {
-                infoDisplay.innerHTML = `<strong>Lucro:</strong> R$ ${lucroValor.toFixed(2)} (${margem}% sobre o custo)`;
-                infoDisplay.className = 'form-text text-success';
+// Editar produto
+function editarProduto(id) {
+    fetch(`/api/produto/${id}`)
+        .then(response => response.json())
+        .then(produto => {
+            if (produto.error) {
+                alert('Produto não encontrado!');
+                return;
+            }
+            
+            // Preencher formulário
+            document.getElementById('edit_nome').value = produto.nome || '';
+            document.getElementById('edit_categoria').value = produto.categoria || '';
+            document.getElementById('edit_marca').value = produto.marca || '';
+            document.getElementById('edit_descricao').value = produto.descricao || '';
+            document.getElementById('edit_codigo_barras').value = produto.codigo_barras || '';
+            document.getElementById('edit_codigo_fornecedor').value = produto.codigo_fornecedor || '';
+            document.getElementById('edit_estoque').value = produto.estoque || 0;
+            document.getElementById('edit_estoque_minimo').value = produto.estoque_minimo || 5;
+            document.getElementById('preco_custo_edit').value = produto.preco_custo || '';
+            document.getElementById('margem_lucro_edit').value = produto.margem_lucro || '';
+            document.getElementById('preco_venda_edit').value = produto.preco || '';
+            
+            // Configurar foto atual
+            const currentPhotoContainer = document.getElementById('current_photo_container');
+            const currentPhoto = document.getElementById('current_photo');
+            
+            if (produto.foto_url) {
+                currentPhoto.src = produto.foto_url;
+                currentPhotoContainer.style.display = 'block';
             } else {
-                infoDisplay.textContent = 'Preço igual ao custo (sem lucro)';
-                infoDisplay.className = 'form-text text-warning';
+                currentPhotoContainer.style.display = 'none';
             }
-        }
-        
-        console.log('Preço calculado:', precoVenda.toFixed(2));
-    } else if (custo > 0) {
-        precoInput.value = custo.toFixed(2);
-        if (infoDisplay) {
-            infoDisplay.textContent = 'Informe a margem desejada';
-            infoDisplay.className = 'form-text text-muted';
-        }
-    } else {
-        precoInput.value = '';
-        if (infoDisplay) {
-            infoDisplay.textContent = 'Calculado automaticamente';
-            infoDisplay.className = 'form-text text-success';
-        }
-    }
+            
+            // Configurar action do formulário
+            document.getElementById('formEditarProduto').action = `/produtos/editar/${id}`;
+            
+            // Abrir modal
+            new bootstrap.Modal(document.getElementById('modalEditarProduto')).show();
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados do produto!');
+        });
 }
 
-
-
-// Função atualizada para editar produto usando data attributes
-function editarProdutoComData(botao) {
-    console.log('=== INICIANDO EDIÇÃO DE PRODUTO ===');
-    
-    try {
-        // Extrair dados dos atributos data
-        const dadosProduto = {
-            id: botao.getAttribute('data-produto-id'),
-            nome: botao.getAttribute('data-produto-nome') || '',
-            preco: parseFloat(botao.getAttribute('data-produto-preco')) || 0,
-            estoque: parseInt(botao.getAttribute('data-produto-estoque')) || 0,
-            codigo_barras: botao.getAttribute('data-produto-codigo-barras') || '',
-            codigo_fornecedor: botao.getAttribute('data-produto-codigo-fornecedor') || '',
-            preco_custo: parseFloat(botao.getAttribute('data-produto-preco-custo')) || 0,
-            margem_lucro: parseFloat(botao.getAttribute('data-produto-margem-lucro')) || 0,
-            estoque_minimo: parseInt(botao.getAttribute('data-produto-estoque-minimo')) || 5,
-            foto_url: botao.getAttribute('data-produto-foto-url') || '',
-            marca: botao.getAttribute('data-produto-marca') || ''
-        };
-        
-        console.log('Dados extraídos do botão:', dadosProduto);
-        
-        // Verificar se o ID existe
-        if (!dadosProduto.id) {
-            alert('Erro: ID do produto não encontrado!');
-            return;
-        }
-        
-        // Preencher campos do formulário
-        preencherFormularioEdicao(dadosProduto);
-        
-    } catch (error) {
-        console.error('Erro ao extrair dados do produto:', error);
-        alert('Erro ao carregar dados do produto. Tente novamente.');
-    }
-}
-
-// Função para preencher o formulário de edição
-function preencherFormularioEdicao(dados) {
-    console.log('Preenchendo formulário com dados:', dados);
-    
-    // Definir valores nos campos
-    const campos = {
-        'edit_produto_id': dados.id,
-        'edit_nome': dados.nome,
-        'edit_preco_custo': dados.preco_custo || '',
-        'edit_margem_lucro': dados.margem_lucro || 100,
-        'edit_estoque': dados.estoque,
-        'edit_estoque_minimo': dados.estoque_minimo,
-        'edit_codigo_barras': dados.codigo_barras,
-        'edit_codigo_fornecedor': dados.codigo_fornecedor,
-        'edit_marca': dados.marca
-    };
-    
-    // Preencher cada campo
-    for (const [campo, valor] of Object.entries(campos)) {
-        const elemento = document.getElementById(campo);
-        if (elemento) {
-            elemento.value = valor;
-            console.log(`Campo ${campo} preenchido com:`, valor);
-        } else {
-            console.error(`Campo ${campo} não encontrado!`);
-        }
-    }
-    
-    // Calcular preço de venda
-    calcularPrecoVendaEdit();
-    
-    // Configurar ação do formulário
-    const formAction = `/produtos/editar/${dados.id}`;
-    const form = document.getElementById('form-editar-produto');
-    if (form) {
-        form.action = formAction;
-        console.log('Action do formulário definida:', formAction);
-    }
-    
-    // Gerenciar foto
-    gerenciarFotoEdicao(dados.foto_url);
-    
-    // Resetar checkbox de remover foto
-    const removerFoto = document.getElementById('remover_foto');
-    if (removerFoto) {
-        removerFoto.checked = false;
-    }
-    
-    console.log('Formulário preenchido com sucesso!');
-}
-
-// Função para gerenciar a foto na edição
-function gerenciarFotoEdicao(foto_url) {
-    const editPreviewContainer = document.getElementById('edit-preview-foto');
-    const editFotoInput = document.getElementById('edit_foto_produto');
-    
-    if (editFotoInput) {
-        editFotoInput.value = '';
-    }
-    
-    if (editPreviewContainer) {
-        if (foto_url && foto_url !== 'None' && foto_url !== '' && foto_url !== 'null') {
-            console.log('Carregando foto atual:', foto_url);
-            editPreviewContainer.innerHTML = `
-                <img src="${foto_url}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
-                <p class="text-success mt-2 mb-0">
-                    <i class="fas fa-check-circle"></i> Imagem atual
-                </p>
-            `;
-        } else {
-            console.log('Nenhuma foto atual');
-            editPreviewContainer.innerHTML = `
-                <div>
-                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
-                </div>
-            `;
-        }
-    }
-}
-
-// Função atualizada para editar produto
-function editarProduto(id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, estoque_minimo, foto_url, marca) {
-    console.log('=== DEBUG EDITAR PRODUTO ===');
-    console.log('Parâmetros recebidos:', {
-        id: id,
-        nome: nome,
-        preco: preco,
-        estoque: estoque,
-        codigo_barras: codigo_barras,
-        codigo_fornecedor: codigo_fornecedor,
-        preco_custo: preco_custo,
-        margem_lucro: margem_lucro,
-        estoque_minimo: estoque_minimo,
-        foto_url: foto_url,
-        marca: marca
-    });
-    
-    // Verificar se os elementos existem
-    const elementos = {
-        edit_produto_id: document.getElementById('edit_produto_id'),
-        edit_nome: document.getElementById('edit_nome'),
-        edit_preco: document.getElementById('edit_preco'),
-        edit_estoque: document.getElementById('edit_estoque'),
-        edit_estoque_minimo: document.getElementById('edit_estoque_minimo'),
-        edit_codigo_barras: document.getElementById('edit_codigo_barras'),
-        edit_codigo_fornecedor: document.getElementById('edit_codigo_fornecedor'),
-        edit_preco_custo: document.getElementById('edit_preco_custo'),
-        edit_marca: document.getElementById('edit_marca'),
-        edit_margem_lucro: document.getElementById('edit_margem_lucro')
-    };
-    
-    console.log('Elementos do DOM:', elementos);
-    
-    // Verificar se algum elemento está faltando
-    for (let [key, element] of Object.entries(elementos)) {
-        if (!element) {
-            console.error(`Elemento ${key} não encontrado!`);
-            alert(`Erro: Elemento ${key} não encontrado no formulário!`);
-            return;
-        }
-    }
-    
-    // Preencher todos os campos do formulário com os valores atuais
-    elementos.edit_produto_id.value = id || '';
-    elementos.edit_nome.value = nome || '';
-    elementos.edit_preco.value = preco || '';
-    elementos.edit_estoque.value = estoque || 0;
-    elementos.edit_estoque_minimo.value = estoque_minimo || 5;
-    elementos.edit_codigo_barras.value = codigo_barras || '';
-    elementos.edit_codigo_fornecedor.value = codigo_fornecedor || '';
-    elementos.edit_preco_custo.value = preco_custo || '';
-    elementos.edit_marca.value = marca || '';
-    
-    console.log('Valores preenchidos nos campos:', {
-        edit_produto_id: elementos.edit_produto_id.value,
-        edit_nome: elementos.edit_nome.value,
-        edit_preco: elementos.edit_preco.value,
-        edit_estoque: elementos.edit_estoque.value,
-        edit_estoque_minimo: elementos.edit_estoque_minimo.value,
-        edit_codigo_barras: elementos.edit_codigo_barras.value,
-        edit_codigo_fornecedor: elementos.edit_codigo_fornecedor.value,
-        edit_preco_custo: elementos.edit_preco_custo.value,
-        edit_marca: elementos.edit_marca.value
-    });
-    
-    // Limpar checkbox de remover foto
-    $('#remover_foto').prop('checked', false);
-    
-    // Configurar margem de lucro
-    if (margem_lucro && margem_lucro > 0) {
-        elementos.edit_margem_lucro.value = parseFloat(margem_lucro).toFixed(2);
-    } else if (preco > 0 && preco_custo > 0) {
-        const margemCalculada = ((preco - preco_custo) / preco_custo) * 100;
-        elementos.edit_margem_lucro.value = margemCalculada.toFixed(2);
-    } else {
-        elementos.edit_margem_lucro.value = '100.00'; // Margem padrão de 100%
-    }
-    
-    console.log('Margem de lucro definida:', elementos.edit_margem_lucro.value);
-    
-    // Gerenciar exibição da foto atual
-    const editFotoAtual = document.getElementById('edit-foto-atual');
-    const editSemFoto = document.getElementById('edit-sem-foto');
-    const editPreviewContainer = document.getElementById('edit-preview-foto');
-    
-    // Limpar input de nova foto
-    document.getElementById('edit_foto_produto').value = '';
-    
-    // Verificar e carregar foto atual
-    if (foto_url && foto_url !== 'None' && foto_url !== '' && foto_url !== 'null') {
-        console.log('Carregando foto atual:', foto_url);
-        if (editFotoAtual) {
-            editFotoAtual.src = foto_url;
-            editFotoAtual.style.display = 'block';
-        }
-        if (editSemFoto) {
-            editSemFoto.style.display = 'none';
-        }
-        
-        // Adicionar indicação de sucesso
-        if (editPreviewContainer) {
-            editPreviewContainer.innerHTML = `
-                <img src="${foto_url}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
-                <p class="text-success mt-2 mb-0">
-                    <i class="fas fa-check-circle"></i> Imagem selecionada
-                </p>
-            `;
-        }
-    } else {
-        console.log('Nenhuma foto atual encontrada');
-        if (editFotoAtual) {
-            editFotoAtual.style.display = 'none';
-        }
-        if (editSemFoto) {
-            editSemFoto.style.display = 'block';
-        }
-        if (editPreviewContainer) {
-            editPreviewContainer.innerHTML = `
-                <div id="edit-sem-foto">
-                    <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                    <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
-                </div>
-            `;
-        }
-    }
-    
-    // Recalcular o preço com as informações atuais
-    calcularPrecoVendaEdit();
-    
-    // Definir a action do formulário com o ID correto
-    const formAction = '/produtos/editar/' + id;
-    console.log('Definindo action do formulário:', formAction);
-    document.getElementById('form-editar-produto').action = formAction;
-    
-    // Verificar se a action foi definida
-    console.log('Action definida:', document.getElementById('form-editar-produto').action);
-    
-    // Ir para a primeira aba (informações básicas) automaticamente
-    try {
-        const firstTab = new bootstrap.Tab(document.getElementById('aba-edit-info-basica'));
-        firstTab.show();
-    } catch (e) {
-        console.log('Erro ao mudar aba:', e);
-    }
-    
-    console.log('=== FIM DEBUG EDITAR PRODUTO ===');
-    console.log('Produto carregado para edição');
-}
-
+// Confirmar exclusão
 function confirmarExclusao(id, nome) {
-    if (confirm(`Tem certeza que deseja excluir o produto "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
-        // Criar formulário para exclusão
+    if (confirm(`Tem certeza que deseja excluir o produto "${nome}"?`)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '/produtos/deletar/' + id;
-        
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'produto_id';
-        input.value = id;
-        
-        form.appendChild(input);
+        form.action = `/produtos/deletar/${id}`;
         document.body.appendChild(form);
         form.submit();
     }
 }
 
-function verDetalhes(id) {
-    // Buscar detalhes do produto via AJAX
-    fetch(`/api/produto/${id}`)
-        .then(response => response.json())
-        .then(produto => {
-            if (produto.error) {
-                alert('Produto não encontrado');
-                return;
-            }
-            
-            let statusEstoque = '';
-            if (produto.estoque <= 0) {
-                statusEstoque = '<span class="badge bg-danger">Sem Estoque</span>';
-            } else if (produto.estoque <= 5) {
-                statusEstoque = '<span class="badge bg-warning">Estoque Baixo</span>';
-            } else {
-                statusEstoque = '<span class="badge bg-success">Disponível</span>';
-            }
-            
-            const conteudo = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <strong>ID:</strong> ${produto.id}<br>
-                        <strong>Nome:</strong> ${produto.nome}<br>
-                        <strong>Preço:</strong> R$ ${produto.preco.toFixed(2)}
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Estoque:</strong> ${produto.estoque}<br>
-                        <strong>Status:</strong> ${statusEstoque}<br>
-                        <strong>Código:</strong> ${produto.codigo_barras || 'Não informado'}
-                    </div>
-                </div>
-            `;
-            
-            $('#detalhesConteudo').html(conteudo);
-            $('#modalDetalhes').modal('show');
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao carregar detalhes do produto');
-        });
-}
+// Limpar modals ao fechar
+document.getElementById('modalAdicionarProduto').addEventListener('hidden.bs.modal', function() {
+    this.querySelector('form').reset();
+    document.getElementById('preview-add').style.display = 'none';
+});
 
-// Busca em tempo real
-$(document).ready(function() {
-    // Criar controles de paginação
-    createPaginationControls('controlesPaginacao', {
-        searchId: 'buscaProduto',
-        searchPlaceholder: '🔍 Buscar por nome, código de barras, código do fornecedor...',
-        tableId: 'tabelaProdutos',
-        itemsPerPageId: 'itensPorPagina',
-        visibleCountId: 'produtosVisiveis',
-        totalCountId: 'totalProdutos',
-        prevBtnId: 'btnAnterior',
-        nextBtnId: 'btnProximo',
-        paginationControlsId: 'controlesNavegacao',
-        pageInfoId: 'infoPaginacao'
+document.getElementById('modalEditarProduto').addEventListener('hidden.bs.modal', function() {
+    this.querySelector('form').reset();
+    document.getElementById('preview-edit').style.display = 'none';
+    document.getElementById('remover_foto').checked = false;
+});
+
+// Inicializar tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
-    // Inicializar paginação
-    const pagination = new TablePagination({
-        tableId: 'tabelaProdutos',
-        searchId: 'buscaProduto',
-        itemsPerPageId: 'itensPorPagina',
-        visibleCountId: 'produtosVisiveis',
-        totalCountId: 'totalProdutos',
-        prevBtnId: 'btnAnterior',
-        nextBtnId: 'btnProximo',
-        paginationControlsId: 'controlesNavegacao',
-        pageInfoId: 'infoPaginacao',
-        defaultItemsPerPage: 20
-    });
-    
-    // Inicializar campos de cálculo
-    $('#preco_custo, #margem_lucro').on('input', calcularPrecoVendaAutomatico);
-    $('#edit_preco_custo, #edit_margem_lucro').on('input', calcularPrecoVendaEdit);
-    
-    // Gerenciar checkbox de remover foto
-    $('#remover_foto').on('change', function() {
-        const isChecked = $(this).is(':checked');
-        const preview = document.getElementById('edit-preview-foto');
-        
-        if (isChecked) {
-            // Limpar input de arquivo e preview
-            document.getElementById('edit_foto_produto').value = '';
-            preview.innerHTML = `
-                <div class="text-center p-3">
-                    <i class="fas fa-trash fa-3x text-danger mb-2"></i>
-                    <p class="text-danger mb-0">Foto será removida</p>
-                </div>
-            `;
-        } else {
-            // Restaurar foto atual se existir
-            const editFotoAtual = document.getElementById('edit-foto-atual');
-            if (editFotoAtual.src && editFotoAtual.src !== '') {
-                preview.innerHTML = `
-                    <img src="${editFotoAtual.src}" alt="Foto atual" style="max-width: 100%; max-height: 180px; border-radius: 5px;">
-                    <p class="text-success mt-2 mb-0">
-                        <i class="fas fa-check-circle"></i> Imagem atual
-                    </p>
-                `;
-            } else {
-                preview.innerHTML = `
-                    <div id="edit-sem-foto">
-                        <i class="fas fa-image fa-3x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">Nenhuma imagem selecionada</p>
+    // Adicionar efeito de clique nas fotos para ampliar
+    document.querySelectorAll('.product-photo').forEach(function(img) {
+        if (img.src && img.src !== '') {
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', function() {
+                const modalHtml = `
+                    <div class="modal fade" id="modalAmpliiarFoto" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header text-white" style="background-color: #1a237e;">
+                                    <h5 class="modal-title">Foto do Produto</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body text-center">
+                                    <img src="${this.src}" class="img-fluid rounded">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `;
-            }
+                
+                const existingModal = document.getElementById('modalAmpliiarFoto');
+                if (existingModal) existingModal.remove();
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                new bootstrap.Modal(document.getElementById('modalAmpliiarFoto')).show();
+            });
         }
-    });
-    
-    // Adicionar evento para quando o modal de edição é aberto
-    $('#modalEditarProduto').on('show.bs.modal', function() {
-        console.log('Modal de edição sendo aberto...');
-        // Resetar formulário
-        const form = document.getElementById('form-editar-produto');
-        if (form) {
-            form.action = '';
-        }
-    });
-    
-    // Adicionar evento para quando o modal de edição é fechado
-    $('#modalEditarProduto').on('hidden.bs.modal', function() {
-        console.log('Modal de edição foi fechado');
-        // Limpar formulário
-        const form = document.getElementById('form-editar-produto');
-        if (form) {
-            form.reset();
-            form.action = '';
-        }
-    });
-    
-    // Adicionar validação para formulário de edição
-    $('#form-editar-produto').on('submit', function(e) {
-        console.log('Submetendo formulário de edição...');
-        
-        // Obter valores dos campos
-        const nome = $('#edit_nome').val().trim();
-        const preco_custo = parseFloat($('#edit_preco_custo').val()) || 0;
-        const margem_lucro = parseFloat($('#edit_margem_lucro').val()) || 0;
-        const estoque = parseInt($('#edit_estoque').val()) || 0;
-        const formAction = document.getElementById('form-editar-produto').action;
-        
-        console.log('Dados do formulário antes de enviar:', {
-            action: formAction,
-            produto_id: $('#edit_produto_id').val(),
-            nome: nome,
-            preco_custo: preco_custo,
-            margem_lucro: margem_lucro,
-            preco: $('#edit_preco').val(),
-            estoque: estoque,
-            estoque_minimo: $('#edit_estoque_minimo').val(),
-            codigo_barras: $('#edit_codigo_barras').val(),
-            codigo_fornecedor: $('#edit_codigo_fornecedor').val(),
-            marca: $('#edit_marca').val(),
-            remover_foto: $('#remover_foto').is(':checked')
-        });
-        
-        // Validações básicas
-        if (!nome) {
-            e.preventDefault();
-            alert('Nome do produto é obrigatório');
-            $('#edit_nome').focus();
-            return false;
-        }
-        
-        if (!formAction || formAction === '' || formAction.endsWith('produtos/editar/')) {
-            e.preventDefault();
-            alert('Erro: ID do produto não foi definido corretamente. Tente abrir o modal novamente.');
-            console.error('Action do formulário inválida:', formAction);
-            return false;
-        }
-        
-        if (preco_custo <= 0) {
-            e.preventDefault();
-            alert('Preço de custo é obrigatório e deve ser maior que zero');
-            $('#edit_preco_custo').focus();
-            return false;
-        }
-        
-        // Recalcular preço final antes de enviar para garantir
-        calcularPrecoVendaEdit();
-        
-        // Adicionar indicador visual de carregamento
-        const submitBtn = $('#btn-atualizar-produto');
-        const originalText = submitBtn.html();
-        submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Atualizando...').prop('disabled', true);
-        
-        console.log('Formulário sendo enviado para:', formAction);
-        
-        // Restaurar botão após um tempo (fallback)
-        setTimeout(() => {
-            submitBtn.html(originalText).prop('disabled', false);
-        }, 10000);
-        
-        return true;
     });
 });
-</script>
 
-<!-- Modal para exibir detalhes -->
-<div class="modal fade" id="modalDetalhes" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-eye"></i> Detalhes do Produto
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="detalhesConteudo">
-                <!-- Conteúdo será carregado via JavaScript -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
-</div>
+// JavaScript para o modal de importação XML
+document.getElementById('formImportarXML').addEventListener('submit', function(e) {
+    const btnImportar = document.getElementById('btnImportar');
+    const arquivoInput = document.querySelector('input[name="arquivo_xml"]');
+    
+    // Verificar se arquivo foi selecionado
+    if (!arquivoInput.files.length) {
+        e.preventDefault();
+        alert('Por favor, selecione um arquivo XML antes de importar.');
+        return false;
+    }
+    
+    // Verificar extensão do arquivo
+    const fileName = arquivoInput.files[0].name.toLowerCase();
+    if (!fileName.endsWith('.xml')) {
+        e.preventDefault();
+        alert('Por favor, selecione apenas arquivos XML (.xml).');
+        return false;
+    }
+    
+    // Mostrar indicador de carregamento
+    btnImportar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processando...';
+    btnImportar.disabled = true;
+    
+    // Mostrar alerta de processamento
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-warning mt-3';
+    alertDiv.innerHTML = '<i class="fas fa-hourglass-half me-2"></i><strong>Processando arquivo XML...</strong> Isso pode levar alguns segundos dependendo do tamanho do arquivo.';
+    
+    const modalBody = document.querySelector('#modalImportarXML .modal-body');
+    modalBody.appendChild(alertDiv);
+});
+
+// Resetar o modal quando fechado
+document.getElementById('modalImportarXML').addEventListener('hidden.bs.modal', function() {
+    const form = document.getElementById('formImportarXML');
+    const btnImportar = document.getElementById('btnImportar');
+    
+    // Resetar formulário
+    form.reset();
+    
+    // Resetar botão
+    btnImportar.innerHTML = '<i class="fas fa-file-import me-2"></i>Importar Produtos';
+    btnImportar.disabled = false;
+    
+    // Remover alertas de processamento
+    const alerts = document.querySelectorAll('#modalImportarXML .alert-warning');
+    alerts.forEach(alert => alert.remove());
+});
+
+// Validação em tempo real do arquivo
+document.querySelector('input[name="arquivo_xml"]').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const feedback = document.querySelector('.file-feedback') || document.createElement('small');
+    
+    if (!feedback.classList.contains('file-feedback')) {
+        feedback.className = 'file-feedback text-muted d-block mt-1';
+        e.target.parentNode.appendChild(feedback);
+    }
+    
+    if (file) {
+        if (file.name.toLowerCase().endsWith('.xml')) {
+            feedback.innerHTML = `<i class="fas fa-check text-success me-1"></i>Arquivo selecionado: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            feedback.className = 'file-feedback text-success d-block mt-1';
+        } else {
+            feedback.innerHTML = `<i class="fas fa-exclamation-triangle text-danger me-1"></i>Arquivo deve ser um XML (.xml)`;
+            feedback.className = 'file-feedback text-danger d-block mt-1';
+        }
+    } else {
+        feedback.remove();
+    }
+});
+</script>
 {% endblock %}
