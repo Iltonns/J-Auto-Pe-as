@@ -17,8 +17,8 @@ from Minha_autopecas_web.logica_banco import (
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id,
     obter_configuracoes_empresa, atualizar_configuracoes_empresa,
-    listar_contas_pagar_hoje, listar_contas_pagar_em_atraso, adicionar_conta_pagar, pagar_conta,
-    listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta, adicionar_conta_receber,
+    listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta,
+    listar_contas_receber_hoje, receber_conta, adicionar_conta_receber,
     listar_contas_pagar_por_periodo, listar_contas_receber_por_periodo,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
@@ -1315,10 +1315,11 @@ def registrar_venda_route():
 @required_permission('financeiro')
 def contas_a_pagar_hoje():
     filtro = request.args.get('filtro', 'hoje')
+    status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim)
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
     fornecedores = obter_fornecedores_para_select()
     hoje = date.today()
     
@@ -1346,13 +1347,8 @@ def contas_a_pagar_hoje():
                          fornecedores=fornecedores, 
                          hoje=hoje,
                          filtro_atual=filtro,
+                         status_atual=status,
                          estatisticas=estatisticas)
-
-@app.route('/pagamentos-em-atraso')
-@required_permission('financeiro')
-def pagamentos_em_atraso():
-    contas = listar_contas_pagar_em_atraso()
-    return render_template('pagamentos_em_atraso.html', contas=contas)
 
 @app.route('/contas-pagar/adicionar', methods=['POST'])
 @required_permission('financeiro')
@@ -1397,10 +1393,11 @@ def pagar_conta_route(id):
 @required_permission('financeiro')
 def contas_a_receber_hoje():
     filtro = request.args.get('filtro', 'hoje')
+    status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim)
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
     clientes = listar_clientes()
     hoje = date.today()
     
@@ -1428,13 +1425,8 @@ def contas_a_receber_hoje():
                          clientes=clientes, 
                          hoje=hoje,
                          filtro_atual=filtro,
+                         status_atual=status,
                          estatisticas=estatisticas)
-
-@app.route('/recebimentos-em-atraso')
-@required_permission('financeiro')
-def recebimentos_em_atraso():
-    contas = listar_contas_receber_em_atraso()
-    return render_template('recebimentos_em_atraso.html', contas=contas)
 
 @app.route('/contas-receber/receber/<int:id>', methods=['POST'])
 @required_permission('financeiro')

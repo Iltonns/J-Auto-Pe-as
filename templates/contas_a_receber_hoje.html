@@ -83,38 +83,55 @@
                     <ul class="nav nav-pills filter-pills mb-3">
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'hoje' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='hoje') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='hoje', status=status_atual) }}">
                                 <i class="fas fa-calendar-day me-1"></i>Hoje
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'atrasadas' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='atrasadas') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='atrasadas', status=status_atual) }}">
                                 <i class="fas fa-exclamation-triangle me-1"></i>Atrasadas
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'proximos_7_dias' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_7_dias') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_7_dias', status=status_atual) }}">
                                 <i class="fas fa-calendar-week me-1"></i>Próximos 7 dias
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'proximos_30_dias' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_30_dias') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_30_dias', status=status_atual) }}">
                                 <i class="fas fa-calendar-alt me-1"></i>Próximos 30 dias
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'futuras' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='futuras') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='futuras', status=status_atual) }}">
                                 <i class="fas fa-clock me-1"></i>Futuras
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if filtro_atual == 'todos' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro='todos') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro='todos', status=status_atual) }}">
                                 <i class="fas fa-list me-1"></i>Todas
+                            </a>
+                        </li>
+                    </ul>
+
+                    <!-- Filtros de Status -->
+                    <h6 class="text-muted mb-2 mt-3">Filtrar por Status:</h6>
+                    <ul class="nav nav-pills filter-pills mb-3">
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if status_atual == 'pendente' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='pendente') }}">
+                                <i class="fas fa-clock me-1"></i>Pendentes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if status_atual == 'recebido' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='recebido') }}">
+                                <i class="fas fa-check-circle me-1"></i>Recebidas
                             </a>
                         </li>
                     </ul>
@@ -224,6 +241,9 @@
                                     <th class="border-0 text-end">Valor</th>
                                     <th class="border-0">Vencimento</th>
                                     <th class="border-0">Prazo</th>
+                                    {% if status_atual == 'recebido' %}
+                                    <th class="border-0">Data Recebimento</th>
+                                    {% endif %}
                                     <th class="border-0 text-center">Ações</th>
                                 </tr>
                             </thead>
@@ -254,13 +274,25 @@
                                             {{ conta.texto_prazo }}
                                         </span>
                                     </td>
+                                    {% if status_atual == 'recebido' %}
+                                    <td>
+                                        {% if conta.data_recebimento %}
+                                            {% set data_rec_str = conta.data_recebimento|string %}
+                                            <span class="fw-semibold text-success">{{ data_rec_str[:10] }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endif %}
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
+                                            {% if status_atual == 'pendente' %}
                                             <button class="btn btn-success" 
                                                     onclick="confirmarRecebimento({{ conta.id }})"
                                                     title="Marcar como Recebido">
                                                 <i class="fas fa-check"></i>
                                             </button>
+                                            {% endif %}
                                             <button class="btn btn-outline-primary" 
                                                     onclick="editarConta({{ conta.id }})"
                                                     title="Editar">

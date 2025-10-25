@@ -48,7 +48,6 @@ Sistema completo de gestão para lojas de autopeças com design moderno e profis
 ### 💳 Controle Financeiro
 - Contas a pagar com vencimento
 - Contas a receber de vendas a prazo
-- Controle de pagamentos em atraso
 - Alertas de vencimentos
 
 ## 🛠️ Tecnologias Utilizadas
@@ -173,8 +172,6 @@ Autope-as-4-Irm-os/
     ├── login.html           # Tela de login
     ├── contas_a_pagar_hoje.html
     ├── contas_a_receber_hoje.html
-    ├── pagamentos_em_atraso.html
-    ├── recebimentos_em_atraso.html
     ├── relatorios.html      # Relatórios (em desenvolvimento)
     └── erros/               # Páginas de erro
         ├── 404.html
@@ -262,8 +259,6 @@ Se você encontrar algum problema ou tiver dúvidas:
 ### 💰 Sistema Financeiro Completo
 - **Contas a Pagar Hoje** - Controle de vencimentos diários
 - **Contas a Receber Hoje** - Acompanhamento de recebimentos
-- **Pagamentos em Atraso** - Gestão de inadimplência de fornecedores
-- **Recebimentos em Atraso** - Controle de inadimplência de clientes
 - Relatórios financeiros detalhados
 
 ### 🛒 Sistema de Vendas e Caixa
@@ -353,8 +348,6 @@ Autope-as-4-Irm-os/
 │   ├── vendas.html                # Sistema de vendas/caixa
 │   ├── contas_a_pagar_hoje.html   # Contas a pagar hoje
 │   ├── contas_a_receber_hoje.html # Contas a receber hoje
-│   ├── pagamentos_em_atraso.html  # Pagamentos em atraso
-│   ├── recebimentos_em_atraso.html# Recebimentos em atraso
 │   └── erros/
 │       └── 404.html               # Página de erro 404
 ├── requirements.txt               # Dependências Python

@@ -1821,39 +1821,7 @@ def listar_contas_pagar_hoje():
     conn.close()
     return contas
 
-def listar_contas_pagar_em_atraso():
-    """Lista contas a pagar em atraso"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
-               f.nome as fornecedor_nome,
-               julianday('now') - julianday(cp.data_vencimento) as dias_atraso
-        FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE date(cp.data_vencimento) < date('now') AND cp.status = 'pendente'
-        ORDER BY cp.data_vencimento
-    ''')
-    
-    contas = []
-    for row in cursor.fetchall():
-        contas.append({
-            'id': row[0],
-            'descricao': row[1],
-            'valor': row[2],
-            'data_vencimento': row[3],
-            'status': row[4],
-            'categoria': row[5],
-            'observacoes': row[6],
-            'fornecedor_nome': row[7] or 'Sem fornecedor',
-            'dias_atraso': int(row[8]) if row[8] else 0
-        })
-    
-    conn.close()
-    return contas
-
-def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None):
+def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
     """Lista contas a pagar com filtros de período"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1861,13 +1829,14 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     base_query = '''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome,
-               julianday(cp.data_vencimento) - julianday('now') as dias_restantes
+               julianday(cp.data_vencimento) - julianday('now') as dias_restantes,
+               cp.data_pagamento
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.status = 'pendente'
+        WHERE cp.status = ?
     '''
     
-    params = []
+    params = [status]
     
     if filtro == 'hoje':
         base_query += " AND date(cp.data_vencimento) = date('now')"
@@ -1881,7 +1850,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
         base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
         base_query += " AND date(cp.data_vencimento) BETWEEN ? AND ?"
-        params = [data_inicio, data_fim]
+        params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cp.data_vencimento"
     
@@ -1891,6 +1860,10 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     for row in cursor.fetchall():
         dias_restantes = int(row[8]) if row[8] else 0
         status_visual = 'danger' if dias_restantes < 0 else ('warning' if dias_restantes <= 7 else 'success')
+        
+        # Para contas pagas, usar visual de sucesso
+        if row[4] == 'pago':
+            status_visual = 'success'
         
         contas.append({
             'id': row[0],
@@ -1903,7 +1876,8 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
             'fornecedor_nome': row[7] or 'Sem fornecedor',
             'dias_restantes': dias_restantes,
             'status_visual': status_visual,
-            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}"
+            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}" if row[4] == 'pendente' else 'Pago',
+            'data_pagamento': row[9]
         })
     
     conn.close()
@@ -2000,49 +1974,21 @@ def listar_contas_receber_hoje():
     conn.close()
     return contas
 
-def listar_contas_receber_em_atraso():
-    """Lista contas a receber em atraso"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
-               julianday('now') - julianday(cr.data_vencimento) as dias_atraso
-        FROM contas_receber cr
-        LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE date(cr.data_vencimento) < date('now') AND cr.status = 'pendente'
-        ORDER BY cr.data_vencimento
-    ''')
-    
-    contas = []
-    for row in cursor.fetchall():
-        contas.append({
-            'id': row[0],
-            'descricao': row[1],
-            'valor': row[2],
-            'data_vencimento': row[3],
-            'status': row[4],
-            'cliente_nome': row[5] or 'Cliente não informado',
-            'dias_atraso': int(row[6]) if row[6] else 0
-        })
-    
-    conn.close()
-    return contas
-
-def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None):
+def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
     """Lista contas a receber com filtros de período"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     base_query = '''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
-               julianday(cr.data_vencimento) - julianday('now') as dias_restantes
+               julianday(cr.data_vencimento) - julianday('now') as dias_restantes,
+               cr.data_recebimento
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE cr.status = 'pendente'
+        WHERE cr.status = ?
     '''
     
-    params = []
+    params = [status]
     
     if filtro == 'hoje':
         base_query += " AND date(cr.data_vencimento) = date('now')"
@@ -2056,7 +2002,7 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
         base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
         base_query += " AND date(cr.data_vencimento) BETWEEN ? AND ?"
-        params = [data_inicio, data_fim]
+        params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cr.data_vencimento"
     
@@ -2067,6 +2013,10 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
         dias_restantes = int(row[6]) if row[6] else 0
         status_visual = 'danger' if dias_restantes < 0 else ('warning' if dias_restantes <= 7 else 'success')
         
+        # Para contas recebidas, usar visual de sucesso
+        if row[4] == 'recebido':
+            status_visual = 'success'
+        
         contas.append({
             'id': row[0],
             'descricao': row[1],
@@ -2076,7 +2026,8 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
             'cliente_nome': row[5] or 'Cliente não informado',
             'dias_restantes': dias_restantes,
             'status_visual': status_visual,
-            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}"
+            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}" if row[4] == 'pendente' else 'Recebido',
+            'data_recebimento': row[7]
         })
     
     conn.close()
