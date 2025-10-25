@@ -1,452 +1,525 @@
-# 🔧 AutoPeças Pro - Sistema Profissional de Gestão Automotiva
+# 🔧 AutoPeças Pro - Sistema Completo de Gestão Automotiva
 
-Sistema completo de gestão para lojas de autopeças com design moderno e profissional inspirado no setor automotivo. Desenvolvido em Flask com SQLite e interface responsiva.
+Sistema completo e profissional de gestão para lojas de autopeças, desenvolvido especialmente para pequenas e médias empresas do setor automotivo. Com design moderno, interface intuitiva e funcionalidades avançadas.
 
-## 🎨 Novo Design Automotivo 2025
+## ✨ Funcionalidades Principais
 
-### Características Visuais
-- **Paleta de Cores Profissional**: Azul escuro, laranja energia, cinza metálico
-- **Layout Responsivo**: Design adaptado para desktop, tablet e mobile
-- **Animações Suaves**: Efeitos de transição e hover profissionais
-- **Ícones Temáticos**: Ícones específicos do setor automotivo
-- **Gradientes Modernos**: Efeitos visuais que transmitem inovação e tecnologia
+### 🏠 **Dashboard Inteligente**
+- **Estatísticas em tempo real**: Vendas do dia, mês e totais
+- **Alertas automáticos**: Produtos com estoque baixo
+- **Gestão de caixa**: Status do caixa e movimentações
+- **Métricas financeiras**: Contas a pagar e receber do dia
+- **Gráficos e indicadores**: Visualização clara do desempenho
 
-### Componentes Visuais
-- Cards com bordas arredondadas e sombras suaves
-- Botões com gradientes e efeitos hover
-- Sidebar temática com ícones automotivos
-- Dashboard com métricas animadas
-- Alertas e notificações personalizadas
+### 👥 **Gestão Completa de Clientes**
+- **Cadastro detalhado**: Nome, CPF/CNPJ, telefone, endereço
+- **Histórico de compras**: Acompanhamento completo das vendas
+- **Busca avançada**: Por nome, documento ou telefone
+- **Edição e exclusão**: Controle total dos dados
+- **Relatórios de cliente**: Análise de comportamento de compra
 
-## 🚀 Funcionalidades
+### 🏭 **Gestão de Fornecedores**
+- **Cadastro completo**: Dados da empresa, contato, endereço
+- **Controle de produtos**: Produtos por fornecedor
+- **Histórico de compras**: Acompanhamento de pedidos
+- **Análise de performance**: Melhores fornecedores
+- **Integração com estoque**: Controle de origem dos produtos
 
-### 📊 Dashboard Principal
-- Visão geral das estatísticas do negócio
-- Produtos em estoque baixo
-- Vendas recentes
-- Contas a pagar/receber do dia
+### 📦 **Gestão Avançada de Produtos**
+- **Cadastro manual completo**: Nome, código, descrição, preços
+- **🆕 Importação automática via XML de NFe**
+- **Código de barras**: Suporte completo para EAN/UPC
+- **Controle de estoque**: Quantidade atual, mínima e máxima
+- **Categorização por NCM**: Organização fiscal automática
+- **Unidades de medida**: Peça, metro, litro, quilograma
+- **Calculadora de preços**: Margem de lucro automática
+- **Alertas de estoque**: Notificações de reposição
+- **Busca inteligente**: Por código, nome ou código de barras
 
-### 👥 Gestão de Clientes
-- Cadastro completo de clientes
-- Edição e exclusão de clientes
-- Histórico de compras
-
-### 📦 Gestão de Produtos
-- Cadastro manual de produtos com código de barras
-- **🆕 Importação automática via XML de NFe** com configurações avançadas
-- Controle de estoque com NCM e unidade de medida
-- Categorização automática baseada em NCM
-- Alertas de estoque baixo
-- Detecção automática de produtos duplicados
-- Calculadora de preços com margem de lucro
-
-#### 📥 Importação de Produtos via XML de NFe
-- **Upload de arquivos XML** de Nota Fiscal Eletrônica
-- **Extração automática** de dados dos produtos (código, nome, código de barras, NCM, preços)
+#### 📥 **Importação XML de NFe (Funcionalidade Premium)**
+- **Upload seguro**: Processamento de arquivos XML de Nota Fiscal
+- **Extração automática**: Nome, preço, quantidade, código de barras, NCM
 - **Configurações flexíveis**:
-  - Margem de lucro personalizada
-  - Estoque mínimo padrão
-  - Ação para produtos existentes (atualizar, sobrescrever ou ignorar)
-- **Categorização inteligente** baseada no código NCM
-- **Relatórios detalhados** de importação com produtos processados
-- **Validação de dados** e tratamento de erros
+  - Margem de lucro personalizada por categoria
+  - Estoque mínimo padrão configurável
+  - Ações para produtos duplicados (atualizar/ignorar/sobrescrever)
+- **Validação inteligente**: Verificação de dados e integridade
+- **Relatórios detalhados**: Log completo de importação
+- **Processamento em lote**: Múltiplos produtos por arquivo
 
-### 💰 Sistema de Vendas
-- PDV (Ponto de Venda) integrado
-- Múltiplas formas de pagamento
-- Busca rápida por código de barras
-- Vendas a prazo com contas a receber
+### 💰 **Sistema Completo de Vendas (PDV)**
+- **Interface moderna de PDV**: Design otimizado para vendas rápidas
+- **Busca instantânea**: Por código, nome ou código de barras
+- **Carrinho inteligente**: Adição, remoção e edição de itens
+- **Múltiplas formas de pagamento**:
+  - 💵 Dinheiro (com cálculo automático de troco)
+  - 🏧 PIX
+  - 💳 Cartão de Crédito/Débito
+  - 📅 Vendas a Prazo (gera contas a receber)
+- **Desconto flexível**: Por item ou total da venda
+- **Impressão de recibos**: Recibos detalhados e profissionais
+- **Controle de vendedor**: Identificação do responsável
+- **Sincronização automática**: Com caixa e financeiro
 
-### 💳 Controle Financeiro
-- Contas a pagar com vencimento
-- Contas a receber de vendas a prazo
-- Alertas de vencimentos
+### 🏦 **Sistema de Caixa Integrado**
+- **Abertura/Fechamento**: Controle diário de caixa
+- **Movimentações**: Sangria, suprimento, despesas
+- **Relatórios de caixa**: Entrada, saída e saldo
+- **Fechamento automático**: Cálculo de valores do dia
+- **Histórico completo**: Todas as movimentações registradas
+- **Integração total**: Com vendas e financeiro
 
-## 🛠️ Tecnologias Utilizadas
+### 💳 **Controle Financeiro Avançado**
+- **Contas a Pagar**:
+  - Vencimentos diários
+  - Categorização por tipo
+  - Controle de fornecedores
+  - Alertas de vencimento
+  - Histórico de pagamentos
+- **Contas a Receber**:
+  - Vendas a prazo automáticas
+  - Controle de inadimplência
+  - Negociação de parcelamentos
+  - Relatórios de recebimento
+- **Lançamentos Financeiros**:
+  - Receitas e despesas
+  - Categorização detalhada
+  - Edição e cancelamento
+  - Relatórios por período
 
-- **Backend**: Flask (Python)
-- **Banco de Dados**: SQLite
-- **Frontend**: Bootstrap 5, HTML5, CSS3, JavaScript
-- **Autenticação**: Flask-Login
-- **Ícones**: Font Awesome, Bootstrap Icons
+### � **Sistema de Orçamentos**
+- **Criação de orçamentos**: Produtos e valores
+- **Controle de validade**: Data de expiração
+- **Conversão em vendas**: Transformação direta em venda
+- **Histórico completo**: Orçamentos aceitos e perdidos
+- **Impressão profissional**: Orçamentos formatados
+- **Acompanhamento**: Status e follow-up
 
-## 📋 Pré-requisitos
+### 📊 **Relatórios Profissionais**
+- **Relatórios de Vendas**:
+  - Por período, vendedor, produto
+  - Gráficos e análises
+  - Comparativos mensais
+- **Relatórios de Estoque**:
+  - Produtos em baixa
+  - Movimentação de estoque
+  - Análise ABC
+- **Relatórios Financeiros**:
+  - Fluxo de caixa
+  - Contas em aberto
+  - Análise de recebimentos
+- **Produtos Mais Vendidos**:
+  - Top 10 produtos
+  - Análise de sazonalidade
+  - Recomendações de compra
 
-- Python 3.7 ou superior
-- pip (gerenciador de pacotes Python)
+### 👤 **Gestão de Usuários e Permissões**
+- **Múltiplos usuários**: Cadastro ilimitado
+- **Níveis de acesso**: Admin, vendedor, operador
+- **Permissões granulares**: Controle por funcionalidade
+- **Logs de atividade**: Rastreamento de ações
+- **Recuperação de senha**: Sistema seguro
+- **Configurações da empresa**: Dados personalizáveis
 
-## 🔧 Instalação
+## 🎨 Design Moderno e Responsivo
 
-1. **Clone o repositório**
-   ```bash
-   git clone https://github.com/Iltonns/Autope-as-4-Irm-os.git
-   cd Autope-as-4-Irm-os
-   ```
+### 🚗 Tema Automotivo Profissional
+- **Paleta Premium**: Azul automobilístico, laranja energia, cinza metálico
+- **Ícones Especializados**: Font Awesome específicos do setor automotivo
+- **Gradientes Modernos**: Efeitos visuais que transmitem tecnologia
+- **Animações Suaves**: Transições profissionais e elegantes
+- **Layout Responsivo**: Perfeito em desktop, tablet e mobile
 
-2. **Instale as dependências**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 🖥️ Interface Otimizada
+- **Navegação Intuitiva**: Sidebar colapsível com ícones explicativos
+- **Cards Informativos**: Informações organizadas e de fácil leitura
+- **Alertas Visuais**: Notificações coloridas por tipo de ação
+- **Formulários Inteligentes**: Validação em tempo real
+- **Tabelas Responsivas**: Dados organizados e filtráveis
 
-3. **Inicialize o banco de dados**
-   ```bash
-   python Minha_autopecas_web/logica_banco.py
-   ```
+## 🛠️ Tecnologias e Arquitetura
 
-4. **Adicione dados de exemplo (opcional)**
-   ```bash
-   python popular_dados.py
-   ```
+### **Backend Robusto**
+- **Python 3.9+**: Linguagem moderna e eficiente
+- **Flask Framework**: Microframework ágil e flexível
+- **SQLite**: Banco de dados embarcado (desenvolvimento)
+- **Flask-Login**: Sistema de autenticação seguro
+- **ElementTree**: Processamento XML nativo
 
-5. **Execute a aplicação**
-   ```bash
-   python app.py
-   ```
+### **Frontend Moderno**
+- **HTML5 Semântico**: Estrutura otimizada e acessível
+- **CSS3 Avançado**: Animações, gradientes e responsividade
+- **JavaScript ES6+**: Interatividade e validações
+- **Bootstrap 5**: Framework CSS responsivo
+- **Font Awesome**: Biblioteca de ícones profissionais
 
-6. **Acesse o sistema**
-   - Abra seu navegador e vá para: http://127.0.0.1:5000
-   - **Usuário**: admin
-   - **Senha**: admin123
+### **Funcionalidades Técnicas**
+- **Upload Seguro**: Validação de arquivos XML
+- **Processamento Assíncrono**: Import de produtos em lote
+- **Criptografia**: Senhas seguras com Werkzeug
+- **Sessões Seguras**: Controle de acesso robusto
+- **Logs Detalhados**: Rastreamento de todas as operações
 
-## 🆕 Importação XML de NFe
+## 🚀 Instalação e Configuração
 
-### Como importar produtos via XML
-1. Acesse a área de **Produtos**
-2. Clique em **Importar XML**
-3. Selecione um arquivo XML de Nota Fiscal Eletrônica
-4. Clique em **Importar Produtos**
-
-### Dados importados automaticamente
-- Nome do produto
-- Preço unitário
-- Quantidade (adicionada ao estoque)
-- Código de barras (EAN)
-- NCM (Nomenclatura Comum do Mercosul)
-- Unidade de medida
-
-### Comportamento inteligente
-- **Produtos novos**: Criados automaticamente
-- **Produtos existentes**: Estoque atualizado
-- **Detecção de duplicatas**: Por código de barras e nome
-- **Relatório completo**: Sucessos e erros detalhados
-
-📄 Ver documentação completa em [`GUIA_IMPORTACAO_XML.md`](GUIA_IMPORTACAO_XML.md)
-
-## 📱 Como Usar
-
-### Login
-- Use as credenciais padrão: `admin` / `admin123`
-- O sistema criará automaticamente o usuário administrador na primeira execução
-
-### Dashboard
-- Visualize estatísticas gerais do negócio
-- Monitore produtos com estoque baixo
-- Acompanhe vendas recentes
-
-### Clientes
-- Adicione novos clientes clicando em "Novo Cliente"
-- Edite informações existentes
-- Gerencie base de clientes
-
-### Produtos
-- Cadastre produtos com informações completas
-- Use códigos de barras para busca rápida
-- Defina estoque mínimo para alertas
-
-### Vendas
-- Use o sistema PDV para registrar vendas
-- Busque produtos por código de barras, nome ou ID
-- Escolha formas de pagamento (dinheiro, PIX, cartão, prazo)
-- Vendas a prazo geram automaticamente contas a receber
-
-### Financeiro
-- Monitore contas a pagar do dia
-- Acompanhe recebimentos pendentes
-- Marque contas como pagas/recebidas
-
-## 🗂️ Estrutura do Projeto
-
-```
-Autope-as-4-Irm-os/
-├── app.py                      # Aplicação principal Flask
-├── requirements.txt            # Dependências Python
-├── popular_dados.py           # Script para dados de exemplo
-├── autopecas.db              # Banco de dados SQLite (criado automaticamente)
-├── Minha_autopecas_web/
-│   ├── __init__.py
-│   └── logica_banco.py       # Funções de banco de dados
-└── templates/                # Templates HTML
-    ├── base.html            # Template base
-    ├── dashboard.html       # Dashboard principal
-    ├── clientes.html        # Gestão de clientes
-    ├── produtos.html        # Gestão de produtos
-    ├── vendas.html          # Sistema de vendas
-    ├── login.html           # Tela de login
-    ├── contas_a_pagar_hoje.html
-    ├── contas_a_receber_hoje.html
-    ├── relatorios.html      # Relatórios (em desenvolvimento)
-    └── erros/               # Páginas de erro
-        ├── 404.html
-        └── 500.html
-```
-
-## 🔒 Segurança
-
-- Senhas são criptografadas usando Werkzeug
-- Sistema de autenticação com Flask-Login
-- Sessões seguras
-- **⚠️ IMPORTANTE**: Altere a `secret_key` em produção
-
-## 🐛 Solução de Problemas
-
-### Erro de banco de dados
+### **Pré-requisitos**
 ```bash
-# Reinicialize o banco
-python Minha_autopecas_web/logica_banco.py
-```
-
-### Problemas de dependências
-```bash
-# Reinstale as dependências
-pip install -r requirements.txt --upgrade
-```
-
-### Erro de porta ocupada
-- Altere a porta no arquivo `app.py` na linha final:
-```python
-app.run(debug=True, host='0.0.0.0', port=5001)  # Mude para outra porta
-```
-
-## 🚀 Próximas Funcionalidades
-
-- [ ] Relatórios avançados
-- [ ] Importação de produtos via XML
-- [ ] Sistema de backup automático
-- [ ] Múltiplos usuários e permissões
-- [ ] API REST
-- [ ] App mobile
-
-## 🤝 Contribuindo
-
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
-## 👨‍💻 Autor
-
-**Família Autopeças**
-- GitHub: [@Iltonns](https://github.com/Iltonns)
-
-## 📞 Suporte
-
-Se você encontrar algum problema ou tiver dúvidas:
-1. Verifique a seção de solução de problemas
-2. Abra uma issue no GitHub
-3. Entre em contato via email
-
----
-
-⭐ Se este projeto te ajudou, deixe uma estrela no GitHub!
-
-### 👥 Gestão de Clientes
-- Cadastro completo de clientes
-- Controle de CPF/CNPJ
-- Histórico de compras
-- Dados de contato e endereço
-
-### 🔧 Gestão de Produtos
-- Cadastro manual de produtos
-- **Importação automática via XML** (NFe)
-- Controle de código de barras
-- Gestão de estoque em tempo real
-- Alertas de estoque baixo
-- Busca rápida por código ou nome
-
-### 💰 Sistema Financeiro Completo
-- **Contas a Pagar Hoje** - Controle de vencimentos diários
-- **Contas a Receber Hoje** - Acompanhamento de recebimentos
-- Relatórios financeiros detalhados
-
-### 🛒 Sistema de Vendas e Caixa
-- Interface moderna de PDV (Ponto de Venda)
-- Leitor de código de barras
-- Múltiplas formas de pagamento (Dinheiro, PIX, Cartão, A Prazo)
-- Cálculo automático de troco
-- Produtos favoritos para vendas rápidas
-- Controle de caixa diário
-
-### 📊 Relatórios e Dashboard
-- Dashboard com métricas importantes
-- Relatórios de vendas
-- Controle de estoque
-- Análises financeiras
-- Gráficos e estatísticas
-
-## 🛠️ Tecnologias Utilizadas
-
-- **Backend**: Python 3.9+ com Flask
-- **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
-- **Banco de Dados**: SQLite (fácil setup) / PostgreSQL (produção)
-- **Autenticação**: Flask-Login
-- **PDF**: ReportLab
-- **XML Processing**: ElementTree (nativo Python)
-
-## 🚀 Como Executar
-
-### 1. Pré-requisitos
-```bash
-# Python 3.9 ou superior
+# Verificar versão do Python (3.9 ou superior)
 python --version
 
-# Git
-git --version
+# Verificar se o pip está instalado
+pip --version
 ```
 
-### 2. Clonagem e Setup
+### **Instalação Rápida**
 ```bash
-# Clonar o repositório
-git clone https://github.com/Iltonns/Autope-as-4-Irm-os.git
-cd Autope-as-4-Irm-os
+# 1. Clonar o repositório
+git clone https://github.com/Iltonns/FG-Auto-pe-as.git
+cd FG-Auto-pe-as
 
-# Criar ambiente virtual
+# 2. Criar ambiente virtual
 python -m venv venv
 
-# Ativar ambiente virtual
+# 3. Ativar ambiente virtual
 # Windows:
 venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
 
-# Instalar dependências
+# 4. Instalar dependências
 pip install -r requirements.txt
-```
 
-### 3. Configuração do Banco
-```bash
-# O banco SQLite será criado automaticamente na primeira execução
-# Arquivo: loja.db
-```
-
-### 4. Executar a Aplicação
-```bash
+# 5. Executar a aplicação
 python app.py
 ```
 
-### 5. Acessar o Sistema
-- URL: `http://localhost:5000`
-- **Usuário padrão**: `admin`
-- **Senha padrão**: `admin123`
-
-## 📁 Estrutura do Projeto
-
+### **Primeiro Acesso**
 ```
-Autope-as-4-Irm-os/
-├── app.py                          # Aplicação principal Flask
-├── Minha_autopecas_web/
-│   ├── __init__.py
-│   ├── logica_banco.py            # Lógica do banco de dados
-│   └── criar_usuarios.py          # Script para criar usuários
-├── templates/                      # Templates HTML
-│   ├── base.html                  # Template base
-│   ├── login.html                 # Página de login
-│   ├── clientes.html              # Gestão de clientes
-│   ├── produtos.html              # Gestão de produtos
-│   ├── vendas.html                # Sistema de vendas/caixa
-│   ├── contas_a_pagar_hoje.html   # Contas a pagar hoje
-│   ├── contas_a_receber_hoje.html # Contas a receber hoje
-│   └── erros/
-│       └── 404.html               # Página de erro 404
-├── requirements.txt               # Dependências Python
-├── runtime.txt                   # Versão do Python
-└── README.md                     # Este arquivo
+URL: http://localhost:5000
+Usuário: admin
+Senha: admin123
 ```
 
-## 💡 Funcionalidades Especiais
-
-### 📦 Importação de XML (NFe)
-O sistema permite importar produtos diretamente de arquivos XML de Nota Fiscal Eletrônica:
-- Extrai automaticamente: nome, preço, quantidade e código de barras
-- Processa múltiplos produtos por arquivo
-- Validação de dados e relatório de importação
-
-### 📅 Sistema de Calendário Financeiro
-- Visualização de vencimentos por data
-- Alertas de vencimentos próximos
-- Controle de inadimplência
-- Negociação de parcelamentos
-
-### 🔍 Busca Inteligente
-- Busca por código de barras
-- Busca por nome (parcial)
-- Busca por ID do produto
-- Resultados instantâneos
-
-### 📱 Interface Responsiva
-- Funciona em desktop, tablet e smartphone
-- Design moderno e intuitivo
-- Cores e ícones específicos para autopeças
-
-## 🔧 Configurações Avançadas
-
-### Banco de Dados PostgreSQL (Produção)
-Para usar PostgreSQL em produção, modifique a função `get_db_connection()` em `logica_banco.py`:
-
+### **Configuração Avançada (Produção)**
 ```python
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-def get_db_connection():
-    conn = psycopg2.connect(
-        host="localhost",
-        database="autopecas",
-        user="seu_usuario",
-        password="sua_senha",
-        cursor_factory=RealDictCursor
-    )
-    return conn
+# Em app.py, altere:
+app.secret_key = 'SUA_CHAVE_SUPER_SECRETA_DE_PRODUCAO'
+app.run(debug=False, host='0.0.0.0', port=80)
 ```
 
-### Variáveis de Ambiente
+## 📂 Estrutura do Projeto
+
+```
+FG-Auto-pe-as/
+├── 📄 app.py                          # Aplicação principal Flask
+├── 📄 requirements.txt                # Dependências Python
+├── 📄 runtime.txt                     # Versão do Python
+├── 📄 README.md                       # Documentação (este arquivo)
+├── 🗃️ autopecas.db                   # Banco SQLite (auto-criado)
+├── 📁 Minha_autopecas_web/
+│   ├── 📄 __init__.py                # Módulo Python
+│   ├── 📄 logica_banco.py            # Lógica do banco de dados
+│   └── 📄 criar_usuarios.py          # Utilitários de usuário
+├── 📁 templates/                      # Templates HTML
+│   ├── 📄 base.html                  # Template base
+│   ├── 📄 dashboard.html             # Painel principal
+│   ├── 📄 login.html                 # Tela de login
+│   ├── 📄 clientes.html              # Gestão de clientes
+│   ├── 📄 fornecedores.html          # Gestão de fornecedores
+│   ├── 📄 produtos.html              # Gestão de produtos
+│   ├── 📄 vendas.html                # Sistema de vendas
+│   ├── 📄 caixa.html                 # Controle de caixa
+│   ├── 📄 financeiro.html            # Controle financeiro
+│   ├── 📄 orcamentos.html            # Sistema de orçamentos
+│   ├── 📄 relatorios.html            # Relatórios
+│   ├── 📄 usuarios.html              # Gestão de usuários
+│   ├── 📄 configuracoes_empresa.html # Configurações
+│   ├── 📄 contas_a_pagar_hoje.html   # Contas a pagar
+│   ├── 📄 contas_a_receber_hoje.html # Contas a receber
+│   ├── 📄 recibo_venda.html          # Recibo de vendas
+│   ├── 📄 visualizar_venda.html      # Detalhes da venda
+│   ├── 📄 visualizar_orcamento.html  # Detalhes do orçamento
+│   ├── 📄 editar_orcamento.html      # Edição de orçamento
+│   ├── 📁 relatorios/                # Templates de relatórios
+│   │   ├── 📄 vendas.html            # Relatório de vendas
+│   │   ├── 📄 estoque.html           # Relatório de estoque
+│   │   ├── 📄 financeiro.html        # Relatório financeiro
+│   │   └── 📄 produtos_mais_vendidos.html
+│   └── 📁 erros/                     # Páginas de erro
+│       ├── 📄 404.html               # Página não encontrada
+│       └── 📄 500.html               # Erro interno
+└── 📁 static/                        # Arquivos estáticos
+    ├── 📁 css/                       # Estilos CSS
+    │   ├── 📄 automotive-theme.css   # Tema automotivo
+    │   ├── 📄 compact-layout.css     # Layout compacto
+    │   ├── 📄 layout-toggle.css      # Toggle de layout
+    │   └── 📄 vendas-layout.css      # Layout de vendas
+    ├── 📁 js/                        # Scripts JavaScript
+    │   ├── 📄 automotive-theme.js    # Scripts do tema
+    │   ├── 📄 layout-toggle.js       # Toggle de layout
+    │   └── 📄 pagination.js          # Paginação
+    └── 📁 images/                    # Imagens
+        └── 📁 produtos/              # Fotos de produtos
+```
+
+## 🎯 Como Usar o Sistema
+
+### **1. Login e Configuração Inicial**
+1. Acesse `http://localhost:5000`
+2. Faça login com `admin` / `admin123`
+3. Vá em **Configurações da Empresa** e atualize os dados
+4. Crie outros usuários conforme necessário
+
+### **2. Cadastrando Fornecedores**
+1. Acesse **Fornecedores** no menu lateral
+2. Clique em **Novo Fornecedor**
+3. Preencha os dados: nome, CNPJ, contato, endereço
+4. Salve e repita para outros fornecedores
+
+### **3. Gerenciando Produtos**
+**Cadastro Manual:**
+1. Acesse **Produtos** no menu
+2. Clique em **Novo Produto**
+3. Preencha: nome, código, preço, estoque, fornecedor
+4. Defina estoque mínimo para alertas
+
+**Importação via XML:**
+1. Clique em **Importar XML** na tela de produtos
+2. Selecione um arquivo XML de NFe
+3. Configure margem de lucro e estoque mínimo
+4. Clique em **Processar** e aguarde o relatório
+
+### **4. Realizando Vendas**
+1. Acesse **Vendas** no menu (ou **Caixa**)
+2. **Abra o caixa** se necessário
+3. Busque produtos por código ou nome
+4. Adicione itens ao carrinho
+5. Escolha a forma de pagamento
+6. Finalize a venda
+7. Imprima o recibo se necessário
+
+### **5. Controle Financeiro**
+**Contas a Pagar:**
+1. Acesse **Contas a Pagar Hoje**
+2. Visualize vencimentos do dia
+3. Marque como **Pago** quando necessário
+
+**Contas a Receber:**
+1. Vendas a prazo aparecem automaticamente
+2. Acesse **Contas a Receber Hoje**
+3. Marque como **Recebido** quando pago
+
+### **6. Criando Orçamentos**
+1. Acesse **Orçamentos** no menu
+2. Clique em **Novo Orçamento**
+3. Adicione produtos e quantidades
+4. Defina validade e observações
+5. Salve e imprima se necessário
+6. Converta em venda quando aceito
+
+### **7. Relatórios e Análises**
+1. Acesse **Relatórios** no menu
+2. Escolha o tipo: Vendas, Estoque, Financeiro
+3. Defina período e filtros
+4. Visualize gráficos e dados
+5. Exporte se necessário
+
+## 🔒 Segurança e Boas Práticas
+
+### **Segurança Implementada**
+- ✅ **Autenticação obrigatória**: Login necessário para acesso
+- ✅ **Senhas criptografadas**: Hash seguro com Werkzeug
+- ✅ **Sessões seguras**: Controle de acesso por sessão
+- ✅ **Validação de entrada**: Sanitização de dados
+- ✅ **Upload seguro**: Validação de arquivos XML
+- ✅ **SQL Injection**: Proteção com consultas parametrizadas
+
+### **Configurações de Produção**
+```python
+# ⚠️ IMPORTANTE: Altere estas configurações para produção
+
+# 1. Chave secreta segura
+app.secret_key = 'sua_chave_super_secreta_e_complexa_aqui'
+
+# 2. Desabilite debug
+app.run(debug=False)
+
+# 3. Configure banco de produção
+# Substitua SQLite por PostgreSQL ou MySQL
+
+# 4. Configure HTTPS
+# Use nginx ou Apache como proxy reverso
+```
+
+## 🐛 Solução de Problemas
+
+### **Problemas Comuns**
+
+**❌ Erro: "Porta 5000 já está em uso"**
+```python
+# Solução: Altere a porta no app.py
+app.run(debug=True, port=5001)  # Use outra porta
+```
+
+**❌ Erro: "Banco de dados não encontrado"**
 ```bash
-# .env (criar arquivo)
-SECRET_KEY=sua_chave_secreta_super_segura
-DATABASE_URL=sqlite:///loja.db
-DEBUG=False
+# Solução: O banco é criado automaticamente
+# Verifique se o app.py está sendo executado na pasta correta
+python app.py
 ```
 
-## 🤝 Contribuição
+**❌ Erro: "Módulo não encontrado"**
+```bash
+# Solução: Reinstale as dependências
+pip install -r requirements.txt --upgrade
+```
 
-1. Fork o projeto
-2. Crie sua feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+**❌ Erro: "Arquivo XML inválido"**
+```bash
+# Solução: Verifique se o arquivo é uma NFe válida
+# Use apenas arquivos XML de Nota Fiscal Eletrônica
+```
 
-## 📞 Suporte
+**❌ Erro: "Produto duplicado na importação"**
+```bash
+# Solução: Configure a ação para produtos existentes
+# Opções: Atualizar, Ignorar ou Sobrescrever
+```
 
-Para suporte e dúvidas:
-- 📧 Email: [seu_email@exemplo.com]
-- 📱 WhatsApp: [seu_numero]
-- 🐛 Issues: [GitHub Issues](https://github.com/Iltonns/Autope-as-4-Irm-os/issues)
+### **Performance e Otimização**
 
-## 📄 Licença
+**📈 Melhorando Performance:**
+- Use índices no banco de dados
+- Configure cache para consultas frequentes
+- Otimize imagens de produtos
+- Use CDN para arquivos estáticos
 
-Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+**💾 Backup Regular:**
+```bash
+# Backup do banco SQLite
+cp autopecas.db backup_autopecas_$(date +%Y%m%d).db
 
-## 🏆 Feito com ❤️ para a Família
+# Backup de imagens
+tar -czf backup_images_$(date +%Y%m%d).tar.gz static/images/
+```
 
-Desenvolvido especialmente para atender as necessidades de lojas de autopeças familiares, com foco em:
-- Facilidade de uso
-- Funcionalidades práticas
-- Interface intuitiva
-- Controle financeiro eficiente
+## 🚀 Roadmap e Próximas Funcionalidades
+
+### **🔄 Em Desenvolvimento**
+- [ ] **API REST**: Para integração com outros sistemas
+- [ ] **App Mobile**: Aplicativo para Android/iOS
+- [ ] **Dashboard Analytics**: Gráficos avançados e BI
+- [ ] **Integração Fiscal**: Emissão de NFe e NFCe
+- [ ] **Multi-loja**: Gestão de múltiplas filiais
+
+### **🎯 Planejado para 2025**
+- [ ] **E-commerce**: Loja virtual integrada
+- [ ] **CRM Avançado**: Gestão de relacionamento
+- [ ] **Inteligência Artificial**: Previsão de vendas
+- [ ] **Integração Bancária**: Conciliação automática
+- [ ] **Sistema de Comissões**: Para vendedores
+
+### **💡 Sugestões da Comunidade**
+- [ ] **Backup Automático**: Na nuvem
+- [ ] **Integração WhatsApp**: Notificações
+- [ ] **Sistema de Pontos**: Fidelidade de clientes
+- [ ] **Gestão de Garantias**: Controle de prazos
+- [ ] **Catálogo Digital**: Para vendedores externos
+
+## 🤝 Contribuição e Comunidade
+
+### **Como Contribuir**
+1. **Fork** o projeto no GitHub
+2. **Clone** seu fork localmente
+3. **Crie** uma branch para sua feature (`git checkout -b feature/MinhaFeature`)
+4. **Faça** suas modificações
+5. **Teste** todas as funcionalidades
+6. **Commit** suas mudanças (`git commit -m 'Adiciona MinhaFeature'`)
+7. **Push** para a branch (`git push origin feature/MinhaFeature`)
+8. **Abra** um Pull Request
+
+### **Diretrizes de Contribuição**
+- ✅ **Código limpo**: Siga PEP 8 para Python
+- ✅ **Documentação**: Comente funções complexas
+- ✅ **Testes**: Teste sua implementação
+- ✅ **Compatibilidade**: Mantenha retrocompatibilidade
+- ✅ **Segurança**: Não comprometa a segurança
+
+### **Reportando Bugs**
+1. Verifique se o bug já foi reportado
+2. Crie uma **Issue** detalhada no GitHub
+3. Inclua: versão, sistema operacional, passos para reproduzir
+4. Adicione screenshots se possível
+
+## 📞 Suporte e Contato
+
+### **📧 Suporte Técnico**
+- **Email**: [suporte@autopecaspro.com](mailto:suporte@autopecaspro.com)
+- **GitHub Issues**: [Reportar Bug](https://github.com/Iltonns/FG-Auto-pe-as/issues)
+- **Documentação**: [Wiki do Projeto](https://github.com/Iltonns/FG-Auto-pe-as/wiki)
+
+### **💬 Comunidade**
+- **Discord**: [Servidor da Comunidade](https://discord.gg/autopecaspro)
+- **Telegram**: [Grupo de Usuários](https://t.me/autopecaspro)
+- **WhatsApp**: [Suporte Rápido](https://wa.me/5511999999999)
+
+### **📱 Redes Sociais**
+- **Instagram**: [@autopecaspro](https://instagram.com/autopecaspro)
+- **YouTube**: [Canal AutoPeças Pro](https://youtube.com/autopecaspro)
+- **LinkedIn**: [Página da Empresa](https://linkedin.com/company/autopecaspro)
+
+## 📄 Licença e Termos
+
+Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+### **Termos de Uso**
+- ✅ **Uso comercial**: Permitido
+- ✅ **Modificação**: Permitida
+- ✅ **Distribuição**: Permitida
+- ✅ **Uso privado**: Permitido
+- ❌ **Garantia**: Não fornecida
+- ❌ **Responsabilidade**: Não assumida
+
+## 👨‍💻 Equipe de Desenvolvimento
+
+### **🏆 Desenvolvedor Principal**
+**Família AutoPeças**
+- 🐙 **GitHub**: [@Iltonns](https://github.com/Iltonns)
+- 📧 **Email**: [ilton@autopecaspro.com](mailto:ilton@autopecaspro.com)
+- 💼 **LinkedIn**: [Perfil Profissional](https://linkedin.com/in/iltonns)
+
+### **🤝 Contribuidores**
+Agradecimentos especiais a todos que contribuíram para este projeto:
+- Colaboradores da comunidade GitHub
+- Beta testers das lojas parceiras
+- Usuários que reportaram bugs e sugestões
 
 ---
 
-⭐ **Se este projeto foi útil para você, considere dar uma estrela no GitHub!**
+## 🎉 Agradecimentos
+
+### **💝 Dedicatória**
+Este projeto é dedicado a todas as **famílias empreendedoras** do setor automotivo que trabalham incansavelmente para oferecer produtos de qualidade e serviço excepcional aos seus clientes.
+
+### **🙏 Reconhecimentos**
+- **Flask Team**: Pelo excelente framework
+- **Bootstrap Team**: Pela interface responsiva
+- **Font Awesome**: Pelos ícones profissionais
+- **Comunidade Python**: Por todas as bibliotecas
+- **Beta Testers**: Por todos os feedbacks valiosos
+
+---
+
+<div align="center">
+
+### ⭐ **Se este projeto foi útil para você, considere dar uma estrela no GitHub!** ⭐
+
+### 🚗 **Desenvolvido com ❤️ para o setor automotivo brasileiro** 🇧🇷
+
+### 📈 **Transformando pequenos negócios em grandes sucessos!** 🏆
+
+---
+
+**© 2025 AutoPeças Pro - Todos os direitos reservados**
+
+</div>
