@@ -81,51 +81,51 @@
                             <tr>
                                 <td>{{ produto.id }}</td>
                                 <td>
-                                    <div class="fw-bold">{{ produto.nome }}</div>
+                                    <div>{{ produto.nome }}</div>
                                     {% if produto.codigo_fornecedor %}
                                     <small class="text-muted">Cód: {{ produto.codigo_fornecedor }}</small>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if produto.marca %}
-                                        <span class="badge bg-primary">{{ produto.marca }}</span>
+                                        <span class="text-dark">{{ produto.marca }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if produto.categoria %}
-                                        <span class="badge bg-info">{{ produto.categoria }}</span>
+                                        <span class="text-dark">{{ produto.categoria }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if produto.codigo_fornecedor %}
-                                        <span class="badge bg-secondary">{{ produto.codigo_fornecedor }}</span>
+                                        <span class="text-dark">{{ produto.codigo_fornecedor }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <div class="fw-bold">R$ {{ "%.2f"|format(produto.preco) }}</div>
+                                    <div>R$ {{ "%.2f"|format(produto.preco) }}</div>
                                     {% if produto.preco_custo > 0 %}
                                     <small class="text-muted">Custo: R$ {{ "%.2f"|format(produto.preco_custo) }}</small>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge {% if produto.estoque <= 0 %}bg-danger{% elif produto.estoque <= 5 %}bg-warning{% else %}bg-success{% endif %}">
+                                    <span class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= 5 %}text-warning{% else %}text-success{% endif %}">
                                         {{ produto.estoque }}
                                     </span>
                                 </td>
                                 <td>{{ produto.codigo_barras or '-' }}</td>
                                 <td>
                                     {% if produto.estoque <= 0 %}
-                                        <span class="badge bg-danger">Sem Estoque</span>
+                                        <span class="text-danger">Sem Estoque</span>
                                     {% elif produto.estoque <= 5 %}
-                                        <span class="badge bg-warning">Estoque Baixo</span>
+                                        <span class="text-warning">Estoque Baixo</span>
                                     {% else %}
-                                        <span class="badge bg-success">Disponível</span>
+                                        <span class="text-success">Disponível</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -261,8 +261,8 @@
                                     <div class="alert alert-info d-flex align-items-center">
                                         <i class="fas fa-info-circle me-2"></i>
                                         <div>
-                                            <strong>Como funciona:</strong> 
-                                            Informe o <strong>custo</strong> e a <strong>margem desejada</strong>. 
+                                            Como funciona: 
+                                            Informe o custo e a margem desejada. 
                                             O preço de venda será calculado automaticamente.
                                             <br>
                                             <small class="text-muted">Exemplo: Custo R$ 20,00 + Margem 100% = Preço de Venda R$ 40,00</small>
@@ -319,7 +319,7 @@
                             
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle"></i>
-                                <strong>Dicas para foto da peça:</strong>
+                                Dicas para foto da peça:
                                 <ul class="mb-0 mt-2">
                                     <li>Use boa iluminação para destacar os detalhes</li>
                                     <li>Fotografe a peça de diferentes ângulos se necessário</li>

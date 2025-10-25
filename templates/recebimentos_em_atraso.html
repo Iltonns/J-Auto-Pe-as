@@ -118,16 +118,24 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-success" 
-                                            onclick="marcarComoRecebido({{ recebimento.id }}, '{{ recebimento.descricao }}')">
-                                        <i class="fas fa-check"></i> Receber
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="enviarCobranca('{{ recebimento.cliente_nome }}', {{ recebimento.valor }}, {{ recebimento.dias_atraso }})">
-                                        <i class="fas fa-phone"></i> Cobrar
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-info" 
-                                            onclick="verDetalhes({{ recebimento.id }}, '{{ recebimento.cliente_nome }}', '{{ recebimento.descricao }}', {{ recebimento.valor }}, '{{ recebimento.data_vencimento }}', {{ recebimento.dias_atraso }}, '{{ recebimento.observacoes or '' }}')">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-sm btn-success" 
+                                                onclick="marcarComoRecebido({{ recebimento.id }}, '{{ recebimento.descricao }}')">
+                                            <i class="fas fa-check"></i> Receber
+                                        </button>
+                                        <form method="POST" action="{{ url_for('sincronizar_conta_receber_individual', conta_id=recebimento.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-warning" title="Sincronizar com Financeiro">
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    <div class="btn-group btn-group-sm mt-1">
+                                        <button class="btn btn-sm btn-outline-primary" 
+                                                onclick="enviarCobranca('{{ recebimento.cliente_nome }}', {{ recebimento.valor }}, {{ recebimento.dias_atraso }})">
+                                            <i class="fas fa-phone"></i> Cobrar
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="verDetalhes({{ recebimento.id }}, '{{ recebimento.cliente_nome }}', '{{ recebimento.descricao }}', {{ recebimento.valor }}, '{{ recebimento.data_vencimento }}', {{ recebimento.dias_atraso }}, '{{ recebimento.observacoes or '' }}')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     {% if recebimento.dias_atraso > 30 %}

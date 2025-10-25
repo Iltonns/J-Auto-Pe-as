@@ -1,114 +1,302 @@
 {% extends "base.html" %}
 
-{% block title %}Contas a Receber Hoje - Sistema de Autopeças{% endblock %}
-{% block page_title %}Contas a Receber - {{ hoje.strftime('%d/%m/%Y') if hoje else 'Hoje' }}{% endblock %}
+{% block title %}Contas a Receber - Sistema de Autopeças{% endblock %}
+{% block page_title %}Gestão de Contas a Receber{% endblock %}
+
+{% block head %}
+<style>
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-danger { background-color: #dc3545; }
+.status-warning { background-color: #ffc107; }
+.status-success { background-color: #198754; }
+
+.card-stats {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card-stats:hover {
+    transform: translateY(-5px);
+}
+
+.filter-pills .nav-link {
+    border-radius: 20px;
+    margin-right: 8px;
+    font-weight: 500;
+}
+
+.filter-pills .nav-link.active {
+    background: linear-gradient(45deg, #28a745, #20c997);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(40, 167, 69, 0.05);
+}
+
+.badge-prazo {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-hand-holding-usd"></i> 
-                    Contas a Receber com Vencimento Hoje
-                    {% if contas %}
-                        <span class="badge bg-info ms-2">{{ contas|length }}</span>
-                    {% endif %}
-                </h5>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaConta">
-                    <i class="fas fa-plus"></i> Nova Conta
-                </button>
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-2">
+                        <i class="fas fa-hand-holding-usd text-success me-2"></i>
+                        Contas a Receber
+                    </h1>
+                    <p class="text-muted mb-0">Gestão completa dos seus recebíveis</p>
+                </div>
+                <div>
+                    <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta">
+                        <i class="fas fa-plus me-2"></i>Nova Conta
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="window.print()">
+                        <i class="fas fa-print me-2"></i>Imprimir
+                    </button>
+                </div>
             </div>
-            <div class="card-body">
-                {% if contas %}
-                <!-- Resumo -->
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <div class="card bg-info text-white">
-                            <div class="card-body text-center">
-                                <h4>{{ contas|length }}</h4>
-                                <small>Contas Pendentes</small>
-                            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">
+                        <i class="fas fa-filter me-2"></i>Filtros de Período
+                    </h6>
+                    
+                    <ul class="nav nav-pills filter-pills mb-3">
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'hoje' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='hoje') }}">
+                                <i class="fas fa-calendar-day me-1"></i>Hoje
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'atrasadas' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='atrasadas') }}">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Atrasadas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'proximos_7_dias' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_7_dias') }}">
+                                <i class="fas fa-calendar-week me-1"></i>Próximos 7 dias
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'proximos_30_dias' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='proximos_30_dias') }}">
+                                <i class="fas fa-calendar-alt me-1"></i>Próximos 30 dias
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'futuras' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='futuras') }}">
+                                <i class="fas fa-clock me-1"></i>Futuras
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if filtro_atual == 'todos' else '' }}" 
+                               href="{{ url_for('contas_a_receber_hoje', filtro='todos') }}">
+                                <i class="fas fa-list me-1"></i>Todas
+                            </a>
+                        </li>
+                    </ul>
+
+                    <!-- Filtro Personalizado -->
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Data Início</label>
+                            <input type="date" class="form-control" id="data_inicio">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Data Fim</label>
+                            <input type="date" class="form-control" id="data_fim">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-outline-success" onclick="aplicarFiltroPersonalizado()">
+                                <i class="fas fa-search me-2"></i>Filtrar
+                            </button>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card bg-success text-white">
-                            <div class="card-body text-center">
-                                <h4>R$ {{ "%.2f"|format(contas|sum(attribute='valor')) }}</h4>
-                                <small>Total a Receber</small>
-                            </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm card-stats h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex justify-content-center align-items-center mb-2">
+                        <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-list-ol text-info fa-2x"></i>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card bg-primary text-white">
-                            <div class="card-body text-center">
-                                <h4>R$ {{ "%.2f"|format((contas|sum(attribute='valor')) / (contas|length)) }}</h4>
-                                <small>Valor Médio</small>
-                            </div>
+                    <h3 class="mb-1">{{ estatisticas.total_contas }}</h3>
+                    <p class="text-muted mb-0">Total de Contas</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm card-stats h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex justify-content-center align-items-center mb-2">
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-money-bill-wave text-success fa-2x"></i>
                         </div>
                     </div>
+                    <h3 class="mb-1 text-success">R$ {{ "%.2f"|format(estatisticas.total_valor) }}</h3>
+                    <p class="text-muted mb-0">Total a Receber</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm card-stats h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex justify-content-center align-items-center mb-2">
+                        <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-exclamation-triangle text-warning fa-2x"></i>
+                        </div>
+                    </div>
+                    <h3 class="mb-1 text-warning">{{ estatisticas.atrasadas }}</h3>
+                    <p class="text-muted mb-0">Contas Atrasadas</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm card-stats h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex justify-content-center align-items-center mb-2">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-chart-line text-primary fa-2x"></i>
+                        </div>
+                    </div>
+                    <h3 class="mb-1 text-primary">R$ {{ "%.2f"|format(estatisticas.valor_medio) }}</h3>
+                    <p class="text-muted mb-0">Valor Médio</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Contas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table me-2"></i>Lista de Contas
+                        {% if contas %}
+                            <span class="badge bg-success ms-2">{{ contas|length }} item(s)</span>
+                        {% endif %}
+                    </h6>
                 </div>
                 
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Cliente</th>
-                                <th>Descrição</th>
-                                <th>Valor</th>
-                                <th>Vencimento</th>
-                                <th>Status</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for conta in contas %}
-                            <tr>
-                                <td>{{ conta.cliente_nome }}</td>
-                                <td>{{ conta.descricao }}</td>
-                                <td>
-                                    <strong class="text-success">R$ {{ "%.2f"|format(conta.valor) }}</strong>
-                                </td>
-                                <td>
-                                    <span class="badge bg-info">{{ conta.data_vencimento }}</span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-status status-{{ conta.status }}">
-                                        {% if conta.status == 'pendente' %}
-                                            Pendente
-                                        {% elif conta.status == 'recebido' %}
-                                            Recebido
-                                        {% else %}
-                                            {{ conta.status.title() }}
+                {% if contas %}
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">Status</th>
+                                    <th class="border-0">Cliente</th>
+                                    <th class="border-0">Descrição</th>
+                                    <th class="border-0 text-end">Valor</th>
+                                    <th class="border-0">Vencimento</th>
+                                    <th class="border-0">Prazo</th>
+                                    <th class="border-0 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for conta in contas %}
+                                <tr>
+                                    <td>
+                                        <span class="status-indicator status-{{ conta.status_visual }}"></span>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">{{ conta.cliente_nome }}</div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">{{ conta.descricao }}</div>
+                                        {% if conta.observacoes %}
+                                        <small class="text-muted">{{ conta.observacoes }}</small>
                                         {% endif %}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if conta.status == 'pendente' %}
-                                    <button class="btn btn-sm btn-success" 
-                                            onclick="marcarComoRecebido({{ conta.id }}, '{{ conta.descricao }}')">
-                                        <i class="fas fa-check"></i> Receber
-                                    </button>
-                                    {% endif %}
-                                    <button class="btn btn-sm btn-outline-info" 
-                                            onclick="verDetalhes({{ conta.id }}, '{{ conta.cliente_nome }}', '{{ conta.descricao }}', {{ conta.valor }}, '{{ conta.data_vencimento }}', '{{ conta.observacoes or '' }}')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="enviarLembrete('{{ conta.cliente_nome }}', {{ conta.valor }})">
-                                        <i class="fas fa-bell"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="fw-bold text-success">R$ {{ "%.2f"|format(conta.valor) }}</span>
+                                    </td>
+                                    <td>
+                                        {% set data_str = conta.data_vencimento|string %}
+                                        <span class="fw-semibold">{{ data_str[:10] }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-prazo bg-{{ conta.status_visual }}">
+                                            {{ conta.texto_prazo }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-success" 
+                                                    onclick="confirmarRecebimento({{ conta.id }})"
+                                                    title="Marcar como Recebido">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="editarConta({{ conta.id }})"
+                                                    title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="verDetalhes({{ conta.id }})"
+                                                    title="Ver Detalhes">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-smile fa-3x text-success mb-3"></i>
-                    <h5 class="text-success">Nenhuma conta a receber hoje</h5>
-                    <p class="text-muted">Todas as contas do dia já foram recebidas ou não há vencimentos para hoje.</p>
+                <div class="card-body text-center py-5">
+                    <div class="mb-4">
+                        <i class="fas fa-inbox fa-4x text-muted"></i>
+                    </div>
+                    <h5 class="text-muted">Nenhuma conta encontrada</h5>
+                    <p class="text-muted mb-4">
+                        {% if filtro_atual == 'hoje' %}
+                            Não há contas com vencimento hoje.
+                        {% elif filtro_atual == 'atrasadas' %}
+                            Não há contas em atraso.
+                        {% else %}
+                            Não há contas para o período selecionado.
+                        {% endif %}
+                    </p>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovaConta">
+                        <i class="fas fa-plus me-2"></i>Adicionar Nova Conta
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -120,19 +308,42 @@
 <div class="modal fade" id="modalNovaConta" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-plus"></i> Nova Conta a Receber
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="{{ url_for('adicionar_conta_receber') }}">
+            <form method="POST" action="{{ url_for('adicionar_conta_receber_route') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2"></i>Nova Conta a Receber
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
+                                <label for="descricao" class="form-label">Descrição *</label>
+                                <input type="text" class="form-control" id="descricao" name="descricao" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="valor" class="form-label">Valor *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="number" class="form-control" id="valor" name="valor" step="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="data_vencimento" class="form-label">Data de Vencimento *</label>
+                                <input type="date" class="form-control" id="data_vencimento" name="data_vencimento" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
                                 <label for="cliente_id" class="form-label">Cliente</label>
-                                <select class="form-control" id="cliente_id" name="cliente_id">
+                                <select class="form-select" id="cliente_id" name="cliente_id">
                                     <option value="">Selecione um cliente</option>
                                     {% for cliente in clientes %}
                                     <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
@@ -140,33 +351,16 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="valor" class="form-label">Valor (R$) *</label>
-                                <input type="number" class="form-control" id="valor" name="valor" step="0.01" min="0" required>
-                            </div>
-                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="descricao" class="form-label">Descrição *</label>
-                        <input type="text" class="form-control" id="descricao" name="descricao" required placeholder="Ex: Venda a prazo, serviços prestados, etc.">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="data_vencimento" class="form-label">Data de Vencimento *</label>
-                        <input type="date" class="form-control" id="data_vencimento" name="data_vencimento" required>
-                    </div>
-                    
                     <div class="mb-3">
                         <label for="observacoes" class="form-label">Observações</label>
-                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3" placeholder="Informações adicionais sobre a conta"></textarea>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Salvar Conta
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Salvar Conta
                     </button>
                 </div>
             </form>
@@ -174,79 +368,42 @@
     </div>
 </div>
 
-<!-- Modal Detalhes da Conta -->
-<div class="modal fade" id="modalDetalhes" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-eye"></i> Detalhes da Conta
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="detalhesConteudo">
-                <!-- Conteúdo será carregado via JavaScript -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% endblock %}
-
-{% block extra_js %}
 <script>
-function marcarComoRecebido(contaId, descricao) {
-    if (confirm(`Confirmar recebimento da conta "${descricao}"?`)) {
+function aplicarFiltroPersonalizado() {
+    const dataInicio = document.getElementById('data_inicio').value;
+    const dataFim = document.getElementById('data_fim').value;
+    
+    if (dataInicio && dataFim) {
+        window.location.href = `{{ url_for('contas_a_receber_hoje') }}?filtro=personalizado&data_inicio=${dataInicio}&data_fim=${dataFim}`;
+    } else {
+        alert('Por favor, selecione ambas as datas para aplicar o filtro personalizado.');
+    }
+}
+
+function confirmarRecebimento(contaId) {
+    if (confirm('Tem certeza que deseja marcar esta conta como recebida?')) {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/contas-receber/receber/${contaId}`;
-        
-        const inputData = document.createElement('input');
-        inputData.type = 'hidden';
-        inputData.name = 'data_recebimento';
-        inputData.value = new Date().toISOString().split('T')[0];
-        
-        form.appendChild(inputData);
         document.body.appendChild(form);
         form.submit();
     }
 }
 
-function verDetalhes(id, cliente, descricao, valor, vencimento, observacoes) {
-    const conteudo = `
-        <div class="row">
-            <div class="col-12">
-                <p><strong>Cliente:</strong> ${cliente}</p>
-                <p><strong>Descrição:</strong> ${descricao}</p>
-                <p><strong>Valor:</strong> <span class="text-success">R$ ${valor.toFixed(2)}</span></p>
-                <p><strong>Vencimento:</strong> ${vencimento}</p>
-                ${observacoes ? `<p><strong>Observações:</strong> ${observacoes}</p>` : ''}
-            </div>
-        </div>
-    `;
-    
-    $('#detalhesConteudo').html(conteudo);
-    $('#modalDetalhes').modal('show');
+function editarConta(contaId) {
+    // Implementar modal de edição
+    alert('Funcionalidade de edição em desenvolvimento');
 }
 
-function enviarLembrete(cliente, valor) {
-    // Simular envio de lembrete
-    alert(`Lembrete enviado para ${cliente} sobre a conta de R$ ${valor.toFixed(2)}`);
-    
-    // Aqui você poderia implementar:
-    // - Envio de WhatsApp
-    // - Envio de email
-    // - SMS
-    // - Notificação push
+function verDetalhes(contaId) {
+    // Implementar modal de detalhes
+    alert('Funcionalidade de detalhes em desenvolvimento');
 }
 
-// Definir data padrão como hoje
-$(document).ready(function() {
-    const hoje = new Date().toISOString().split('T')[0];
-    $('#data_vencimento').val(hoje);
+// Definir data de hoje como padrão
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('data_vencimento').value = today;
 });
 </script>
 {% endblock %}

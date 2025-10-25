@@ -9,9 +9,28 @@
             <i class="fas fa-chart-line text-success me-2"></i>
             Módulo Financeiro
         </h1>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal">
-            <i class="fas fa-plus me-2"></i>Novo Lançamento
-        </button>
+        <div>
+            <form method="POST" action="{{ url_for('sincronizar_lancamentos_com_contas_route') }}" style="display: inline;">
+                <button type="submit" class="btn btn-info me-2" title="Cria automaticamente contas a pagar/receber a partir dos lançamentos financeiros">
+                    <i class="fas fa-magic me-2"></i>Auto-Criar Contas
+                </button>
+            </form>
+            <a href="{{ url_for('contas_nao_sincronizadas') }}" class="btn btn-warning me-2">
+                <i class="fas fa-sync-alt me-2"></i>Sincronizar Contas
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal">
+                <i class="fas fa-plus me-2"></i>Novo Lançamento
+            </button>
+        </div>
+    </div>
+
+    <!-- Alerta Informativo -->
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Nova Funcionalidade!</strong> Agora quando você criar um lançamento financeiro com data de vencimento, 
+        o sistema automaticamente criará a conta a pagar/receber correspondente. 
+        Use o botão <strong>"Auto-Criar Contas"</strong> para processar lançamentos existentes.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
     <!-- Cards de Resumo -->
@@ -98,10 +117,18 @@
                             <tbody>
                                 {% for receita in receitas %}
                                 <tr>
-                                    <td>{{ receita.data_lancamento[:10] }}</td>
+                                    <td>
+                                        {% if receita.data_lancamento %}
+                                            {% set data_str = receita.data_lancamento|string %}
+                                            {{ data_str[:10] }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if receita.data_vencimento %}
-                                            {{ receita.data_vencimento[:10] }}
+                                            {% set data_str = receita.data_vencimento|string %}
+                                            {{ data_str[:10] }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -123,11 +150,22 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" title="Editar">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="editarLancamento({{ receita.id }}, '{{ receita.categoria }}', '{{ receita.descricao }}', {{ receita.valor }}, '{{ receita.data_vencimento or '' }}', '{{ receita.fornecedor_cliente or '' }}', '{{ receita.numero_documento or '' }}', '{{ receita.observacoes or '' }}')"
+                                                    title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-outline-success" title="Marcar como Recebido">
+                                            {% if receita.status == 'pendente' %}
+                                            <button class="btn btn-outline-success" 
+                                                    onclick="marcarComoRecebido({{ receita.id }})"
+                                                    title="Marcar como Recebido">
                                                 <i class="fas fa-check"></i>
+                                            </button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="deletarLancamento({{ receita.id }}, 'receita')"
+                                                    title="Deletar">
+                                                <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -165,10 +203,18 @@
                             <tbody>
                                 {% for despesa in despesas %}
                                 <tr>
-                                    <td>{{ despesa.data_lancamento[:10] }}</td>
+                                    <td>
+                                        {% if despesa.data_lancamento %}
+                                            {% set data_str = despesa.data_lancamento|string %}
+                                            {{ data_str[:10] }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if despesa.data_vencimento %}
-                                            {{ despesa.data_vencimento[:10] }}
+                                            {% set data_str = despesa.data_vencimento|string %}
+                                            {{ data_str[:10] }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -190,11 +236,22 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" title="Editar">
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="editarLancamento({{ despesa.id }}, '{{ despesa.categoria }}', '{{ despesa.descricao }}', {{ despesa.valor }}, '{{ despesa.data_vencimento or '' }}', '{{ despesa.fornecedor_cliente or '' }}', '{{ despesa.numero_documento or '' }}', '{{ despesa.observacoes or '' }}')"
+                                                    title="Editar">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-outline-success" title="Marcar como Pago">
+                                            {% if despesa.status == 'pendente' %}
+                                            <button class="btn btn-outline-success" 
+                                                    onclick="marcarComoPago({{ despesa.id }})"
+                                                    title="Marcar como Pago">
                                                 <i class="fas fa-check"></i>
+                                            </button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="deletarLancamento({{ despesa.id }}, 'despesa')"
+                                                    title="Deletar">
+                                                <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -212,6 +269,132 @@
                     {% endif %}
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Lançamento -->
+<div class="modal fade" id="editarLancamentoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formEditarLancamento" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit me-2 text-primary"></i>
+                        Editar Lançamento Financeiro
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_categoria" class="form-label">Categoria *</label>
+                                <select class="form-select" id="edit_categoria" name="categoria" required>
+                                    <option value="">Selecione</option>
+                                    <option value="vendas">Vendas</option>
+                                    <option value="servicos">Serviços</option>
+                                    <option value="aluguel">Aluguel</option>
+                                    <option value="funcionarios">Funcionários</option>
+                                    <option value="fornecedores">Fornecedores</option>
+                                    <option value="impostos">Impostos</option>
+                                    <option value="marketing">Marketing</option>
+                                    <option value="outros">Outros</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_valor" class="form-label">Valor *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="number" class="form-control" id="edit_valor" name="valor" 
+                                           step="0.01" min="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_descricao" class="form-label">Descrição *</label>
+                        <input type="text" class="form-control" id="edit_descricao" name="descricao" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_data_vencimento" class="form-label">Data Vencimento</label>
+                                <input type="date" class="form-control" id="edit_data_vencimento" name="data_vencimento">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_fornecedor_cliente" class="form-label">Fornecedor/Cliente</label>
+                                <input type="text" class="form-control" id="edit_fornecedor_cliente" name="fornecedor_cliente">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_numero_documento" class="form-label">Nº Documento</label>
+                                <input type="text" class="form-control" id="edit_numero_documento" name="numero_documento">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Marcar como Pago/Recebido -->
+<div class="modal fade" id="marcarPagoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formMarcarPago" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-check me-2 text-success"></i>
+                        <span id="tituloMarcarPago">Marcar como Pago</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="forma_pagamento" class="form-label">Forma de Pagamento</label>
+                        <select class="form-select" id="forma_pagamento" name="forma_pagamento">
+                            <option value="">Selecione</option>
+                            <option value="dinheiro">Dinheiro</option>
+                            <option value="cartao_debito">Cartão de Débito</option>
+                            <option value="cartao_credito">Cartão de Crédito</option>
+                            <option value="pix">PIX</option>
+                            <option value="transferencia">Transferência</option>
+                            <option value="boleto">Boleto</option>
+                            <option value="outros">Outros</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_pagamento" class="form-label">Data do Pagamento</label>
+                        <input type="date" class="form-control" id="data_pagamento" name="data_pagamento">
+                    </div>
+                    <input type="hidden" name="status" value="pago">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-2"></i><span id="textoConfirmar">Confirmar Pagamento</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -321,6 +504,69 @@
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('data_lancamento').value = today;
+    document.getElementById('data_pagamento').value = today;
 });
+
+// Função para editar lançamento
+function editarLancamento(id, categoria, descricao, valor, dataVencimento, fornecedorCliente, numeroDocumento, observacoes) {
+    // Preencher o formulário de edição
+    document.getElementById('edit_categoria').value = categoria;
+    document.getElementById('edit_descricao').value = descricao;
+    document.getElementById('edit_valor').value = valor;
+    document.getElementById('edit_data_vencimento').value = dataVencimento;
+    document.getElementById('edit_fornecedor_cliente').value = fornecedorCliente;
+    document.getElementById('edit_numero_documento').value = numeroDocumento;
+    document.getElementById('edit_observacoes').value = observacoes;
+    
+    // Definir a action do formulário
+    document.getElementById('formEditarLancamento').action = `/financeiro/lancamento/${id}/editar`;
+    
+    // Abrir o modal
+    const modal = new bootstrap.Modal(document.getElementById('editarLancamentoModal'));
+    modal.show();
+}
+
+// Função para marcar como recebido
+function marcarComoRecebido(id) {
+    document.getElementById('tituloMarcarPago').textContent = 'Marcar como Recebido';
+    document.getElementById('textoConfirmar').textContent = 'Confirmar Recebimento';
+    document.getElementById('formMarcarPago').action = `/financeiro/lancamento/${id}/status`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('marcarPagoModal'));
+    modal.show();
+}
+
+// Função para marcar como pago
+function marcarComoPago(id) {
+    document.getElementById('tituloMarcarPago').textContent = 'Marcar como Pago';
+    document.getElementById('textoConfirmar').textContent = 'Confirmar Pagamento';
+    document.getElementById('formMarcarPago').action = `/financeiro/lancamento/${id}/status`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('marcarPagoModal'));
+    modal.show();
+}
+
+// Função para deletar lançamento
+function deletarLancamento(id, tipo) {
+    const tipoTexto = tipo === 'receita' ? 'receita' : 'despesa';
+    if (confirm(`Tem certeza que deseja deletar esta ${tipoTexto}? Esta ação não pode ser desfeita.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/financeiro/lancamento/${id}/deletar`;
+        
+        // Adicionar token CSRF se necessário
+        const csrfToken = document.querySelector('meta[name=csrf-token]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.getAttribute('content');
+            form.appendChild(csrfInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 </script>
 {% endblock %}

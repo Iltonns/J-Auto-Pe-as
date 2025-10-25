@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Contas Não Sincronizadas - Sistema Autopeças{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-sync-alt text-warning me-2"></i>
+            Contas Não Sincronizadas
+        </h1>
+        <div>
+            <a href="{{ url_for('financeiro') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-arrow-left me-2"></i>Voltar ao Financeiro
+            </a>
+            <form method="POST" action="{{ url_for('sincronizar_todas_contas') }}" style="display: inline;">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Deseja sincronizar todas as contas pendentes?')">
+                    <i class="fas fa-sync me-2"></i>Sincronizar Todas
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-file-invoice-dollar me-2"></i>
+                        Contas a Pagar Não Sincronizadas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="text-danger mb-0">{{ contas_pagar|length }}</h4>
+                            <small class="text-muted">conta(s) pendente(s)</small>
+                        </div>
+                        {% if contas_pagar %}
+                        <div>
+                            <h5 class="text-danger mb-0">
+                                R$ {{ "%.2f"|format(contas_pagar|sum(attribute='valor')) }}
+                            </h5>
+                            <small class="text-muted">Total</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-hand-holding-usd me-2"></i>
+                        Contas a Receber Não Sincronizadas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="text-success mb-0">{{ contas_receber|length }}</h4>
+                            <small class="text-muted">conta(s) pendente(s)</small>
+                        </div>
+                        {% if contas_receber %}
+                        <div>
+                            <h5 class="text-success mb-0">
+                                R$ {{ "%.2f"|format(contas_receber|sum(attribute='valor')) }}
+                            </h5>
+                            <small class="text-muted">Total</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="pagar-tab" data-bs-toggle="tab" href="#contas-pagar">
+                        <i class="fas fa-file-invoice-dollar text-danger me-2"></i>
+                        Contas a Pagar ({{ contas_pagar|length }})
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="receber-tab" data-bs-toggle="tab" href="#contas-receber">
+                        <i class="fas fa-hand-holding-usd text-success me-2"></i>
+                        Contas a Receber ({{ contas_receber|length }})
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content">
+                <!-- Tab Contas a Pagar -->
+                <div class="tab-pane fade show active" id="contas-pagar">
+                    {% if contas_pagar %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Informação:</strong> Estas contas a pagar ainda não foram sincronizadas com o módulo financeiro. 
+                        Sincronize-as para evitar lançamentos duplicados.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fornecedor</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for conta in contas_pagar %}
+                                <tr>
+                                    <td>{{ conta.fornecedor_nome }}</td>
+                                    <td>{{ conta.descricao }}</td>
+                                    <td>
+                                        <span class="text-danger fw-bold">R$ {{ "%.2f"|format(conta.valor) }}</span>
+                                    </td>
+                                    <td>{{ conta.data_vencimento }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('sincronizar_conta_pagar_individual', conta_id=conta.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-warning" title="Sincronizar com Financeiro">
+                                                <i class="fas fa-sync"></i> Sincronizar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <h5 class="text-success">Todas as contas a pagar estão sincronizadas!</h5>
+                        <p class="text-muted">Não há contas a pagar pendentes de sincronização.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Tab Contas a Receber -->
+                <div class="tab-pane fade" id="contas-receber">
+                    {% if contas_receber %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Informação:</strong> Estas contas a receber ainda não foram sincronizadas com o módulo financeiro. 
+                        Sincronize-as para evitar lançamentos duplicados.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for conta in contas_receber %}
+                                <tr>
+                                    <td>{{ conta.cliente_nome }}</td>
+                                    <td>{{ conta.descricao }}</td>
+                                    <td>
+                                        <span class="text-success fw-bold">R$ {{ "%.2f"|format(conta.valor) }}</span>
+                                    </td>
+                                    <td>{{ conta.data_vencimento }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('sincronizar_conta_receber_individual', conta_id=conta.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-warning" title="Sincronizar com Financeiro">
+                                                <i class="fas fa-sync"></i> Sincronizar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <h5 class="text-success">Todas as contas a receber estão sincronizadas!</h5>
+                        <p class="text-muted">Não há contas a receber pendentes de sincronização.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.nav-tabs .nav-link {
+    border: 1px solid transparent;
+    border-top-left-radius: 0.25rem;
+    border-top-right-radius: 0.25rem;
+}
+
+.nav-tabs .nav-link.active {
+    color: #495057;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.btn-warning {
+    color: #212529;
+}
+</style>
+{% endblock %}

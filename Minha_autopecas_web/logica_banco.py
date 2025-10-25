@@ -160,6 +160,12 @@ def init_db():
     except:
         pass
     
+    # Adicionar coluna para fornecedor na tabela contas_pagar se não existir
+    try:
+        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN fornecedor_id INTEGER")
+    except:
+        pass
+    
     # Tabela de vendas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vendas (
@@ -201,7 +207,11 @@ def init_db():
             status TEXT DEFAULT 'pendente',
             categoria TEXT,
             observacoes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            fornecedor_id INTEGER,
+            lancamento_financeiro_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (fornecedor_id) REFERENCES fornecedores (id),
+            FOREIGN KEY (lancamento_financeiro_id) REFERENCES lancamentos_financeiros (id)
         )
     ''')
     
@@ -296,7 +306,7 @@ def init_db():
         )
     ''')
     
-    # Tabela de despesas e receitas extras (não relacionadas a vendas)
+    # Tabela de lançamentos financeiros - adicionar colunas de referência
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS lancamentos_financeiros (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -313,7 +323,11 @@ def init_db():
             fornecedor_cliente TEXT,
             usuario_id INTEGER NOT NULL,
             observacoes TEXT,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+            conta_pagar_id INTEGER,
+            conta_receber_id INTEGER,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
+            FOREIGN KEY (conta_pagar_id) REFERENCES contas_pagar (id),
+            FOREIGN KEY (conta_receber_id) REFERENCES contas_receber (id)
         )
     ''')
     
@@ -362,6 +376,24 @@ def init_db():
             INSERT INTO configuracoes_empresa (nome_empresa, endereco, telefone, email)
             VALUES (?, ?, ?, ?)
         ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
+    
+    # Adicionar colunas para sincronização financeira se não existirem
+    try:
+        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN fornecedor_id INTEGER")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN lancamento_financeiro_id INTEGER")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE lancamentos_financeiros ADD COLUMN conta_pagar_id INTEGER")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE lancamentos_financeiros ADD COLUMN conta_receber_id INTEGER")
+    except:
+        pass
     
     conn.commit()
     conn.close()
@@ -991,12 +1023,23 @@ def listar_movimentacoes_caixa(limit=50):
     conn.close()
     return movimentacoes
 
-def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes=""):
-    """Cria um lançamento financeiro (receita ou despesa)"""
+def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", auto_criar_conta=True):
+    """Cria um lançamento financeiro (receita ou despesa) e automaticamente cria a conta correspondente"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
+        # Verificar se já existe lançamento similar para evitar duplicatas
+        cursor.execute('''
+            SELECT id FROM lancamentos_financeiros 
+            WHERE tipo = ? AND descricao = ? AND valor = ? AND data_lancamento = ? AND status = 'pendente'
+        ''', (tipo, descricao, valor, data_lancamento))
+        
+        lancamento_existente = cursor.fetchone()
+        if lancamento_existente:
+            return False, f"Já existe um lançamento similar pendente (ID: {lancamento_existente[0]})"
+        
+        # Criar o lançamento financeiro
         cursor.execute('''
             INSERT INTO lancamentos_financeiros (
                 tipo, categoria, descricao, valor, data_lancamento, 
@@ -1007,9 +1050,72 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
         
         lancamento_id = cursor.lastrowid
         conn.commit()
-        return True, f"Lançamento criado com sucesso. ID: {lancamento_id}"
+        
+        # Automaticamente criar conta correspondente se solicitado e há data de vencimento
+        if auto_criar_conta and data_vencimento:
+            try:
+                if tipo == 'despesa':
+                    # Buscar fornecedor pelo nome se informado
+                    fornecedor_id = None
+                    if fornecedor_cliente:
+                        cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        fornecedor_result = cursor.fetchone()
+                        if fornecedor_result:
+                            fornecedor_id = fornecedor_result[0]
+                    
+                    # Criar conta a pagar
+                    cursor.execute('''
+                        INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
+                    
+                    conta_id = cursor.lastrowid
+                    
+                    # Atualizar lançamento com referência à conta
+                    cursor.execute('''
+                        UPDATE lancamentos_financeiros 
+                        SET conta_pagar_id = ?
+                        WHERE id = ?
+                    ''', (conta_id, lancamento_id))
+                    
+                    conn.commit()
+                    return True, f"Lançamento criado (ID: {lancamento_id}) e conta a pagar criada automaticamente (ID: {conta_id})"
+                
+                elif tipo == 'receita':
+                    # Buscar cliente pelo nome se informado
+                    cliente_id = None
+                    if fornecedor_cliente:
+                        cursor.execute('SELECT id FROM clientes WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        cliente_result = cursor.fetchone()
+                        if cliente_result:
+                            cliente_id = cliente_result[0]
+                    
+                    # Criar conta a receber
+                    cursor.execute('''
+                        INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+                    
+                    conta_id = cursor.lastrowid
+                    
+                    # Atualizar lançamento com referência à conta
+                    cursor.execute('''
+                        UPDATE lancamentos_financeiros 
+                        SET conta_receber_id = ?
+                        WHERE id = ?
+                    ''', (conta_id, lancamento_id))
+                    
+                    conn.commit()
+                    return True, f"Lançamento criado (ID: {lancamento_id}) e conta a receber criada automaticamente (ID: {conta_id})"
+                
+            except Exception as e_conta:
+                # Se falhar na criação da conta, o lançamento ainda existe
+                return True, f"Lançamento criado (ID: {lancamento_id}), mas erro ao criar conta: {str(e_conta)}"
+        
+        return True, f"Lançamento criado com sucesso (ID: {lancamento_id})"
         
     except Exception as e:
+        conn.rollback()
         return False, f"Erro ao criar lançamento: {str(e)}"
     finally:
         conn.close()
@@ -1020,7 +1126,12 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
     cursor = conn.cursor()
     
     query = '''
-        SELECT lf.*, u.nome_completo, u.username
+        SELECT lf.id, lf.tipo, lf.categoria, lf.descricao, lf.valor, 
+               lf.data_lancamento, lf.data_vencimento, lf.data_pagamento, 
+               lf.status, lf.forma_pagamento, lf.numero_documento, 
+               lf.fornecedor_cliente, lf.usuario_id, lf.observacoes,
+               lf.conta_pagar_id, lf.conta_receber_id,
+               u.nome_completo, u.username
         FROM lancamentos_financeiros lf
         JOIN usuarios u ON lf.usuario_id = u.id
         WHERE 1=1
@@ -1056,7 +1167,9 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
             'fornecedor_cliente': row[11],
             'usuario_id': row[12],
             'observacoes': row[13],
-            'usuario_nome': row[14] if row[14] else row[15]
+            'conta_pagar_id': row[14],
+            'conta_receber_id': row[15],
+            'usuario_nome': row[16] if row[16] else row[17]
         })
     
     conn.close()
@@ -1684,10 +1797,12 @@ def listar_contas_pagar_hoje():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, descricao, valor, data_vencimento, status, categoria
-        FROM contas_pagar
-        WHERE date(data_vencimento) = date('now') AND status = 'pendente'
-        ORDER BY valor DESC
+        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
+               f.nome as fornecedor_nome
+        FROM contas_pagar cp
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        WHERE date(cp.data_vencimento) = date('now') AND cp.status = 'pendente'
+        ORDER BY cp.valor DESC
     ''')
     
     contas = []
@@ -1698,7 +1813,9 @@ def listar_contas_pagar_hoje():
             'valor': row[2],
             'data_vencimento': row[3],
             'status': row[4],
-            'categoria': row[5]
+            'categoria': row[5],
+            'observacoes': row[6],
+            'fornecedor_nome': row[7] or 'Sem fornecedor'
         })
     
     conn.close()
@@ -1710,10 +1827,13 @@ def listar_contas_pagar_em_atraso():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, descricao, valor, data_vencimento, status, categoria
-        FROM contas_pagar
-        WHERE date(data_vencimento) < date('now') AND status = 'pendente'
-        ORDER BY data_vencimento
+        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
+               f.nome as fornecedor_nome,
+               julianday('now') - julianday(cp.data_vencimento) as dias_atraso
+        FROM contas_pagar cp
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        WHERE date(cp.data_vencimento) < date('now') AND cp.status = 'pendente'
+        ORDER BY cp.data_vencimento
     ''')
     
     contas = []
@@ -1724,26 +1844,116 @@ def listar_contas_pagar_em_atraso():
             'valor': row[2],
             'data_vencimento': row[3],
             'status': row[4],
-            'categoria': row[5]
+            'categoria': row[5],
+            'observacoes': row[6],
+            'fornecedor_nome': row[7] or 'Sem fornecedor',
+            'dias_atraso': int(row[8]) if row[8] else 0
         })
     
     conn.close()
     return contas
 
-def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, observacoes=None):
+def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None):
+    """Lista contas a pagar com filtros de período"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    base_query = '''
+        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
+               f.nome as fornecedor_nome,
+               julianday(cp.data_vencimento) - julianday('now') as dias_restantes
+        FROM contas_pagar cp
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        WHERE cp.status = 'pendente'
+    '''
+    
+    params = []
+    
+    if filtro == 'hoje':
+        base_query += " AND date(cp.data_vencimento) = date('now')"
+    elif filtro == 'atrasadas':
+        base_query += " AND date(cp.data_vencimento) < date('now')"
+    elif filtro == 'futuras':
+        base_query += " AND date(cp.data_vencimento) > date('now')"
+    elif filtro == 'proximos_7_dias':
+        base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+7 days')"
+    elif filtro == 'proximos_30_dias':
+        base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
+    elif filtro == 'personalizado' and data_inicio and data_fim:
+        base_query += " AND date(cp.data_vencimento) BETWEEN ? AND ?"
+        params = [data_inicio, data_fim]
+    
+    base_query += " ORDER BY cp.data_vencimento"
+    
+    cursor.execute(base_query, params)
+    
+    contas = []
+    for row in cursor.fetchall():
+        dias_restantes = int(row[8]) if row[8] else 0
+        status_visual = 'danger' if dias_restantes < 0 else ('warning' if dias_restantes <= 7 else 'success')
+        
+        contas.append({
+            'id': row[0],
+            'descricao': row[1],
+            'valor': row[2],
+            'data_vencimento': row[3],
+            'status': row[4],
+            'categoria': row[5],
+            'observacoes': row[6],
+            'fornecedor_nome': row[7] or 'Sem fornecedor',
+            'dias_restantes': dias_restantes,
+            'status_visual': status_visual,
+            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}"
+        })
+    
+    conn.close()
+    return contas
+
+def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None, auto_sincronizar=True):
     """Adiciona uma nova conta a pagar"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-        INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (descricao, valor, data_vencimento, categoria, observacoes))
-    
-    conta_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return conta_id
+    try:
+        # Verificar se já existe conta similar para evitar duplicatas
+        cursor.execute('''
+            SELECT id FROM contas_pagar 
+            WHERE descricao = ? AND valor = ? AND data_vencimento = ? AND status = 'pendente'
+        ''', (descricao, valor, data_vencimento))
+        
+        conta_existente = cursor.fetchone()
+        if conta_existente:
+            conn.close()
+            return False, f"Já existe uma conta similar pendente (ID: {conta_existente[0]})"
+        
+        cursor.execute('''
+            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
+        
+        conta_id = cursor.lastrowid
+        conn.commit()
+        
+        # Auto-sincronizar com módulo financeiro se solicitado
+        if auto_sincronizar:
+            try:
+                conn.close()
+                # Reabrir conexão para sincronização
+                sucesso_sync, msg_sync = sincronizar_conta_pagar_com_financeiro(conta_id, 1)  # Usuario admin temporário
+                if sucesso_sync:
+                    return True, f"Conta criada e sincronizada com sucesso (ID: {conta_id})"
+                else:
+                    return True, f"Conta criada (ID: {conta_id}), mas falha na sincronização: {msg_sync}"
+            except Exception as e:
+                return True, f"Conta criada (ID: {conta_id}), mas erro na sincronização: {str(e)}"
+        else:
+            conn.close()
+            return True, f"Conta criada com sucesso (ID: {conta_id})"
+            
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao criar conta: {str(e)}"
 
 def pagar_conta(conta_id, data_pagamento=None):
     """Marca uma conta como paga"""
@@ -1796,7 +2006,8 @@ def listar_contas_receber_em_atraso():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome
+        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
+               julianday('now') - julianday(cr.data_vencimento) as dias_atraso
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
         WHERE date(cr.data_vencimento) < date('now') AND cr.status = 'pendente'
@@ -1811,7 +2022,61 @@ def listar_contas_receber_em_atraso():
             'valor': row[2],
             'data_vencimento': row[3],
             'status': row[4],
-            'cliente': row[5]
+            'cliente_nome': row[5] or 'Cliente não informado',
+            'dias_atraso': int(row[6]) if row[6] else 0
+        })
+    
+    conn.close()
+    return contas
+
+def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None):
+    """Lista contas a receber com filtros de período"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    base_query = '''
+        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
+               julianday(cr.data_vencimento) - julianday('now') as dias_restantes
+        FROM contas_receber cr
+        LEFT JOIN clientes c ON cr.cliente_id = c.id
+        WHERE cr.status = 'pendente'
+    '''
+    
+    params = []
+    
+    if filtro == 'hoje':
+        base_query += " AND date(cr.data_vencimento) = date('now')"
+    elif filtro == 'atrasadas':
+        base_query += " AND date(cr.data_vencimento) < date('now')"
+    elif filtro == 'futuras':
+        base_query += " AND date(cr.data_vencimento) > date('now')"
+    elif filtro == 'proximos_7_dias':
+        base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+7 days')"
+    elif filtro == 'proximos_30_dias':
+        base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
+    elif filtro == 'personalizado' and data_inicio and data_fim:
+        base_query += " AND date(cr.data_vencimento) BETWEEN ? AND ?"
+        params = [data_inicio, data_fim]
+    
+    base_query += " ORDER BY cr.data_vencimento"
+    
+    cursor.execute(base_query, params)
+    
+    contas = []
+    for row in cursor.fetchall():
+        dias_restantes = int(row[6]) if row[6] else 0
+        status_visual = 'danger' if dias_restantes < 0 else ('warning' if dias_restantes <= 7 else 'success')
+        
+        contas.append({
+            'id': row[0],
+            'descricao': row[1],
+            'valor': row[2],
+            'data_vencimento': row[3],
+            'status': row[4],
+            'cliente_nome': row[5] or 'Cliente não informado',
+            'dias_restantes': dias_restantes,
+            'status_visual': status_visual,
+            'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}"
         })
     
     conn.close()
@@ -1834,20 +2099,51 @@ def receber_conta(conta_id, data_recebimento=None):
     conn.commit()
     conn.close()
 
-def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None):
+def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None, auto_sincronizar=True):
     """Adiciona uma nova conta a receber"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-        INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
-    
-    conta_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return conta_id
+    try:
+        # Verificar se já existe conta similar para evitar duplicatas
+        cursor.execute('''
+            SELECT id FROM contas_receber 
+            WHERE descricao = ? AND valor = ? AND data_vencimento = ? AND status = 'pendente'
+        ''', (descricao, valor, data_vencimento))
+        
+        conta_existente = cursor.fetchone()
+        if conta_existente:
+            conn.close()
+            return False, f"Já existe uma conta similar pendente (ID: {conta_existente[0]})"
+        
+        cursor.execute('''
+            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+        
+        conta_id = cursor.lastrowid
+        conn.commit()
+        
+        # Auto-sincronizar com módulo financeiro se solicitado
+        if auto_sincronizar:
+            try:
+                conn.close()
+                # Reabrir conexão para sincronização
+                sucesso_sync, msg_sync = sincronizar_conta_receber_com_financeiro(conta_id, 1)  # Usuario admin temporário
+                if sucesso_sync:
+                    return True, f"Conta criada e sincronizada com sucesso (ID: {conta_id})"
+                else:
+                    return True, f"Conta criada (ID: {conta_id}), mas falha na sincronização: {msg_sync}"
+            except Exception as e:
+                return True, f"Conta criada (ID: {conta_id}), mas erro na sincronização: {str(e)}"
+        else:
+            conn.close()
+            return True, f"Conta criada com sucesso (ID: {conta_id})"
+            
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao criar conta: {str(e)}"
 
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
@@ -3021,6 +3317,296 @@ def listar_produtos_por_fornecedor(fornecedor_id):
     finally:
         conn.close()
 
+def sincronizar_lancamentos_com_contas(usuario_id):
+    """Sincroniza lançamentos financeiros existentes criando as contas correspondentes"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    resultado = {"despesas": 0, "receitas": 0, "erros": []}
+    
+    try:
+        # Buscar lançamentos de despesa sem conta a pagar correspondente
+        cursor.execute('''
+            SELECT id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes
+            FROM lancamentos_financeiros 
+            WHERE tipo = 'despesa' AND conta_pagar_id IS NULL AND data_vencimento IS NOT NULL AND status = 'pendente'
+        ''')
+        
+        despesas = cursor.fetchall()
+        
+        for despesa in despesas:
+            lancamento_id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes = despesa
+            
+            try:
+                # Buscar fornecedor pelo nome se informado
+                fornecedor_id = None
+                if fornecedor_cliente:
+                    cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    fornecedor_result = cursor.fetchone()
+                    if fornecedor_result:
+                        fornecedor_id = fornecedor_result[0]
+                
+                # Criar conta a pagar
+                cursor.execute('''
+                    INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
+                
+                conta_id = cursor.lastrowid
+                
+                # Atualizar lançamento com referência à conta
+                cursor.execute('''
+                    UPDATE lancamentos_financeiros 
+                    SET conta_pagar_id = ?
+                    WHERE id = ?
+                ''', (conta_id, lancamento_id))
+                
+                resultado["despesas"] += 1
+                
+            except Exception as e:
+                resultado["erros"].append(f"Erro ao criar conta para lançamento {lancamento_id}: {str(e)}")
+        
+        # Buscar lançamentos de receita sem conta a receber correspondente
+        cursor.execute('''
+            SELECT id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes
+            FROM lancamentos_financeiros 
+            WHERE tipo = 'receita' AND conta_receber_id IS NULL AND data_vencimento IS NOT NULL AND status = 'pendente'
+        ''')
+        
+        receitas = cursor.fetchall()
+        
+        for receita in receitas:
+            lancamento_id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes = receita
+            
+            try:
+                # Buscar cliente pelo nome se informado
+                cliente_id = None
+                if fornecedor_cliente:
+                    cursor.execute('SELECT id FROM clientes WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    cliente_result = cursor.fetchone()
+                    if cliente_result:
+                        cliente_id = cliente_result[0]
+                
+                # Criar conta a receber
+                cursor.execute('''
+                    INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+                
+                conta_id = cursor.lastrowid
+                
+                # Atualizar lançamento com referência à conta
+                cursor.execute('''
+                    UPDATE lancamentos_financeiros 
+                    SET conta_receber_id = ?
+                    WHERE id = ?
+                ''', (conta_id, lancamento_id))
+                
+                resultado["receitas"] += 1
+                
+            except Exception as e:
+                resultado["erros"].append(f"Erro ao criar conta para lançamento {lancamento_id}: {str(e)}")
+        
+        conn.commit()
+        return True, resultado
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro geral na sincronização: {str(e)}"
+    finally:
+        conn.close()
+
+# FUNÇÕES DE SINCRONIZAÇÃO FINANCEIRA
+def sincronizar_conta_pagar_com_financeiro(conta_id, usuario_id):
+    """Sincroniza uma conta a pagar com o módulo financeiro"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da conta a pagar
+        cursor.execute('''
+            SELECT cp.*, f.nome as fornecedor_nome
+            FROM contas_pagar cp
+            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+            WHERE cp.id = ? AND cp.lancamento_financeiro_id IS NULL
+        ''', (conta_id,))
+        
+        conta = cursor.fetchone()
+        if not conta:
+            return False, "Conta não encontrada ou já sincronizada"
+        
+        # Criar lançamento financeiro correspondente
+        fornecedor_nome = conta[8] if conta[8] else "Fornecedor não informado"
+        cursor.execute('''
+            INSERT INTO lancamentos_financeiros (
+                tipo, categoria, descricao, valor, data_lancamento, data_vencimento,
+                fornecedor_cliente, usuario_id, observacoes, conta_pagar_id, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            'despesa', conta[6] or 'Geral', conta[1], conta[2], 
+            conta[9] or date.today().isoformat(), conta[3],
+            fornecedor_nome, usuario_id, conta[7], conta_id, conta[5]
+        ))
+        
+        lancamento_id = cursor.lastrowid
+        
+        # Atualizar conta a pagar com referência ao lançamento
+        cursor.execute('''
+            UPDATE contas_pagar 
+            SET lancamento_financeiro_id = ?
+            WHERE id = ?
+        ''', (lancamento_id, conta_id))
+        
+        conn.commit()
+        return True, f"Conta sincronizada com sucesso. Lançamento {lancamento_id} criado."
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao sincronizar conta: {str(e)}"
+    finally:
+        conn.close()
+
+def sincronizar_conta_receber_com_financeiro(conta_id, usuario_id):
+    """Sincroniza uma conta a receber com o módulo financeiro"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da conta a receber
+        cursor.execute('''
+            SELECT cr.*, c.nome as cliente_nome
+            FROM contas_receber cr
+            LEFT JOIN clientes c ON cr.cliente_id = c.id
+            WHERE cr.id = ?
+        ''', (conta_id,))
+        
+        conta = cursor.fetchone()
+        if not conta:
+            return False, "Conta não encontrada"
+        
+        # Verificar se já existe lançamento para esta conta
+        cursor.execute('''
+            SELECT id FROM lancamentos_financeiros 
+            WHERE conta_receber_id = ?
+        ''', (conta_id,))
+        
+        if cursor.fetchone():
+            return False, "Conta já possui lançamento financeiro correspondente"
+        
+        # Criar lançamento financeiro correspondente
+        cliente_nome = conta[10] if conta[10] else "Cliente não informado"
+        cursor.execute('''
+            INSERT INTO lancamentos_financeiros (
+                tipo, categoria, descricao, valor, data_lancamento, data_vencimento,
+                fornecedor_cliente, usuario_id, observacoes, conta_receber_id, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            'receita', 'Vendas', conta[1], conta[2], 
+            conta[9] or date.today().isoformat(), conta[3],
+            cliente_nome, usuario_id, conta[8], conta_id, conta[5]
+        ))
+        
+        lancamento_id = cursor.lastrowid
+        conn.commit()
+        return True, f"Conta sincronizada com sucesso. Lançamento {lancamento_id} criado."
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao sincronizar conta: {str(e)}"
+    finally:
+        conn.close()
+
+def sincronizar_todas_contas_financeiro(usuario_id):
+    """Sincroniza todas as contas a pagar e receber com o módulo financeiro"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    sincronizadas = {"pagas": 0, "receber": 0, "erros": []}
+    
+    try:
+        # Sincronizar contas a pagar não sincronizadas
+        cursor.execute('''
+            SELECT id FROM contas_pagar 
+            WHERE lancamento_financeiro_id IS NULL AND status = 'pendente'
+        ''')
+        contas_pagar = cursor.fetchall()
+        
+        for (conta_id,) in contas_pagar:
+            sucesso, mensagem = sincronizar_conta_pagar_com_financeiro(conta_id, usuario_id)
+            if sucesso:
+                sincronizadas["pagas"] += 1
+            else:
+                sincronizadas["erros"].append(f"Conta a pagar {conta_id}: {mensagem}")
+        
+        # Sincronizar contas a receber não sincronizadas
+        cursor.execute('''
+            SELECT cr.id FROM contas_receber cr
+            LEFT JOIN lancamentos_financeiros lf ON cr.id = lf.conta_receber_id
+            WHERE lf.conta_receber_id IS NULL AND cr.status = 'pendente'
+        ''')
+        contas_receber = cursor.fetchall()
+        
+        for (conta_id,) in contas_receber:
+            sucesso, mensagem = sincronizar_conta_receber_com_financeiro(conta_id, usuario_id)
+            if sucesso:
+                sincronizadas["receber"] += 1
+            else:
+                sincronizadas["erros"].append(f"Conta a receber {conta_id}: {mensagem}")
+        
+        return True, sincronizadas
+        
+    except Exception as e:
+        return False, f"Erro geral na sincronização: {str(e)}"
+    finally:
+        conn.close()
+
+def obter_contas_nao_sincronizadas():
+    """Retorna contas a pagar e receber que não estão sincronizadas com o módulo financeiro"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Contas a pagar não sincronizadas
+    cursor.execute('''
+        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, f.nome as fornecedor_nome
+        FROM contas_pagar cp
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        WHERE cp.lancamento_financeiro_id IS NULL AND cp.status = 'pendente'
+        ORDER BY cp.data_vencimento
+    ''')
+    
+    contas_pagar = []
+    for row in cursor.fetchall():
+        contas_pagar.append({
+            'id': row[0],
+            'descricao': row[1],
+            'valor': row[2],
+            'data_vencimento': row[3],
+            'fornecedor_nome': row[4] or 'Sem fornecedor'
+        })
+    
+    # Contas a receber não sincronizadas
+    cursor.execute('''
+        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, c.nome as cliente_nome
+        FROM contas_receber cr
+        LEFT JOIN clientes c ON cr.cliente_id = c.id
+        LEFT JOIN lancamentos_financeiros lf ON cr.id = lf.conta_receber_id
+        WHERE lf.conta_receber_id IS NULL AND cr.status = 'pendente'
+        ORDER BY cr.data_vencimento
+    ''')
+    
+    contas_receber = []
+    for row in cursor.fetchall():
+        contas_receber.append({
+            'id': row[0],
+            'descricao': row[1],
+            'valor': row[2],
+            'data_vencimento': row[3],
+            'cliente_nome': row[4] or 'Cliente não informado'
+        })
+    
+    conn.close()
+    return contas_pagar, contas_receber
+
 # FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
 def obter_configuracoes_empresa():
     """Obtém as configurações da empresa"""
@@ -3140,6 +3726,120 @@ def atualizar_configuracoes_empresa(dados):
         conn.close()
 
 # Inicialização automática
+def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes=""):
+    """Edita um lançamento financeiro existente"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se o lançamento existe e está pendente
+        cursor.execute('SELECT id, status FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
+        lancamento = cursor.fetchone()
+        
+        if not lancamento:
+            return False, "Lançamento não encontrado"
+        
+        if lancamento[1] != 'pendente':
+            return False, "Só é possível editar lançamentos pendentes"
+        
+        # Atualizar o lançamento
+        cursor.execute('''
+            UPDATE lancamentos_financeiros 
+            SET categoria = ?, descricao = ?, valor = ?, data_vencimento = ?,
+                fornecedor_cliente = ?, numero_documento = ?, observacoes = ?
+            WHERE id = ?
+        ''', (categoria, descricao, valor, data_vencimento, fornecedor_cliente, numero_documento, observacoes, lancamento_id))
+        
+        conn.commit()
+        return True, f"Lançamento {lancamento_id} editado com sucesso"
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao editar lançamento: {str(e)}"
+    finally:
+        conn.close()
+
+def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagamento="", data_pagamento=None):
+    """Altera o status de um lançamento financeiro (pago/recebido/cancelado)"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se o lançamento existe
+        cursor.execute('SELECT id, tipo, status FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
+        lancamento = cursor.fetchone()
+        
+        if not lancamento:
+            return False, "Lançamento não encontrado"
+        
+        if lancamento[2] == novo_status:
+            return False, f"Lançamento já está com status '{novo_status}'"
+        
+        # Se não foi fornecida data de pagamento, usar data atual
+        if novo_status == 'pago' and not data_pagamento:
+            data_pagamento = date.today().isoformat()
+        
+        # Atualizar o status do lançamento
+        cursor.execute('''
+            UPDATE lancamentos_financeiros 
+            SET status = ?, forma_pagamento = ?, data_pagamento = ?
+            WHERE id = ?
+        ''', (novo_status, forma_pagamento, data_pagamento, lancamento_id))
+        
+        conn.commit()
+        
+        tipo_texto = "receita" if lancamento[1] == 'receita' else "despesa"
+        status_texto = "recebida" if lancamento[1] == 'receita' and novo_status == 'pago' else ("paga" if novo_status == 'pago' else novo_status)
+        
+        return True, f"{tipo_texto.capitalize()} {status_texto} com sucesso"
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao alterar status do lançamento: {str(e)}"
+    finally:
+        conn.close()
+
+def deletar_lancamento_financeiro_db(lancamento_id):
+    """Deleta um lançamento financeiro e suas contas associadas"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se o lançamento existe
+        cursor.execute('''
+            SELECT id, tipo, status, conta_pagar_id, conta_receber_id 
+            FROM lancamentos_financeiros 
+            WHERE id = ?
+        ''', (lancamento_id,))
+        lancamento = cursor.fetchone()
+        
+        if not lancamento:
+            return False, "Lançamento não encontrado"
+        
+        # Não permitir deletar lançamentos já pagos/recebidos
+        if lancamento[2] == 'pago':
+            return False, "Não é possível deletar lançamentos já pagos/recebidos"
+        
+        # Deletar contas associadas se existirem
+        if lancamento[3]:  # conta_pagar_id
+            cursor.execute('DELETE FROM contas_pagar WHERE id = ?', (lancamento[3],))
+        
+        if lancamento[4]:  # conta_receber_id
+            cursor.execute('DELETE FROM contas_receber WHERE id = ?', (lancamento[4],))
+        
+        # Deletar o lançamento
+        cursor.execute('DELETE FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
+        
+        conn.commit()
+        tipo_texto = "receita" if lancamento[1] == 'receita' else "despesa"
+        return True, f"{tipo_texto.capitalize()} deletada com sucesso"
+        
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao deletar lançamento: {str(e)}"
+    finally:
+        conn.close()
+
 if __name__ == "__main__":
     init_db()
     criar_usuario_admin()

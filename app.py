@@ -19,6 +19,7 @@ from Minha_autopecas_web.logica_banco import (
     obter_configuracoes_empresa, atualizar_configuracoes_empresa,
     listar_contas_pagar_hoje, listar_contas_pagar_em_atraso, adicionar_conta_pagar, pagar_conta,
     listar_contas_receber_hoje, listar_contas_receber_em_atraso, receber_conta, adicionar_conta_receber,
+    listar_contas_pagar_por_periodo, listar_contas_receber_por_periodo,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
     popular_dados_exemplo,
@@ -32,7 +33,12 @@ from Minha_autopecas_web.logica_banco import (
     gerar_relatorio_estoque, gerar_relatorio_financeiro,
     # Funções de fornecedores
     listar_fornecedores, buscar_fornecedor, adicionar_fornecedor, editar_fornecedor, 
-    deletar_fornecedor, obter_fornecedores_para_select, contar_fornecedores, listar_produtos_por_fornecedor
+    deletar_fornecedor, obter_fornecedores_para_select, contar_fornecedores, listar_produtos_por_fornecedor,
+    # Funções de sincronização financeira
+    sincronizar_conta_pagar_com_financeiro, sincronizar_conta_receber_com_financeiro,
+    sincronizar_todas_contas_financeiro, obter_contas_nao_sincronizadas, sincronizar_lancamentos_com_contas,
+    # Novas funções para edição e controle de lançamentos financeiros
+    editar_lancamento_financeiro_db, alterar_status_lancamento_financeiro, deletar_lancamento_financeiro_db
 )
 
 app = Flask(__name__)
@@ -490,6 +496,154 @@ def novo_lancamento_financeiro():
         flash(mensagem, 'error')
     
     return redirect(url_for('financeiro'))
+
+@app.route('/financeiro/lancamento/<int:lancamento_id>/editar', methods=['POST'])
+@login_required
+@required_permission('caixa')
+def editar_lancamento_financeiro(lancamento_id):
+    """Editar um lançamento financeiro existente"""
+    categoria = request.form.get('categoria')
+    descricao = request.form.get('descricao')
+    valor = float(request.form.get('valor'))
+    data_vencimento = request.form.get('data_vencimento')
+    fornecedor_cliente = request.form.get('fornecedor_cliente', '')
+    numero_documento = request.form.get('numero_documento', '')
+    observacoes = request.form.get('observacoes', '')
+    
+    sucesso, mensagem = editar_lancamento_financeiro_db(
+        lancamento_id, categoria, descricao, valor, data_vencimento,
+        fornecedor_cliente, numero_documento, observacoes
+    )
+    
+    if sucesso:
+        flash(mensagem, 'success')
+    else:
+        flash(mensagem, 'error')
+    
+    return redirect(url_for('financeiro'))
+
+@app.route('/financeiro/lancamento/<int:lancamento_id>/status', methods=['POST'])
+@login_required
+@required_permission('caixa')
+def alterar_status_lancamento(lancamento_id):
+    """Marcar lançamento como pago/recebido ou cancelado"""
+    novo_status = request.form.get('status')
+    forma_pagamento = request.form.get('forma_pagamento', '')
+    data_pagamento = request.form.get('data_pagamento')
+    
+    sucesso, mensagem = alterar_status_lancamento_financeiro(
+        lancamento_id, novo_status, forma_pagamento, data_pagamento
+    )
+    
+    if sucesso:
+        flash(mensagem, 'success')
+    else:
+        flash(mensagem, 'error')
+    
+    return redirect(url_for('financeiro'))
+
+@app.route('/financeiro/lancamento/<int:lancamento_id>/deletar', methods=['POST'])
+@login_required
+@required_permission('caixa')
+def deletar_lancamento_financeiro(lancamento_id):
+    """Deletar um lançamento financeiro"""
+    sucesso, mensagem = deletar_lancamento_financeiro_db(lancamento_id)
+    
+    if sucesso:
+        flash(mensagem, 'success')
+    else:
+        flash(mensagem, 'error')
+    
+    return redirect(url_for('financeiro'))
+
+# ROTAS DE SINCRONIZAÇÃO FINANCEIRA
+@app.route('/financeiro/sincronizar-todas', methods=['POST'])
+@login_required
+@required_permission('financeiro')
+def sincronizar_todas_contas():
+    """Sincroniza todas as contas com o módulo financeiro"""
+    try:
+        sucesso, resultado = sincronizar_todas_contas_financeiro(current_user.id)
+        
+        if sucesso:
+            flash(f'Sincronização concluída! {resultado["pagas"]} contas a pagar e {resultado["receber"]} contas a receber sincronizadas.', 'success')
+            if resultado["erros"]:
+                for erro in resultado["erros"]:
+                    flash(erro, 'warning')
+        else:
+            flash(f'Erro na sincronização: {resultado}', 'error')
+    except Exception as e:
+        flash(f'Erro ao sincronizar: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('financeiro'))
+
+@app.route('/financeiro/sincronizar-conta-pagar/<int:conta_id>', methods=['POST'])
+@login_required
+@required_permission('financeiro')
+def sincronizar_conta_pagar_individual(conta_id):
+    """Sincroniza uma conta a pagar específica"""
+    try:
+        sucesso, mensagem = sincronizar_conta_pagar_com_financeiro(conta_id, current_user.id)
+        
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'error')
+    except Exception as e:
+        flash(f'Erro ao sincronizar conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
+
+@app.route('/financeiro/sincronizar-conta-receber/<int:conta_id>', methods=['POST'])
+@login_required
+@required_permission('financeiro')
+def sincronizar_conta_receber_individual(conta_id):
+    """Sincroniza uma conta a receber específica"""
+    try:
+        sucesso, mensagem = sincronizar_conta_receber_com_financeiro(conta_id, current_user.id)
+        
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'error')
+    except Exception as e:
+        flash(f'Erro ao sincronizar conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
+
+@app.route('/financeiro/contas-nao-sincronizadas')
+@login_required
+@required_permission('financeiro')
+def contas_nao_sincronizadas():
+    """Página para visualizar contas não sincronizadas"""
+    try:
+        contas_pagar, contas_receber = obter_contas_nao_sincronizadas()
+        return render_template('contas_nao_sincronizadas.html', 
+                             contas_pagar=contas_pagar, 
+                             contas_receber=contas_receber)
+    except Exception as e:
+        flash(f'Erro ao obter contas não sincronizadas: {str(e)}', 'error')
+        return redirect(url_for('financeiro'))
+
+@app.route('/financeiro/sincronizar-lancamentos-com-contas', methods=['POST'])
+@login_required
+@required_permission('financeiro')
+def sincronizar_lancamentos_com_contas_route():
+    """Sincroniza lançamentos financeiros criando as contas correspondentes"""
+    try:
+        sucesso, resultado = sincronizar_lancamentos_com_contas(current_user.id)
+        
+        if sucesso:
+            flash(f'Sincronização concluída! {resultado["despesas"]} contas a pagar e {resultado["receitas"]} contas a receber criadas a partir dos lançamentos.', 'success')
+            if resultado["erros"]:
+                for erro in resultado["erros"]:
+                    flash(erro, 'warning')
+        else:
+            flash(f'Erro na sincronização: {resultado}', 'error')
+    except Exception as e:
+        flash(f'Erro ao sincronizar lançamentos: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('financeiro'))
 
 @app.route('/caixa/sincronizar-vendas', methods=['POST'])
 @login_required
@@ -1160,9 +1314,39 @@ def registrar_venda_route():
 @app.route('/contas-a-pagar-hoje')
 @required_permission('financeiro')
 def contas_a_pagar_hoje():
-    contas = listar_contas_pagar_hoje()
+    filtro = request.args.get('filtro', 'hoje')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim)
+    fornecedores = obter_fornecedores_para_select()
     hoje = date.today()
-    return render_template('contas_a_pagar_hoje.html', contas=contas, hoje=hoje)
+    
+    # Calcular estatísticas
+    total_contas = len(contas)
+    total_valor = sum(conta['valor'] for conta in contas)
+    valor_medio = total_valor / total_contas if total_contas > 0 else 0
+    
+    # Contar por status
+    atrasadas = len([c for c in contas if c['dias_restantes'] < 0])
+    vencendo_7_dias = len([c for c in contas if 0 <= c['dias_restantes'] <= 7])
+    futuras = len([c for c in contas if c['dias_restantes'] > 7])
+    
+    estatisticas = {
+        'total_contas': total_contas,
+        'total_valor': total_valor,
+        'valor_medio': valor_medio,
+        'atrasadas': atrasadas,
+        'vencendo_7_dias': vencendo_7_dias,
+        'futuras': futuras
+    }
+    
+    return render_template('contas_a_pagar_hoje.html', 
+                         contas=contas, 
+                         fornecedores=fornecedores, 
+                         hoje=hoje,
+                         filtro_atual=filtro,
+                         estatisticas=estatisticas)
 
 @app.route('/pagamentos-em-atraso')
 @required_permission('financeiro')
@@ -1178,10 +1362,20 @@ def adicionar_conta_pagar_route():
     data_vencimento = request.form['data_vencimento']
     categoria = request.form.get('categoria')
     observacoes = request.form.get('observacoes')
+    fornecedor_id = request.form.get('fornecedor_id')
+    
+    # Converter fornecedor_id para None se estiver vazio
+    if fornecedor_id and fornecedor_id.strip():
+        fornecedor_id = int(fornecedor_id)
+    else:
+        fornecedor_id = None
     
     try:
-        adicionar_conta_pagar(descricao, valor, data_vencimento, categoria, observacoes)
-        flash('Conta a pagar adicionada com sucesso!', 'success')
+        sucesso, mensagem = adicionar_conta_pagar(descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
     except Exception as e:
         flash(f'Erro ao adicionar conta: {str(e)}', 'error')
     
@@ -1202,10 +1396,39 @@ def pagar_conta_route(id):
 @app.route('/contas-a-receber-hoje')
 @required_permission('financeiro')
 def contas_a_receber_hoje():
-    contas = listar_contas_receber_hoje()
+    filtro = request.args.get('filtro', 'hoje')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim)
     clientes = listar_clientes()
     hoje = date.today()
-    return render_template('contas_a_receber_hoje.html', contas=contas, clientes=clientes, hoje=hoje)
+    
+    # Calcular estatísticas
+    total_contas = len(contas)
+    total_valor = sum(conta['valor'] for conta in contas)
+    valor_medio = total_valor / total_contas if total_contas > 0 else 0
+    
+    # Contar por status
+    atrasadas = len([c for c in contas if c['dias_restantes'] < 0])
+    vencendo_7_dias = len([c for c in contas if 0 <= c['dias_restantes'] <= 7])
+    futuras = len([c for c in contas if c['dias_restantes'] > 7])
+    
+    estatisticas = {
+        'total_contas': total_contas,
+        'total_valor': total_valor,
+        'valor_medio': valor_medio,
+        'atrasadas': atrasadas,
+        'vencendo_7_dias': vencendo_7_dias,
+        'futuras': futuras
+    }
+    
+    return render_template('contas_a_receber_hoje.html', 
+                         contas=contas, 
+                         clientes=clientes, 
+                         hoje=hoje,
+                         filtro_atual=filtro,
+                         estatisticas=estatisticas)
 
 @app.route('/recebimentos-em-atraso')
 @required_permission('financeiro')
@@ -1226,7 +1449,7 @@ def receber_conta_route(id):
 
 @app.route('/contas-receber/adicionar', methods=['POST'])
 @required_permission('financeiro')
-def adicionar_conta_receber():
+def adicionar_conta_receber_route():
     try:
         descricao = request.form.get('descricao')
         valor = float(request.form.get('valor'))
@@ -1234,8 +1457,11 @@ def adicionar_conta_receber():
         cliente_id = request.form.get('cliente_id') or None
         observacoes = request.form.get('observacoes')
         
-        adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id, observacoes)
-        flash('Conta a receber adicionada com sucesso!', 'success')
+        sucesso, mensagem = adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id, observacoes)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
     except Exception as e:
         flash(f'Erro ao adicionar conta a receber: {str(e)}', 'error')
     

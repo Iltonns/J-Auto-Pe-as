@@ -144,7 +144,7 @@
                                 <tr class="produto-row">
                                     <td>{{ produto.id }}</td>
                                     <td>
-                                        <strong>{{ produto.nome }}</strong>
+                                        {{ produto.nome }}
                                         {% if produto.codigo_barras %}
                                         <br><small class="text-muted">
                                             <i class="fas fa-barcode"></i> {{ produto.codigo_barras }}
@@ -153,32 +153,32 @@
                                     </td>
                                     <td>
                                         {% if produto.marca %}
-                                        <span class="badge bg-primary">{{ produto.marca }}</span>
+                                        <span class="text-dark">{{ produto.marca }}</span>
                                         {% else %}
                                         <small class="text-muted">-</small>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if produto.codigo_fornecedor %}
-                                        <span class="badge bg-info">{{ produto.codigo_fornecedor }}</span>
+                                        <span class="text-dark">{{ produto.codigo_fornecedor }}</span>
                                         {% else %}
                                         <small class="text-muted">-</small>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if produto.categoria %}
-                                        <span class="badge bg-secondary">{{ produto.categoria }}</span>
+                                        <span class="text-dark">{{ produto.categoria }}</span>
                                         {% else %}
                                         <small class="text-muted">-</small>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if produto.estoque <= produto.estoque_minimo %}danger{% elif produto.estoque <= produto.estoque_minimo * 2 %}warning{% else %}success{% endif %}">
+                                        <span class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= (produto.estoque_minimo or 5) %}text-warning{% else %}text-success{% endif %}">
                                             {{ produto.estoque }}
                                         </span>
                                     </td>
                                     <td>R$ {{ "%.2f"|format(produto.preco_custo or produto.preco * 0.7)|replace('.', ',') }}</td>
-                                    <td><strong>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</strong></td>
+                                    <td>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</td>
                                     <td>
                                         <button class="btn btn-sm btn-primary btn-add-item" 
                                                 onclick="adicionarItem({{ produto.id }}, '{{ produto.nome|replace("'", "\\'") }}', {{ produto.preco }}, {{ produto.estoque }})"
@@ -262,10 +262,8 @@
                         <div class="bg-light p-3 rounded mb-3 orcamento-card">
                             <div class="row align-items-center">
                                 <div class="col-6">
-                                    <strong>
-                                        <span class="item-counter" id="contadorItens">0</span>
-                                        Itens: <span id="totalItens">0</span>
-                                    </strong>
+                                    <span class="item-counter" id="contadorItens">0</span>
+                                    Itens: <span id="totalItens">0</span>
                                 </div>
                                 <div class="col-6 text-end">
                                     <div class="total-display">
@@ -348,7 +346,7 @@
                                     <td>{{ orcamento.cliente_nome }}</td>
                                     <td>{{ orcamento.total|format_currency }}</td>
                                     <td>
-                                        <span class="badge bg-{% if orcamento.status == 'pendente' %}warning{% elif orcamento.status == 'convertido' %}success{% else %}secondary{% endif %}">
+                                        <span class="{% if orcamento.status == 'pendente' %}text-warning{% elif orcamento.status == 'convertido' %}text-success{% else %}text-secondary{% endif %}">
                                             {{ orcamento.status.title() }}
                                         </span>
                                     </td>
@@ -661,32 +659,35 @@ function atualizarTabelaProdutos(produtos) {
         const estoque = produto.estoque || 0;
         const estoqueMinimo = produto.estoque_minimo || 5;
         
-        // Definir cor do badge de estoque
-        let badgeClass = 'success';
+        // Definir cor do texto para estoque
+        let estoqueClass = 'text-success';
         if (estoque <= estoqueMinimo) {
-            badgeClass = 'danger';
+            estoqueClass = 'text-danger';
         } else if (estoque <= estoqueMinimo * 2) {
-            badgeClass = 'warning';
+            estoqueClass = 'text-warning';
         }
         
         const row = `
             <tr class="produto-row">
                 <td>${produto.id}</td>
                 <td>
-                    <strong>${produto.nome}</strong>
+                    ${produto.nome}
                     ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
                 </td>
                 <td>
-                    ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
+                    ${produto.marca ? `<span class="text-dark">${produto.marca}</span>` : '<small class="text-muted">-</small>'}
                 </td>
                 <td>
-                    ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
+                    ${produto.codigo_fornecedor ? `<span class="text-dark">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
                 </td>
                 <td>
-                    <span class="badge bg-${badgeClass}">${estoque}</span>
+                    ${produto.categoria ? `<span class="text-dark">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
+                </td>
+                <td>
+                    <span class="${estoqueClass}">${estoque}</span>
                 </td>
                 <td>R$ ${custoEstimado.toFixed(2).replace('.', ',')}</td>
-                <td><strong>R$ ${preco.toFixed(2).replace('.', ',')}</strong></td>
+                <td>R$ ${preco.toFixed(2).replace('.', ',')}</td>
                 <td>
                     <button class="btn btn-sm btn-primary btn-add-item" 
                             onclick="adicionarItem(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${preco}, ${estoque})"

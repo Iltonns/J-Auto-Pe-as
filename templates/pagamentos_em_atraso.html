@@ -113,18 +113,27 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-success" 
-                                            onclick="marcarComoPago({{ pagamento.id }}, '{{ pagamento.descricao }}')">
-                                        <i class="fas fa-check"></i> Pagar
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-info" 
-                                            onclick="verDetalhes({{ pagamento.id }}, '{{ pagamento.fornecedor_nome }}', '{{ pagamento.descricao }}', {{ pagamento.valor }}, '{{ pagamento.data_vencimento }}', {{ pagamento.dias_atraso }}, '{{ pagamento.observacoes or '' }}')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-warning" 
-                                            onclick="remarcarVencimento({{ pagamento.id }}, '{{ pagamento.descricao }}')">
-                                        <i class="fas fa-calendar"></i>
-                                    </button>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-sm btn-success" 
+                                                onclick="marcarComoPago({{ pagamento.id }}, '{{ pagamento.descricao }}')">
+                                            <i class="fas fa-check"></i> Pagar
+                                        </button>
+                                        <form method="POST" action="{{ url_for('sincronizar_conta_pagar_individual', conta_id=pagamento.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-warning" title="Sincronizar com Financeiro">
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    <div class="btn-group btn-group-sm mt-1">
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="verDetalhes({{ pagamento.id }}, '{{ pagamento.fornecedor_nome }}', '{{ pagamento.descricao }}', {{ pagamento.valor }}, '{{ pagamento.data_vencimento }}', {{ pagamento.dias_atraso }}, '{{ pagamento.observacoes or '' }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning" 
+                                                onclick="remarcarVencimento({{ pagamento.id }}, '{{ pagamento.descricao }}')">
+                                            <i class="fas fa-calendar"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
