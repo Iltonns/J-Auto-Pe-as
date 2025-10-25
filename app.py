@@ -35,10 +35,13 @@ from Minha_autopecas_web.logica_banco import (
     listar_fornecedores, buscar_fornecedor, adicionar_fornecedor, editar_fornecedor, 
     deletar_fornecedor, obter_fornecedores_para_select, contar_fornecedores, listar_produtos_por_fornecedor,
     # Funções de sincronização financeira
-    sincronizar_conta_pagar_com_financeiro, sincronizar_conta_receber_com_financeiro,
-    sincronizar_todas_contas_financeiro, obter_contas_nao_sincronizadas, sincronizar_lancamentos_com_contas,
+    sincronizar_lancamentos_com_contas,
     # Novas funções para edição e controle de lançamentos financeiros
-    editar_lancamento_financeiro_db, alterar_status_lancamento_financeiro, deletar_lancamento_financeiro_db
+    editar_lancamento_financeiro_db, alterar_status_lancamento_financeiro, deletar_lancamento_financeiro_db,
+    # Nova função para vendas por período
+    listar_vendas_por_periodo,
+    # Função para limpar sincronizações incorretas
+    limpar_sincronizacoes_incorretas
 )
 
 app = Flask(__name__)
@@ -556,75 +559,6 @@ def deletar_lancamento_financeiro(lancamento_id):
     
     return redirect(url_for('financeiro'))
 
-# ROTAS DE SINCRONIZAÇÃO FINANCEIRA
-@app.route('/financeiro/sincronizar-todas', methods=['POST'])
-@login_required
-@required_permission('financeiro')
-def sincronizar_todas_contas():
-    """Sincroniza todas as contas com o módulo financeiro"""
-    try:
-        sucesso, resultado = sincronizar_todas_contas_financeiro(current_user.id)
-        
-        if sucesso:
-            flash(f'Sincronização concluída! {resultado["pagas"]} contas a pagar e {resultado["receber"]} contas a receber sincronizadas.', 'success')
-            if resultado["erros"]:
-                for erro in resultado["erros"]:
-                    flash(erro, 'warning')
-        else:
-            flash(f'Erro na sincronização: {resultado}', 'error')
-    except Exception as e:
-        flash(f'Erro ao sincronizar: {str(e)}', 'error')
-    
-    return redirect(request.referrer or url_for('financeiro'))
-
-@app.route('/financeiro/sincronizar-conta-pagar/<int:conta_id>', methods=['POST'])
-@login_required
-@required_permission('financeiro')
-def sincronizar_conta_pagar_individual(conta_id):
-    """Sincroniza uma conta a pagar específica"""
-    try:
-        sucesso, mensagem = sincronizar_conta_pagar_com_financeiro(conta_id, current_user.id)
-        
-        if sucesso:
-            flash(mensagem, 'success')
-        else:
-            flash(mensagem, 'error')
-    except Exception as e:
-        flash(f'Erro ao sincronizar conta: {str(e)}', 'error')
-    
-    return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
-
-@app.route('/financeiro/sincronizar-conta-receber/<int:conta_id>', methods=['POST'])
-@login_required
-@required_permission('financeiro')
-def sincronizar_conta_receber_individual(conta_id):
-    """Sincroniza uma conta a receber específica"""
-    try:
-        sucesso, mensagem = sincronizar_conta_receber_com_financeiro(conta_id, current_user.id)
-        
-        if sucesso:
-            flash(mensagem, 'success')
-        else:
-            flash(mensagem, 'error')
-    except Exception as e:
-        flash(f'Erro ao sincronizar conta: {str(e)}', 'error')
-    
-    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
-
-@app.route('/financeiro/contas-nao-sincronizadas')
-@login_required
-@required_permission('financeiro')
-def contas_nao_sincronizadas():
-    """Página para visualizar contas não sincronizadas"""
-    try:
-        contas_pagar, contas_receber = obter_contas_nao_sincronizadas()
-        return render_template('contas_nao_sincronizadas.html', 
-                             contas_pagar=contas_pagar, 
-                             contas_receber=contas_receber)
-    except Exception as e:
-        flash(f'Erro ao obter contas não sincronizadas: {str(e)}', 'error')
-        return redirect(url_for('financeiro'))
-
 @app.route('/financeiro/sincronizar-lancamentos-com-contas', methods=['POST'])
 @login_required
 @required_permission('financeiro')
@@ -656,6 +590,20 @@ def sincronizar_vendas_caixa():
         flash(mensagem, 'success')
     else:
         flash(mensagem, 'error')
+    
+    return redirect(url_for('caixa'))
+
+@app.route('/caixa/limpar-sincronizacoes', methods=['POST'])
+@login_required
+@required_permission('admin')
+def limpar_sincronizacoes_caixa():
+    """Limpar sincronizações incorretas do caixa (apenas admin)"""
+    sucesso, mensagem = limpar_sincronizacoes_incorretas()
+    
+    if sucesso:
+        flash(f"✅ {mensagem}", 'success')
+    else:
+        flash(f"❌ {mensagem}", 'error')
     
     return redirect(url_for('caixa'))
 
@@ -1170,14 +1118,109 @@ def importar_produtos_xml_route():
 @app.route('/vendas')
 @login_required
 def vendas():
+    from datetime import datetime
     clientes_lista = listar_clientes()
     # Buscar vendas do dia para exibir na lista
-    vendas_hoje = obter_vendas_do_dia()
+    vendas_dados = obter_vendas_do_dia()
+    vendas_hoje = vendas_dados.get('vendas', [])
     produtos_lista = listar_produtos()
+    usuarios_lista = listar_usuarios()
+    
+    # Calcular estatísticas
+    total_vendas_hoje = sum(venda.get('total', 0) for venda in vendas_hoje)
+    total_itens_vendidos = sum(venda.get('total_itens', 0) for venda in vendas_hoje)
+    ticket_medio = total_vendas_hoje / len(vendas_hoje) if vendas_hoje else 0
+    
+    # Data de hoje para filtros
+    data_hoje = datetime.now().strftime('%Y-%m-%d')
+    
     return render_template('vendas.html', 
                          clientes=clientes_lista, 
-                         vendas_hoje=vendas_hoje.get('vendas', []), 
-                         produtos=produtos_lista)
+                         vendas_hoje=vendas_hoje,
+                         total_vendas_hoje=total_vendas_hoje,
+                         total_itens_vendidos=total_itens_vendidos,
+                         ticket_medio=ticket_medio,
+                         data_hoje=data_hoje,
+                         produtos=produtos_lista,
+                         usuarios=usuarios_lista)
+
+# API para filtros de vendas por período
+@app.route('/api/vendas/periodo')
+@login_required  
+def api_vendas_periodo():
+    """API para buscar vendas por período com estatísticas"""
+    try:
+        data_inicio = request.args.get('inicio')
+        data_fim = request.args.get('fim')
+        
+        if not data_inicio or not data_fim:
+            return jsonify({'error': 'Parâmetros de data são obrigatórios'}), 400
+        
+        # Buscar vendas do período usando a nova função
+        vendas = listar_vendas_por_periodo(data_inicio, data_fim)
+        
+        # Calcular estatísticas
+        total_vendas = len(vendas)
+        faturamento = sum(venda.get('total', 0) for venda in vendas)
+        total_itens = sum(venda.get('total_itens', 0) for venda in vendas)
+        ticket_medio = faturamento / total_vendas if total_vendas > 0 else 0
+        
+        estatisticas = {
+            'total_vendas': total_vendas,
+            'faturamento': faturamento,
+            'total_itens': total_itens,
+            'ticket_medio': ticket_medio
+        }
+        
+        return jsonify({
+            'vendas': vendas,
+            'estatisticas': estatisticas
+        })
+        
+    except Exception as e:
+        print(f"Erro na API vendas período: {str(e)}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+# API para obter detalhes de uma venda específica
+@app.route('/api/vendas/<int:venda_id>/detalhes')
+@login_required
+def api_venda_detalhes(venda_id):
+    """API para obter detalhes completos de uma venda"""
+    try:
+        venda = obter_venda_por_id(venda_id)
+        if not venda:
+            return jsonify({'error': 'Venda não encontrada'}), 404
+            
+        return jsonify(venda)
+        
+    except Exception as e:
+        print(f"Erro na API venda detalhes: {str(e)}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+# APIs para exportação de vendas
+@app.route('/api/vendas/exportar/<formato>')
+@login_required
+def api_exportar_vendas(formato):
+    """API para exportar vendas em diferentes formatos"""
+    try:
+        data_inicio = request.args.get('inicio')
+        data_fim = request.args.get('fim')
+        
+        if not data_inicio or not data_fim:
+            return jsonify({'error': 'Parâmetros de data são obrigatórios'}), 400
+        
+        if formato not in ['excel', 'pdf']:
+            return jsonify({'error': 'Formato não suportado'}), 400
+        
+        # Por enquanto, retornar um placeholder - implementar exportação real posteriormente
+        return jsonify({
+            'message': f'Exportação em {formato} será implementada em breve',
+            'periodo': f'{data_inicio} a {data_fim}'
+        })
+        
+    except Exception as e:
+        print(f"Erro na API exportar vendas: {str(e)}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
 @app.route('/vendas/<int:venda_id>')
 @login_required

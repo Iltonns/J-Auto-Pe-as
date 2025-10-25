@@ -132,9 +132,16 @@
                     </button>
                     <form method="POST" action="{{ url_for('sincronizar_vendas_caixa') }}" class="mb-2">
                         <button type="submit" class="btn btn-warning btn-sm w-100">
-                            <i class="fas fa-sync me-2"></i>Sincronizar Vendas
+                            <i class="fas fa-sync me-2"></i>Sincronizar Vendas do Dia
                         </button>
                     </form>
+                    {% if current_user.is_authenticated and current_user.username == 'admin' %}
+                    <form method="POST" action="{{ url_for('limpar_sincronizacoes_caixa') }}" class="mb-2" onsubmit="return confirm('⚠️ Tem certeza? Esta ação removerá vendas de outros dias do caixa atual.')">
+                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                            <i class="fas fa-broom me-2"></i>Limpar Sincronizações Incorretas
+                        </button>
+                    </form>
+                    {% endif %}
                     <button type="button" class="btn btn-danger btn-sm w-100" data-bs-toggle="modal" data-bs-target="#fecharCaixaModal">
                         <i class="fas fa-stop me-2"></i>Fechar Caixa
                     </button>

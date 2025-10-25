@@ -1606,8 +1606,48 @@ def obter_venda_por_id(venda_id):
     finally:
         conn.close()
 
+def limpar_sincronizacoes_incorretas():
+    """Remove movimentações de caixa de vendas que não são do dia atual"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        from datetime import date
+        hoje = date.today().strftime('%Y-%m-%d')
+        
+        # Buscar movimentações de vendas que não são de hoje
+        cursor.execute('''
+            SELECT cm.id, cm.venda_id, v.data_venda, cm.valor
+            FROM caixa_movimentacoes cm
+            JOIN vendas v ON cm.venda_id = v.id
+            WHERE cm.categoria = 'venda'
+            AND SUBSTR(v.data_venda, 1, 10) != ?
+            AND DATE(cm.data_movimentacao) = ?
+        ''', (hoje, hoje))
+        
+        movimentacoes_incorretas = cursor.fetchall()
+        
+        print(f"DEBUG LIMPEZA: Encontradas {len(movimentacoes_incorretas)} movimentações incorretas")
+        
+        # Remover movimentações incorretas
+        for mov in movimentacoes_incorretas:
+            mov_id, venda_id, data_venda, valor = mov
+            data_venda_formatada = data_venda[:10] if data_venda else ''
+            print(f"DEBUG LIMPEZA: Removendo mov #{mov_id} - Venda #{venda_id} de {data_venda_formatada} (R$ {valor})")
+            
+            cursor.execute('DELETE FROM caixa_movimentacoes WHERE id = ?', (mov_id,))
+        
+        conn.commit()
+        return True, f"Removidas {len(movimentacoes_incorretas)} sincronizações incorretas"
+        
+    except Exception as e:
+        print(f"DEBUG LIMPEZA: Erro: {str(e)}")
+        return False, f"Erro ao limpar sincronizações: {str(e)}"
+    finally:
+        conn.close()
+
 def sincronizar_vendas_com_caixa():
-    """Sincroniza vendas existentes do dia com o caixa (caso não tenham sido registradas)"""
+    """Sincroniza vendas existentes do dia atual com o caixa (caso não tenham sido registradas)"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -1618,22 +1658,37 @@ def sincronizar_vendas_com_caixa():
             conn.close()
             return False, "Não há caixa aberto"
         
-        # Buscar vendas do dia que não estão no caixa
+        # Usar data específica do dia atual
+        from datetime import date
+        hoje = date.today().strftime('%Y-%m-%d')
+        
+        # Buscar vendas especificamente do dia atual que não estão no caixa
         cursor.execute('''
-            SELECT v.id, v.cliente_id, v.total, v.forma_pagamento, v.usuario_id
+            SELECT v.id, v.cliente_id, v.total, v.forma_pagamento, v.usuario_id, v.data_venda
             FROM vendas v
-            WHERE DATE(v.data_venda) = DATE('now')
+            WHERE SUBSTR(v.data_venda, 1, 10) = ?
             AND v.forma_pagamento != 'prazo'
             AND NOT EXISTS (
                 SELECT 1 FROM caixa_movimentacoes cm 
                 WHERE cm.venda_id = v.id
             )
-        ''')
+        ''', (hoje,))
         
         vendas_nao_sincronizadas = cursor.fetchall()
         
+        print(f"DEBUG SYNC: Sincronizando vendas do dia {hoje}")
+        print(f"DEBUG SYNC: Encontradas {len(vendas_nao_sincronizadas)} vendas para sincronizar")
+        
+        vendas_sincronizadas = 0
+        
         for venda in vendas_nao_sincronizadas:
-            venda_id, cliente_id, total, forma_pagamento, usuario_id = venda
+            venda_id, cliente_id, total, forma_pagamento, usuario_id, data_venda = venda
+            
+            # Verificar novamente se a venda é realmente de hoje
+            data_venda_formatada = data_venda[:10] if data_venda else ''
+            if data_venda_formatada != hoje:
+                print(f"DEBUG SYNC: Venda #{venda_id} ignorada - Data: {data_venda_formatada} ≠ {hoje}")
+                continue
             
             # Buscar nome do cliente
             cliente_nome = "Cliente Avulso"
@@ -1650,11 +1705,16 @@ def sincronizar_vendas_com_caixa():
                 )
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
+            
+            vendas_sincronizadas += 1
+            print(f"DEBUG SYNC: ✓ Venda #{venda_id} sincronizada - R$ {total}")
         
         conn.commit()
-        return True, f"Sincronizadas {len(vendas_nao_sincronizadas)} vendas"
+        print(f"DEBUG SYNC: Total sincronizado: {vendas_sincronizadas} vendas de {hoje}")
+        return True, f"Sincronizadas {vendas_sincronizadas} vendas do dia atual"
         
     except Exception as e:
+        print(f"DEBUG SYNC: Erro ao sincronizar: {str(e)}")
         return False, f"Erro ao sincronizar: {str(e)}"
     finally:
         conn.close()
@@ -1664,119 +1724,62 @@ def obter_vendas_do_dia():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Sincronizar vendas existentes com o caixa
+    # Limpar sincronizações incorretas primeiro
+    limpar_sincronizacoes_incorretas()
+    
+    # Sincronizar vendas do dia atual com o caixa
     sincronizar_vendas_com_caixa()
     
-    # Usar uma consulta mais específica com data local
+    # Usar data específica do dia atual
     from datetime import date
     hoje = date.today().strftime('%Y-%m-%d')
     
     print(f"DEBUG VENDAS: Buscando vendas para {hoje}")
     
-    # Primeiro, verificar todas as vendas no banco
-    cursor.execute('SELECT COUNT(*) FROM vendas')
-    total_vendas = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT id, data_venda, total FROM vendas ORDER BY data_venda DESC LIMIT 5')
-    ultimas_vendas = cursor.fetchall()
-    
-    print(f"DEBUG VENDAS: Total de vendas no banco: {total_vendas}")
-    print("DEBUG VENDAS: Últimas 5 vendas:")
-    for venda in ultimas_vendas:
-        print(f"  ID: {venda[0]}, Data: {venda[1]}, Total: R$ {venda[2]}")
-    
-    # Tentar diferentes formas de buscar vendas do dia
-    # Método 1: DATE() function
-    cursor.execute('''
-        SELECT COUNT(*), COALESCE(SUM(total), 0) 
-        FROM vendas 
-        WHERE DATE(data_venda) = ?
-    ''', (hoje,))
-    resultado1 = cursor.fetchone()
-    
-    # Método 2: LIKE com %
-    cursor.execute('''
-        SELECT COUNT(*), COALESCE(SUM(total), 0)
-        FROM vendas 
-        WHERE data_venda LIKE ?
-    ''', (f'{hoje}%',))
-    resultado2 = cursor.fetchone()
-    
-    # Método 3: SUBSTR para extrair data
-    cursor.execute('''
-        SELECT COUNT(*), COALESCE(SUM(total), 0)
-        FROM vendas 
-        WHERE SUBSTR(data_venda, 1, 10) = ?
-    ''', (hoje,))
-    resultado3 = cursor.fetchone()
-    
-    print(f"DEBUG VENDAS: Método DATE(): {resultado1[0]} vendas, R$ {resultado1[1]}")
-    print(f"DEBUG VENDAS: Método LIKE: {resultado2[0]} vendas, R$ {resultado2[1]}")
-    print(f"DEBUG VENDAS: Método SUBSTR: {resultado3[0]} vendas, R$ {resultado3[1]}")
-    
-    # Usar múltiplos métodos de busca
-    vendas_encontradas = []
-    
-    # Método 1: SUBSTR (mais confiável)
+    # Buscar vendas especificamente do dia atual usando SUBSTR para garantir precisão
     cursor.execute('''
         SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda,
-               COALESCE(SUM(iv.quantidade), 0) as total_itens
+               COALESCE(SUM(iv.quantidade), 0) as total_itens,
+               u.nome_completo as funcionario_nome, u.username as funcionario_username,
+               v.usuario_id
         FROM vendas v
         LEFT JOIN clientes c ON v.cliente_id = c.id
         LEFT JOIN itens_venda iv ON v.id = iv.venda_id
+        LEFT JOIN usuarios u ON v.usuario_id = u.id
         WHERE SUBSTR(v.data_venda, 1, 10) = ?
-        GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda
+        GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, u.nome_completo, u.username, v.usuario_id
         ORDER BY v.data_venda DESC
     ''', (hoje,))
-    vendas_encontradas.extend(cursor.fetchall())
     
-    # Se não encontrou nada com SUBSTR, tentar outros métodos
-    if not vendas_encontradas:
-        cursor.execute('''
-            SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda,
-                   COALESCE(SUM(iv.quantidade), 0) as total_itens
-            FROM vendas v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
-            LEFT JOIN itens_venda iv ON v.id = iv.venda_id
-            WHERE v.data_venda LIKE ?
-            GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda
-            ORDER BY v.data_venda DESC
-        ''', (f'{hoje}%',))
-        vendas_encontradas.extend(cursor.fetchall())
-    
-    # Se ainda não encontrou, pegar as vendas mais recentes (últimas 24h)
-    if not vendas_encontradas:
-        print("DEBUG VENDAS: Não encontrou vendas de hoje, buscando últimas 24h...")
-        cursor.execute('''
-            SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda,
-                   COALESCE(SUM(iv.quantidade), 0) as total_itens
-            FROM vendas v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
-            LEFT JOIN itens_venda iv ON v.id = iv.venda_id
-            WHERE v.data_venda >= datetime('now', '-1 day')
-            GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda
-            ORDER BY v.data_venda DESC
-        ''')
-        vendas_encontradas.extend(cursor.fetchall())
+    vendas_encontradas = cursor.fetchall()
     
     vendas = []
     total_valor = 0
     total_itens = 0
     
-    print("DEBUG VENDAS: Vendas encontradas:")
+    print(f"DEBUG VENDAS: Vendas encontradas para {hoje}:")
     for row in vendas_encontradas:
-        venda = {
-            'id': row[0],
-            'cliente': row[1] or 'Cliente Avulso',
-            'total': row[2],
-            'forma_pagamento': row[3],
-            'data_venda': row[4],
-            'total_itens': row[5] or 0
-        }
-        vendas.append(venda)
-        total_valor += row[2]
-        total_itens += row[5] or 0
-        print(f"  Venda #{row[0]}: R$ {row[2]}, Data: {row[4]}, Itens: {row[5]}")
+        # Verificar se a data da venda realmente corresponde ao dia atual
+        data_venda = row[4][:10] if row[4] else ''
+        
+        if data_venda == hoje:
+            venda = {
+                'id': row[0],
+                'cliente': row[1] or 'Cliente Avulso',
+                'total': row[2],
+                'forma_pagamento': row[3],
+                'data_venda': row[4],
+                'total_itens': row[5] or 0,
+                'funcionario_nome': row[6] or 'Sem funcionário',
+                'funcionario_username': row[7] or '',
+                'usuario_id': row[8]
+            }
+            vendas.append(venda)
+            total_valor += row[2]
+            total_itens += row[5] or 0
+            print(f"  ✓ Venda #{row[0]}: R$ {row[2]}, Data: {row[4]}, Itens: {row[5]}, Funcionário: {row[6] or 'N/A'}")
+        else:
+            print(f"  ✗ Venda #{row[0]} ignorada - Data: {data_venda} ≠ {hoje}")
     
     resultado = {
         'vendas': vendas,
@@ -1785,7 +1788,7 @@ def obter_vendas_do_dia():
         'itens_vendidos': total_itens
     }
     
-    print(f"DEBUG VENDAS: Resultado final: {resultado}")
+    print(f"DEBUG VENDAS: Resultado final para {hoje}: {resultado}")
     
     conn.close()
     return resultado
@@ -1908,21 +1911,9 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
         conta_id = cursor.lastrowid
         conn.commit()
         
-        # Auto-sincronizar com módulo financeiro se solicitado
-        if auto_sincronizar:
-            try:
-                conn.close()
-                # Reabrir conexão para sincronização
-                sucesso_sync, msg_sync = sincronizar_conta_pagar_com_financeiro(conta_id, 1)  # Usuario admin temporário
-                if sucesso_sync:
-                    return True, f"Conta criada e sincronizada com sucesso (ID: {conta_id})"
-                else:
-                    return True, f"Conta criada (ID: {conta_id}), mas falha na sincronização: {msg_sync}"
-            except Exception as e:
-                return True, f"Conta criada (ID: {conta_id}), mas erro na sincronização: {str(e)}"
-        else:
-            conn.close()
-            return True, f"Conta criada com sucesso (ID: {conta_id})"
+        
+        conn.close()
+        return True, f"Conta a pagar criada com sucesso (ID: {conta_id})"
             
     except Exception as e:
         conn.rollback()
@@ -2075,21 +2066,9 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
         conta_id = cursor.lastrowid
         conn.commit()
         
-        # Auto-sincronizar com módulo financeiro se solicitado
-        if auto_sincronizar:
-            try:
-                conn.close()
-                # Reabrir conexão para sincronização
-                sucesso_sync, msg_sync = sincronizar_conta_receber_com_financeiro(conta_id, 1)  # Usuario admin temporário
-                if sucesso_sync:
-                    return True, f"Conta criada e sincronizada com sucesso (ID: {conta_id})"
-                else:
-                    return True, f"Conta criada (ID: {conta_id}), mas falha na sincronização: {msg_sync}"
-            except Exception as e:
-                return True, f"Conta criada (ID: {conta_id}), mas erro na sincronização: {str(e)}"
-        else:
-            conn.close()
-            return True, f"Conta criada com sucesso (ID: {conta_id})"
+        
+        conn.close()
+        return True, f"Conta a receber criada com sucesso (ID: {conta_id})"
             
     except Exception as e:
         conn.rollback()
@@ -3367,197 +3346,6 @@ def sincronizar_lancamentos_com_contas(usuario_id):
     finally:
         conn.close()
 
-# FUNÇÕES DE SINCRONIZAÇÃO FINANCEIRA
-def sincronizar_conta_pagar_com_financeiro(conta_id, usuario_id):
-    """Sincroniza uma conta a pagar com o módulo financeiro"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    try:
-        # Buscar dados da conta a pagar
-        cursor.execute('''
-            SELECT cp.*, f.nome as fornecedor_nome
-            FROM contas_pagar cp
-            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-            WHERE cp.id = ? AND cp.lancamento_financeiro_id IS NULL
-        ''', (conta_id,))
-        
-        conta = cursor.fetchone()
-        if not conta:
-            return False, "Conta não encontrada ou já sincronizada"
-        
-        # Criar lançamento financeiro correspondente
-        fornecedor_nome = conta[8] if conta[8] else "Fornecedor não informado"
-        cursor.execute('''
-            INSERT INTO lancamentos_financeiros (
-                tipo, categoria, descricao, valor, data_lancamento, data_vencimento,
-                fornecedor_cliente, usuario_id, observacoes, conta_pagar_id, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            'despesa', conta[6] or 'Geral', conta[1], conta[2], 
-            conta[9] or date.today().isoformat(), conta[3],
-            fornecedor_nome, usuario_id, conta[7], conta_id, conta[5]
-        ))
-        
-        lancamento_id = cursor.lastrowid
-        
-        # Atualizar conta a pagar com referência ao lançamento
-        cursor.execute('''
-            UPDATE contas_pagar 
-            SET lancamento_financeiro_id = ?
-            WHERE id = ?
-        ''', (lancamento_id, conta_id))
-        
-        conn.commit()
-        return True, f"Conta sincronizada com sucesso. Lançamento {lancamento_id} criado."
-        
-    except Exception as e:
-        conn.rollback()
-        return False, f"Erro ao sincronizar conta: {str(e)}"
-    finally:
-        conn.close()
-
-def sincronizar_conta_receber_com_financeiro(conta_id, usuario_id):
-    """Sincroniza uma conta a receber com o módulo financeiro"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    try:
-        # Buscar dados da conta a receber
-        cursor.execute('''
-            SELECT cr.*, c.nome as cliente_nome
-            FROM contas_receber cr
-            LEFT JOIN clientes c ON cr.cliente_id = c.id
-            WHERE cr.id = ?
-        ''', (conta_id,))
-        
-        conta = cursor.fetchone()
-        if not conta:
-            return False, "Conta não encontrada"
-        
-        # Verificar se já existe lançamento para esta conta
-        cursor.execute('''
-            SELECT id FROM lancamentos_financeiros 
-            WHERE conta_receber_id = ?
-        ''', (conta_id,))
-        
-        if cursor.fetchone():
-            return False, "Conta já possui lançamento financeiro correspondente"
-        
-        # Criar lançamento financeiro correspondente
-        cliente_nome = conta[10] if conta[10] else "Cliente não informado"
-        cursor.execute('''
-            INSERT INTO lancamentos_financeiros (
-                tipo, categoria, descricao, valor, data_lancamento, data_vencimento,
-                fornecedor_cliente, usuario_id, observacoes, conta_receber_id, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            'receita', 'Vendas', conta[1], conta[2], 
-            conta[9] or date.today().isoformat(), conta[3],
-            cliente_nome, usuario_id, conta[8], conta_id, conta[5]
-        ))
-        
-        lancamento_id = cursor.lastrowid
-        conn.commit()
-        return True, f"Conta sincronizada com sucesso. Lançamento {lancamento_id} criado."
-        
-    except Exception as e:
-        conn.rollback()
-        return False, f"Erro ao sincronizar conta: {str(e)}"
-    finally:
-        conn.close()
-
-def sincronizar_todas_contas_financeiro(usuario_id):
-    """Sincroniza todas as contas a pagar e receber com o módulo financeiro"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    sincronizadas = {"pagas": 0, "receber": 0, "erros": []}
-    
-    try:
-        # Sincronizar contas a pagar não sincronizadas
-        cursor.execute('''
-            SELECT id FROM contas_pagar 
-            WHERE lancamento_financeiro_id IS NULL AND status = 'pendente'
-        ''')
-        contas_pagar = cursor.fetchall()
-        
-        for (conta_id,) in contas_pagar:
-            sucesso, mensagem = sincronizar_conta_pagar_com_financeiro(conta_id, usuario_id)
-            if sucesso:
-                sincronizadas["pagas"] += 1
-            else:
-                sincronizadas["erros"].append(f"Conta a pagar {conta_id}: {mensagem}")
-        
-        # Sincronizar contas a receber não sincronizadas
-        cursor.execute('''
-            SELECT cr.id FROM contas_receber cr
-            LEFT JOIN lancamentos_financeiros lf ON cr.id = lf.conta_receber_id
-            WHERE lf.conta_receber_id IS NULL AND cr.status = 'pendente'
-        ''')
-        contas_receber = cursor.fetchall()
-        
-        for (conta_id,) in contas_receber:
-            sucesso, mensagem = sincronizar_conta_receber_com_financeiro(conta_id, usuario_id)
-            if sucesso:
-                sincronizadas["receber"] += 1
-            else:
-                sincronizadas["erros"].append(f"Conta a receber {conta_id}: {mensagem}")
-        
-        return True, sincronizadas
-        
-    except Exception as e:
-        return False, f"Erro geral na sincronização: {str(e)}"
-    finally:
-        conn.close()
-
-def obter_contas_nao_sincronizadas():
-    """Retorna contas a pagar e receber que não estão sincronizadas com o módulo financeiro"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Contas a pagar não sincronizadas
-    cursor.execute('''
-        SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, f.nome as fornecedor_nome
-        FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.lancamento_financeiro_id IS NULL AND cp.status = 'pendente'
-        ORDER BY cp.data_vencimento
-    ''')
-    
-    contas_pagar = []
-    for row in cursor.fetchall():
-        contas_pagar.append({
-            'id': row[0],
-            'descricao': row[1],
-            'valor': row[2],
-            'data_vencimento': row[3],
-            'fornecedor_nome': row[4] or 'Sem fornecedor'
-        })
-    
-    # Contas a receber não sincronizadas
-    cursor.execute('''
-        SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, c.nome as cliente_nome
-        FROM contas_receber cr
-        LEFT JOIN clientes c ON cr.cliente_id = c.id
-        LEFT JOIN lancamentos_financeiros lf ON cr.id = lf.conta_receber_id
-        WHERE lf.conta_receber_id IS NULL AND cr.status = 'pendente'
-        ORDER BY cr.data_vencimento
-    ''')
-    
-    contas_receber = []
-    for row in cursor.fetchall():
-        contas_receber.append({
-            'id': row[0],
-            'descricao': row[1],
-            'valor': row[2],
-            'data_vencimento': row[3],
-            'cliente_nome': row[4] or 'Cliente não informado'
-        })
-    
-    conn.close()
-    return contas_pagar, contas_receber
-
 # FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
 def obter_configuracoes_empresa():
     """Obtém as configurações da empresa"""
@@ -3747,6 +3535,46 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao alterar status do lançamento: {str(e)}"
+    finally:
+        conn.close()
+
+def listar_vendas_por_periodo(data_inicio, data_fim):
+    """Lista vendas por período específico com estatísticas"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # Ajustar datas para incluir o dia completo
+        data_inicio_completa = f"{data_inicio} 00:00:00"
+        data_fim_completa = f"{data_fim} 23:59:59"
+        
+        # Buscar vendas do período
+        cursor.execute('''
+            SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, v.desconto,
+                   (SELECT COUNT(*) FROM itens_venda iv WHERE iv.venda_id = v.id) as total_itens
+            FROM vendas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            WHERE v.data_venda BETWEEN ? AND ?
+            ORDER BY v.data_venda DESC
+        ''', (data_inicio_completa, data_fim_completa))
+        
+        vendas = []
+        for row in cursor.fetchall():
+            vendas.append({
+                'id': row[0],
+                'cliente': row[1] or 'Cliente Avulso',
+                'total': float(row[2]),
+                'forma_pagamento': row[3],
+                'data_venda': row[4],
+                'desconto': float(row[5]) if row[5] else 0,
+                'total_itens': row[6] or 0
+            })
+        
+        return vendas
+        
+    except Exception as e:
+        print(f"Erro ao listar vendas por período: {str(e)}")
+        return []
     finally:
         conn.close()
 

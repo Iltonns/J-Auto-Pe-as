@@ -13,6 +13,54 @@ import random
 # Caminho do banco de dados
 DB_PATH = os.path.join(os.path.dirname(__file__), 'autopecas.db')
 
+def criar_funcionarios_exemplo():
+    """Cria funcionários de exemplo para testar o filtro por funcionário"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Verificar se já existem funcionários além do admin
+    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username != 'admin'")
+    if cursor.fetchone()[0] > 0:
+        print("Funcionários já existem no banco!")
+        conn.close()
+        return
+    
+    funcionarios = [
+        ('joao.silva', 'João Silva', 'joao@autopecas.com'),
+        ('maria.souza', 'Maria Souza', 'maria@autopecas.com'),
+        ('carlos.pereira', 'Carlos Pereira', 'carlos@autopecas.com'),
+        ('ana.costa', 'Ana Costa', 'ana@autopecas.com'),
+    ]
+    
+    from Minha_autopecas_web.logica_banco import criar_usuario
+    
+    for username, nome_completo, email in funcionarios:
+        # Criar o usuário
+        sucesso, user_id = criar_usuario(
+            username=username,
+            password='123456',  # Senha padrão para teste
+            nome_completo=nome_completo,
+            email=email,
+            permissoes={
+                'vendas': True,
+                'estoque': True,
+                'clientes': True,
+                'financeiro': False,
+                'caixa': False,
+                'relatorios': False,
+                'admin': False
+            },
+            created_by=1  # Admin
+        )
+        
+        if sucesso:
+            print(f"Funcionário criado: {nome_completo} ({username})")
+        else:
+            print(f"Erro ao criar funcionário: {nome_completo}")
+    
+    conn.close()
+    print("Funcionários de exemplo criados!")
+
 def atualizar_permissoes_admin():
     """Atualiza as permissões do usuário admin para incluir relatórios"""
     conn = sqlite3.connect(DB_PATH)
@@ -44,16 +92,14 @@ def criar_vendas_exemplo():
         conn.close()
         return
     
-    # Buscar usuário admin
-    cursor.execute("SELECT id FROM usuarios WHERE username = 'admin'")
-    admin_user = cursor.fetchone()
+    # Buscar todos os usuários
+    cursor.execute("SELECT id FROM usuarios ORDER BY id")
+    usuarios = [row[0] for row in cursor.fetchall()]
     
-    if not admin_user:
-        print("Usuário admin não encontrado!")
+    if not usuarios:
+        print("Nenhum usuário encontrado!")
         conn.close()
         return
-    
-    admin_id = admin_user[0]
     
     # Buscar produtos e clientes
     cursor.execute("SELECT id FROM produtos LIMIT 10")
@@ -74,12 +120,13 @@ def criar_vendas_exemplo():
         data_venda = datetime.now() - timedelta(days=random.randint(0, 30))
         cliente_id = random.choice(clientes)
         forma_pagamento = random.choice(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix', 'prazo'])
+        usuario_id = random.choice(usuarios)  # Escolher funcionário aleatório
         
         # Criar venda
         cursor.execute('''
             INSERT INTO vendas (cliente_id, total, forma_pagamento, data_venda, usuario_id)
             VALUES (?, ?, ?, ?, ?)
-        ''', (cliente_id, 0, forma_pagamento, data_venda, admin_id))
+        ''', (cliente_id, 0, forma_pagamento, data_venda, usuario_id))
         
         venda_id = cursor.lastrowid
         total_venda = 0
@@ -164,7 +211,8 @@ if __name__ == "__main__":
     print("Configurando dados de exemplo para relatórios...")
     
     atualizar_permissoes_admin()
+    criar_funcionarios_exemplo()
     criar_vendas_exemplo()
     criar_contas_exemplo()
     
-    print("Configuração concluída! Agora você pode testar os relatórios.")
+    print("Configuração concluída! Agora você pode testar os relatórios e filtro por funcionários.")

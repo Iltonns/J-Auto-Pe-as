@@ -340,7 +340,7 @@
     transform: scale(1.1);
 }
 
-/* Histórico de vendas */
+/* Histórico de vendas aprimorado */
 .historico-vendas {
     margin-top: 2rem;
     background: white;
@@ -354,6 +354,425 @@
     color: white;
     padding: 1.5rem;
     font-weight: 600;
+}
+
+.filtros-vendas .input-group {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.25rem;
+}
+
+.filtros-vendas .form-control {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    color: var(--neutral-dark);
+}
+
+.filtros-vendas .input-group-text {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-weight: 500;
+}
+
+.filtros-vendas .btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.filtros-vendas .btn-outline-light:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Estatísticas */
+.estatisticas-vendas {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem;
+}
+
+.stat-item i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.8;
+}
+
+.stat-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Filtros internos */
+.filtros-internos {
+    padding: 1rem 1.5rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid var(--neutral-light);
+}
+
+.filtros-internos .form-control-sm {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    padding: 0.5rem 0.75rem;
+}
+
+.filtros-internos .form-control-sm:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 0.2rem rgba(41, 98, 255, 0.15);
+}
+
+/* Tabela de vendas melhorada */
+.vendas-table {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.vendas-table thead th {
+    background: var(--gradient-neutral) !important;
+    color: white !important;
+    border: none;
+    padding: 1rem 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.vendas-table .th-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vendas-table .sortable:hover .th-content {
+    transform: scale(1.05);
+}
+
+.vendas-table .th-content i {
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.vendas-table .sortable:hover .th-content i {
+    opacity: 1;
+}
+
+.vendas-table tbody td {
+    border: none;
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: middle;
+}
+
+.venda-row {
+    transition: all 0.2s ease;
+}
+
+.venda-row:hover {
+    background-color: #f8f9fa !important;
+    transform: scale(1.002);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Elementos da linha de venda */
+.venda-numero {
+    display: flex;
+    flex-direction: column;
+}
+
+.numero-principal {
+    font-size: 1rem;
+    color: var(--primary-blue);
+    font-weight: 700;
+}
+
+.data-criacao {
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+.cliente-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cliente-info i {
+    color: var(--primary-blue);
+    width: 16px;
+}
+
+.cliente-nome {
+    font-weight: 500;
+}
+
+.badge-itens {
+    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.valor-venda {
+    display: flex;
+    flex-direction: column;
+}
+
+.valor-principal {
+    font-size: 1.1rem;
+    color: var(--success);
+    font-weight: 700;
+}
+
+.desconto-aplicado {
+    color: #dc3545;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+/* Badges de pagamento */
+.pagamento-badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.pagamento-dinheiro { 
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); 
+    color: var(--success); 
+}
+
+.pagamento-pix { 
+    background: linear-gradient(135deg, #cce5ff 0%, #b3d7ff 100%); 
+    color: var(--primary-dark); 
+}
+
+.pagamento-cartao { 
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); 
+    color: var(--warning); 
+}
+
+.pagamento-prazo { 
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); 
+    color: var(--danger); 
+}
+
+.data-hora-venda {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+}
+
+.hora-principal {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--neutral-dark);
+}
+
+.data-completa {
+    color: #6c757d;
+    font-size: 0.75rem;
+}
+
+/* Ações da venda */
+.acoes-venda {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: center;
+}
+
+.btn-action {
+    padding: 0.375rem 0.5rem;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+}
+
+.btn-visualizar {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+}
+
+.btn-visualizar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-imprimir {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    color: white;
+}
+
+.btn-imprimir:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-duplicar {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    color: #212529;
+}
+
+.btn-duplicar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+/* Estado vazio */
+.empty-state {
+    text-align: center;
+}
+
+.empty-icon {
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state h6 {
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.empty-state p {
+    color: #adb5bd;
+    margin-bottom: 1.5rem;
+}
+
+/* Paginação */
+.paginacao-vendas {
+    padding: 1rem 1.5rem;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.info-paginacao {
+    display: flex;
+    align-items: center;
+}
+
+.controles-paginacao .input-group-sm .form-control {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.controles-paginacao .input-group-text {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .filtros-internos .row > div {
+        margin-bottom: 0.5rem;
+    }
+    
+    .acoes-venda {
+        flex-direction: column;
+    }
+    
+    .btn-action {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .vendas-table {
+        font-size: 0.8rem;
+    }
+    
+    .vendas-table thead th {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.7rem;
+    }
+    
+    .vendas-table tbody td {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .estatisticas-vendas .row {
+        gap: 0.5rem;
+    }
+    
+    .stat-item {
+        padding: 0.25rem;
+    }
+    
+    .stat-value {
+        font-size: 1rem;
+    }
+    
+    .filtros-vendas .input-group {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+/* Animações adicionais */
+@keyframes slideInFromTop {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.venda-row {
+    animation: slideInFromTop 0.3s ease-out;
+}
+
+/* Loading states */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.spinner-border {
+    color: var(--primary-blue);
 }
 
 /* Indicadores de status */
@@ -546,4 +965,33 @@
     font-weight: bold;
     border-top: 2px solid #000;
     padding-top: 5px;
+}
+
+/* Estilos para coluna do funcionário */
+.funcionario-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.funcionario-info i {
+    color: var(--primary-blue);
+    width: 16px;
+    text-align: center;
+}
+
+.funcionario-nome {
+    color: var(--neutral-dark);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+@media (max-width: 768px) {
+    .funcionario-nome {
+        max-width: 80px;
+    }
 }

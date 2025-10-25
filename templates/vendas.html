@@ -240,75 +240,291 @@
 <!-- HISTÓRICO DE VENDAS -->
 <div class="historico-vendas">
     <div class="historico-header">
-        <h5 class="mb-0">
-            <i class="fas fa-history"></i> Vendas Realizadas Hoje
-        </h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-history"></i> Vendas Realizadas
+            </h5>
+            <div class="filtros-vendas">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-calendar-alt"></i>
+                    </span>
+                    <input type="date" id="dataInicio" class="form-control form-control-sm" 
+                           value="{{ data_hoje }}" onchange="filtrarVendasPorData()">
+                    <span class="input-group-text">até</span>
+                    <input type="date" id="dataFim" class="form-control form-control-sm" 
+                           value="{{ data_hoje }}" onchange="filtrarVendasPorData()">
+                    <button type="button" class="btn btn-outline-light btn-sm" 
+                            onclick="resetarFiltros()" title="Resetar filtros">
+                        <i class="fas fa-refresh"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-2">
+            <div class="estatisticas-vendas">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span class="stat-value" id="totalVendasCount">{{ vendas_hoje|length if vendas_hoje else 0 }}</span>
+                            <span class="stat-label">Vendas</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <i class="fas fa-money-bill-wave"></i>
+                            <span class="stat-value" id="totalVendasValor">R$ {{ "%.2f"|format(total_vendas_hoje or 0)|replace('.', ',') }}</span>
+                            <span class="stat-label">Faturamento</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <i class="fas fa-boxes"></i>
+                            <span class="stat-value" id="totalItensVendidos">{{ total_itens_vendidos or 0 }}</span>
+                            <span class="stat-label">Itens Vendidos</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span class="stat-value" id="ticketMedio">R$ {{ "%.2f"|format(ticket_medio or 0)|replace('.', ',') }}</span>
+                            <span class="stat-label">Ticket Médio</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
+        <div class="filtros-internos">
+            <div class="row">
+                <div class="col-md-3">
+                    <input type="text" id="filtroCliente" class="form-control form-control-sm" 
+                           placeholder="🔍 Filtrar por cliente..." onkeyup="filtrarTabela()">
+                </div>
+                <div class="col-md-2">
+                    <select id="filtroFormaPagamento" class="form-control form-control-sm" onchange="filtrarTabela()">
+                        <option value="">Todas as formas</option>
+                        <option value="dinheiro">💰 Dinheiro</option>
+                        <option value="pix">📱 PIX</option>
+                        <option value="cartao_debito">💳 Cartão Débito</option>
+                        <option value="cartao_credito">💳 Cartão Crédito</option>
+                        <option value="prazo">📅 A Prazo</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="filtroFuncionario" class="form-control form-control-sm" onchange="filtrarTabela()">
+                        <option value="">Todos os funcionários</option>
+                        {% for usuario in usuarios %}
+                        {% if usuario.ativo %}
+                        <option value="{{ usuario.id }}">{{ usuario.nome_completo or usuario.username }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="ordenacao" class="form-control form-control-sm" onchange="ordenarTabela()">
+                        <option value="id_desc">Mais recentes</option>
+                        <option value="id_asc">Mais antigas</option>
+                        <option value="valor_desc">Maior valor</option>
+                        <option value="valor_asc">Menor valor</option>
+                        <option value="cliente_asc">Cliente A-Z</option>
+                        <option value="funcionario_asc">Funcionário A-Z</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary" onclick="exportarVendas('excel')" title="Exportar Excel">
+                            <i class="fas fa-file-excel"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="exportarVendas('pdf')" title="Exportar PDF">
+                            <i class="fas fa-file-pdf"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="imprimirRelatorio()" title="Imprimir">
+                            <i class="fas fa-print"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="table-responsive">
-            <table class="table table-hover">
-                <thead class="table-dark">
+            <table class="table table-hover vendas-table" id="tabelaVendas">
+                <thead class="table-dark sticky-top">
                     <tr>
-                        <th>Nº Venda</th>
-                        <th>Cliente</th>
-                        <th>Itens</th>
-                        <th>Total</th>
-                        <th>Forma Pagamento</th>
-                        <th>Hora</th>
-                        <th>Ações</th>
+                        <th class="sortable" data-column="id">
+                            <div class="th-content">
+                                Nº Venda <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="cliente">
+                            <div class="th-content">
+                                Cliente <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="itens">
+                            <div class="th-content">
+                                Itens <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="total">
+                            <div class="th-content">
+                                Total <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="forma_pagamento">
+                            <div class="th-content">
+                                Pagamento <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="hora">
+                            <div class="th-content">
+                                Data/Hora <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="sortable" data-column="funcionario">
+                            <div class="th-content">
+                                Funcionário <i class="fas fa-sort"></i>
+                            </div>
+                        </th>
+                        <th class="text-center">Ações</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="vendasTableBody">
                     {% if vendas_hoje %}
                         {% for venda in vendas_hoje %}
-                        <tr>
+                        <tr class="venda-row" 
+                            data-id="{{ venda.id }}"
+                            data-cliente="{{ (venda.cliente or 'cliente avulso')|lower }}"
+                            data-forma-pagamento="{{ venda.forma_pagamento }}"
+                            data-total="{{ venda.total }}"
+                            data-data="{{ venda.data_venda }}"
+                            data-funcionario="{{ venda.usuario_id or '' }}"
+                            data-funcionario-nome="{{ (venda.funcionario_nome or 'sem funcionario')|lower }}">
                             <td>
-                                <strong>#{{ venda.id }}</strong>
+                                <div class="venda-numero">
+                                    <strong class="numero-principal">#{{ venda.id }}</strong>
+                                    <small class="data-criacao">{{ venda.data_venda[:10] if venda.data_venda and venda.data_venda|length >= 10 else '' }}</small>
+                                </div>
                             </td>
                             <td>
-                                {{ venda.cliente or 'Cliente Avulso' }}
+                                <div class="cliente-info">
+                                    <i class="fas fa-user"></i>
+                                    <span class="cliente-nome">{{ venda.cliente or 'Cliente Avulso' }}</span>
+                                </div>
                             </td>
                             <td>
-                                <span class="badge bg-info">{{ venda.total_itens }} itens</span>
-                            </td>
-                            <td>
-                                <strong class="text-success">R$ {{ "%.2f"|format(venda.total)|replace('.', ',') }}</strong>
-                            </td>
-                            <td>
-                                <span class="status-badge {% if venda.forma_pagamento == 'dinheiro' %}status-dinheiro{% elif venda.forma_pagamento == 'pix' %}status-pix{% else %}status-cartao{% endif %}">
-                                    {{ venda.forma_pagamento|replace('_', ' ')|title }}
+                                <span class="badge badge-itens">
+                                    <i class="fas fa-box"></i>
+                                    {{ venda.total_itens }} {% if venda.total_itens == 1 %}item{% else %}itens{% endif %}
                                 </span>
                             </td>
                             <td>
-                                {% if venda.data_venda %}
-                                    {{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}
-                                {% else %}
-                                    --:--
-                                {% endif %}
+                                <div class="valor-venda">
+                                    <strong class="valor-principal">R$ {{ "%.2f"|format(venda.total)|replace('.', ',') }}</strong>
+                                    {% if venda.desconto and venda.desconto > 0 %}
+                                    <small class="desconto-aplicado">
+                                        <i class="fas fa-percent"></i> Desc.: R$ {{ "%.2f"|format(venda.desconto)|replace('.', ',') }}
+                                    </small>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td>
-                                <div class="btn-group" role="group">
-                                    <button class="btn btn-sm btn-primary" onclick="visualizarVenda({{ venda.id }})" title="Visualizar">
+                                <span class="pagamento-badge {% if venda.forma_pagamento == 'dinheiro' %}pagamento-dinheiro{% elif venda.forma_pagamento == 'pix' %}pagamento-pix{% elif 'cartao' in venda.forma_pagamento %}pagamento-cartao{% else %}pagamento-prazo{% endif %}">
+                                    {% if venda.forma_pagamento == 'dinheiro' %}
+                                        <i class="fas fa-money-bill-wave"></i> Dinheiro
+                                    {% elif venda.forma_pagamento == 'pix' %}
+                                        <i class="fab fa-pix"></i> PIX
+                                    {% elif venda.forma_pagamento == 'cartao_debito' %}
+                                        <i class="fas fa-credit-card"></i> C. Débito
+                                    {% elif venda.forma_pagamento == 'cartao_credito' %}
+                                        <i class="fas fa-credit-card"></i> C. Crédito
+                                    {% elif venda.forma_pagamento == 'prazo' %}
+                                        <i class="fas fa-calendar-plus"></i> A Prazo
+                                    {% else %}
+                                        <i class="fas fa-question"></i> {{ venda.forma_pagamento|replace('_', ' ')|title }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="data-hora-venda">
+                                    {% if venda.data_venda %}
+                                        <div class="hora-principal">{{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}</div>
+                                        <small class="data-completa">{{ venda.data_venda[:10] if venda.data_venda|length >= 10 else '' }}</small>
+                                    {% else %}
+                                        <div class="hora-principal">--:--</div>
+                                        <small class="data-completa">--/--/----</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="funcionario-info">
+                                    <i class="fas fa-user-tie"></i>
+                                    <span class="funcionario-nome">{{ venda.funcionario_nome or 'Sem funcionário' }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="acoes-venda">
+                                    <button class="btn btn-sm btn-action btn-visualizar" 
+                                            onclick="visualizarVenda({{ venda.id }})" 
+                                            title="Visualizar detalhes">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <a href="{{ url_for('visualizar_venda', venda_id=venda.id) }}" target="_blank" class="btn btn-sm btn-success" title="Imprimir Recibo">
+                                    <a href="{{ url_for('visualizar_venda', venda_id=venda.id) }}" 
+                                       target="_blank" 
+                                       class="btn btn-sm btn-action btn-imprimir" 
+                                       title="Imprimir recibo">
                                         <i class="fas fa-print"></i>
                                     </a>
+                                    <button class="btn btn-sm btn-action btn-duplicar" 
+                                            onclick="duplicarVenda({{ venda.id }})" 
+                                            title="Duplicar venda">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
                         {% endfor %}
                     {% else %}
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
-                                <i class="fas fa-info-circle fa-2x mb-2"></i><br>
-                                <strong>Nenhuma venda realizada hoje</strong><br>
-                                <small>As vendas aparecerão aqui conforme forem sendo realizadas</small>
+                        <tr class="empty-state">
+                            <td colspan="8" class="text-center py-5">
+                                <div class="empty-icon">
+                                    <i class="fas fa-receipt fa-3x"></i>
+                                </div>
+                                <h6 class="mt-3 mb-2">Nenhuma venda encontrada</h6>
+                                <p class="text-muted">As vendas realizadas aparecerão aqui conforme forem sendo realizadas</p>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="resetarFiltros()">
+                                    <i class="fas fa-refresh"></i> Resetar Filtros
+                                </button>
                             </td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
+        </div>
+        
+        <!-- Paginação -->
+        <div class="paginacao-vendas">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="info-paginacao">
+                    <small class="text-muted">
+                        Mostrando <span id="registrosExibidos">{{ vendas_hoje|length if vendas_hoje else 0 }}</span> 
+                        de <span id="totalRegistros">{{ vendas_hoje|length if vendas_hoje else 0 }}</span> vendas
+                    </small>
+                </div>
+                <div class="controles-paginacao">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Exibir:</span>
+                        <select id="itensPorPagina" class="form-control" onchange="alterarItensPorPagina()">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span class="input-group-text">por página</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -636,7 +852,7 @@ function mostrarResultadosBusca(produtos) {
         if (!produtos || produtos.length === 0) {
             tbody.append(`
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-3">
+                    <td colspan="8" class="text-center text-muted py-3">
                         <i class="fas fa-search"></i> Nenhum produto encontrado
                     </td>
                 </tr>
@@ -911,5 +1127,390 @@ function imprimirRecibo(vendaId) {
     console.log('Redirecionando para visualização e impressão da venda:', vendaId);
     window.open(`/vendas/${vendaId}`, '_blank');
 }
+
+// Função para duplicar venda
+function duplicarVenda(vendaId) {
+    if (confirm('Deseja duplicar esta venda? Os produtos serão adicionados ao carrinho atual.')) {
+        fetch(`/api/vendas/${vendaId}/detalhes`)
+            .then(response => response.json())
+            .then(venda => {
+                venda.itens.forEach(item => {
+                    adicionarProdutoVenda(item.produto_id, item.produto_nome, item.preco_unitario, item.estoque_atual, item.quantidade);
+                });
+                alert('Venda duplicada com sucesso!');
+            })
+            .catch(error => {
+                console.error('Erro ao duplicar venda:', error);
+                alert('Erro ao duplicar venda');
+            });
+    }
+}
+
+// FILTROS E ORDENAÇÃO DE VENDAS
+let vendasOriginais = [];
+let currentSortColumn = 'id';
+let currentSortDirection = 'desc';
+
+// Inicializar dados de vendas
+function inicializarDadosVendas() {
+    const linhas = document.querySelectorAll('#vendasTableBody tr.venda-row');
+    vendasOriginais = Array.from(linhas).map(linha => ({
+        elemento: linha,
+        id: parseInt(linha.dataset.id),
+        cliente: linha.dataset.cliente,
+        formaPagamento: linha.dataset.formaPagamento,
+        total: parseFloat(linha.dataset.total),
+        data: linha.dataset.data,
+        html: linha.outerHTML
+    }));
+}
+
+// Filtrar vendas por data
+function filtrarVendasPorData() {
+    const dataInicio = document.getElementById('dataInicio').value;
+    const dataFim = document.getElementById('dataFim').value;
+    
+    if (!dataInicio || !dataFim) return;
+    
+    // Mostrar loading
+    const tbody = document.getElementById('vendasTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="8" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="mt-2 mb-0">Carregando vendas...</p>
+            </td>
+        </tr>
+    `;
+    
+    // Fazer requisição para buscar vendas do período
+    fetch(`/api/vendas/periodo?inicio=${dataInicio}&fim=${dataFim}`)
+        .then(response => response.json())
+        .then(data => {
+            atualizarTabelaVendas(data.vendas);
+            atualizarEstatisticas(data.estatisticas);
+        })
+        .catch(error => {
+            console.error('Erro ao filtrar vendas:', error);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i><br>
+                        <strong>Erro ao carregar vendas</strong><br>
+                        <small>Tente novamente em alguns instantes</small>
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+// Atualizar tabela de vendas
+function atualizarTabelaVendas(vendas) {
+    const tbody = document.getElementById('vendasTableBody');
+    
+    if (!vendas || vendas.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-state">
+                <td colspan="8" class="text-center py-5">
+                    <div class="empty-icon">
+                        <i class="fas fa-receipt fa-3x"></i>
+                    </div>
+                    <h6 class="mt-3 mb-2">Nenhuma venda encontrada</h6>
+                    <p class="text-muted">Não há vendas no período selecionado</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = vendas.map(venda => `
+        <tr class="venda-row" 
+            data-id="${venda.id}"
+            data-cliente="${(venda.cliente || 'cliente avulso').toLowerCase()}"
+            data-forma-pagamento="${venda.forma_pagamento}"
+            data-total="${venda.total}"
+            data-data="${venda.data_venda}"
+            data-funcionario="${venda.usuario_id || ''}"
+            data-funcionario-nome="${(venda.funcionario_nome || 'sem funcionario').toLowerCase()}">
+            <td>
+                <div class="venda-numero">
+                    <strong class="numero-principal">#${venda.id}</strong>
+                    <small class="data-criacao">${venda.data_venda ? venda.data_venda.substring(0, 10) : ''}</small>
+                </div>
+            </td>
+            <td>
+                <div class="cliente-info">
+                    <i class="fas fa-user"></i>
+                    <span class="cliente-nome">${venda.cliente || 'Cliente Avulso'}</span>
+                </div>
+            </td>
+            <td>
+                <span class="badge badge-itens">
+                    <i class="fas fa-box"></i>
+                    ${venda.total_itens} ${venda.total_itens === 1 ? 'item' : 'itens'}
+                </span>
+            </td>
+            <td>
+                <div class="valor-venda">
+                    <strong class="valor-principal">R$ ${venda.total.toFixed(2).replace('.', ',')}</strong>
+                    ${venda.desconto && venda.desconto > 0 ? `
+                        <small class="desconto-aplicado">
+                            <i class="fas fa-percent"></i> Desc.: R$ ${venda.desconto.toFixed(2).replace('.', ',')}
+                        </small>
+                    ` : ''}
+                </div>
+            </td>
+            <td>
+                <span class="pagamento-badge ${getPagamentoBadgeClass(venda.forma_pagamento)}">
+                    ${getPagamentoIcon(venda.forma_pagamento)} ${formatarFormaPagamento(venda.forma_pagamento)}
+                </span>
+            </td>
+            <td>
+                <div class="data-hora-venda">
+                    <div class="hora-principal">${venda.data_venda ? venda.data_venda.substring(11, 16) : '--:--'}</div>
+                    <small class="data-completa">${venda.data_venda ? venda.data_venda.substring(0, 10) : '--/--/----'}</small>
+                </div>
+            </td>
+            <td>
+                <div class="funcionario-info">
+                    <i class="fas fa-user-tie"></i>
+                    <span class="funcionario-nome">${venda.funcionario_nome || 'Sem funcionário'}</span>
+                </div>
+            </td>
+            <td>
+                <div class="acoes-venda">
+                    <button class="btn btn-sm btn-action btn-visualizar" 
+                            onclick="visualizarVenda(${venda.id})" 
+                            title="Visualizar detalhes">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <a href="/vendas/${venda.id}" 
+                       target="_blank" 
+                       class="btn btn-sm btn-action btn-imprimir" 
+                       title="Imprimir recibo">
+                        <i class="fas fa-print"></i>
+                    </a>
+                    <button class="btn btn-sm btn-action btn-duplicar" 
+                            onclick="duplicarVenda(${venda.id})" 
+                            title="Duplicar venda">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    
+    // Reinicializar dados de vendas após atualização
+    inicializarDadosVendas();
+}
+
+// Helpers para formatação
+function getPagamentoBadgeClass(formaPagamento) {
+    if (formaPagamento === 'dinheiro') return 'pagamento-dinheiro';
+    if (formaPagamento === 'pix') return 'pagamento-pix';
+    if (formaPagamento.includes('cartao')) return 'pagamento-cartao';
+    return 'pagamento-prazo';
+}
+
+function getPagamentoIcon(formaPagamento) {
+    if (formaPagamento === 'dinheiro') return '<i class="fas fa-money-bill-wave"></i>';
+    if (formaPagamento === 'pix') return '<i class="fab fa-pix"></i>';
+    if (formaPagamento === 'cartao_debito') return '<i class="fas fa-credit-card"></i>';
+    if (formaPagamento === 'cartao_credito') return '<i class="fas fa-credit-card"></i>';
+    if (formaPagamento === 'prazo') return '<i class="fas fa-calendar-plus"></i>';
+    return '<i class="fas fa-question"></i>';
+}
+
+function formatarFormaPagamento(formaPagamento) {
+    const formatacoes = {
+        'dinheiro': 'Dinheiro',
+        'pix': 'PIX',
+        'cartao_debito': 'C. Débito',
+        'cartao_credito': 'C. Crédito',
+        'prazo': 'A Prazo'
+    };
+    return formatacoes[formaPagamento] || formaPagamento.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// Atualizar estatísticas
+function atualizarEstatisticas(stats) {
+    document.getElementById('totalVendasCount').textContent = stats.total_vendas || 0;
+    document.getElementById('totalVendasValor').textContent = `R$ ${(stats.faturamento || 0).toFixed(2).replace('.', ',')}`;
+    document.getElementById('totalItensVendidos').textContent = stats.total_itens || 0;
+    document.getElementById('ticketMedio').textContent = `R$ ${(stats.ticket_medio || 0).toFixed(2).replace('.', ',')}`;
+}
+
+// Filtrar tabela por texto e outras opções
+function filtrarTabela() {
+    const filtroCliente = document.getElementById('filtroCliente').value.toLowerCase();
+    const filtroFormaPagamento = document.getElementById('filtroFormaPagamento').value;
+    const filtroFuncionario = document.getElementById('filtroFuncionario').value;
+    
+    const linhas = document.querySelectorAll('#vendasTableBody tr.venda-row');
+    let visiveisCount = 0;
+    
+    linhas.forEach(linha => {
+        let visivel = true;
+        
+        // Filtro por cliente
+        if (filtroCliente && !linha.dataset.cliente.includes(filtroCliente)) {
+            visivel = false;
+        }
+        
+        // Filtro por forma de pagamento
+        if (filtroFormaPagamento && linha.dataset.formaPagamento !== filtroFormaPagamento) {
+            visivel = false;
+        }
+        
+        // Filtro por funcionário
+        if (filtroFuncionario && linha.dataset.funcionario !== filtroFuncionario) {
+            visivel = false;
+        }
+        
+        linha.style.display = visivel ? '' : 'none';
+        if (visivel) visiveisCount++;
+    });
+    
+    document.getElementById('registrosExibidos').textContent = visiveisCount;
+    
+    // Mostrar mensagem se nenhum registro for encontrado
+    const tbody = document.getElementById('vendasTableBody');
+    const emptyState = tbody.querySelector('.empty-state');
+    
+    if (visiveisCount === 0 && !emptyState) {
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr class="empty-state-filter">
+                <td colspan="8" class="text-center py-4 text-muted">
+                    <i class="fas fa-search fa-2x mb-2"></i><br>
+                    <strong>Nenhuma venda encontrada</strong><br>
+                    <small>Tente ajustar os filtros aplicados</small>
+                </td>
+            </tr>
+        `);
+    } else if (visiveisCount > 0) {
+        const emptyFilter = tbody.querySelector('.empty-state-filter');
+        if (emptyFilter) emptyFilter.remove();
+    }
+}
+
+// Ordenar tabela
+function ordenarTabela() {
+    const ordenacao = document.getElementById('ordenacao').value;
+    const [coluna, direcao] = ordenacao.split('_');
+    
+    const tbody = document.getElementById('vendasTableBody');
+    const linhas = Array.from(tbody.querySelectorAll('tr.venda-row'));
+    
+    linhas.sort((a, b) => {
+        let valorA, valorB;
+        
+        switch (coluna) {
+            case 'id':
+                valorA = parseInt(a.dataset.id);
+                valorB = parseInt(b.dataset.id);
+                break;
+            case 'cliente':
+                valorA = a.dataset.cliente;
+                valorB = b.dataset.cliente;
+                break;
+            case 'funcionario':
+                valorA = a.dataset.funcionarioNome;
+                valorB = b.dataset.funcionarioNome;
+                break;
+            case 'valor':
+                valorA = parseFloat(a.dataset.total);
+                valorB = parseFloat(b.dataset.total);
+                break;
+            default:
+                return 0;
+        }
+        
+        if (valorA < valorB) return direcao === 'asc' ? -1 : 1;
+        if (valorA > valorB) return direcao === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Reordenar no DOM
+    linhas.forEach(linha => tbody.appendChild(linha));
+}
+
+// Resetar filtros
+function resetarFiltros() {
+    document.getElementById('dataInicio').value = new Date().toISOString().split('T')[0];
+    document.getElementById('dataFim').value = new Date().toISOString().split('T')[0];
+    document.getElementById('filtroCliente').value = '';
+    document.getElementById('filtroFormaPagamento').value = '';
+    document.getElementById('filtroFuncionario').value = '';
+    document.getElementById('ordenacao').value = 'id_desc';
+    
+    filtrarVendasPorData();
+}
+
+// Exportar vendas
+function exportarVendas(formato) {
+    const dataInicio = document.getElementById('dataInicio').value;
+    const dataFim = document.getElementById('dataFim').value;
+    
+    const url = `/api/vendas/exportar/${formato}?inicio=${dataInicio}&fim=${dataFim}`;
+    window.open(url, '_blank');
+}
+
+// Imprimir relatório
+function imprimirRelatorio() {
+    const dataInicio = document.getElementById('dataInicio').value;
+    const dataFim = document.getElementById('dataFim').value;
+    
+    const url = `/relatorios/vendas?inicio=${dataInicio}&fim=${dataFim}&imprimir=true`;
+    window.open(url, '_blank');
+}
+
+// Alterar itens por página
+function alterarItensPorPagina() {
+    const itensPorPagina = document.getElementById('itensPorPagina').value;
+    // Implementar paginação se necessário
+    console.log('Alterando para', itensPorPagina, 'itens por página');
+}
+
+// Inicializar quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Definir data de hoje como padrão
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('dataInicio').value = hoje;
+    document.getElementById('dataFim').value = hoje;
+    
+    // Inicializar dados de vendas
+    inicializarDadosVendas();
+    
+    // Configurar ordenação por clique no cabeçalho
+    document.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', function() {
+            const coluna = this.dataset.column;
+            const icone = this.querySelector('i');
+            
+            // Resetar outros ícones
+            document.querySelectorAll('.sortable i').forEach(i => {
+                i.className = 'fas fa-sort';
+            });
+            
+            // Definir direção
+            let direcao = 'asc';
+            if (currentSortColumn === coluna && currentSortDirection === 'asc') {
+                direcao = 'desc';
+            }
+            
+            currentSortColumn = coluna;
+            currentSortDirection = direcao;
+            
+            // Atualizar ícone
+            icone.className = `fas fa-sort-${direcao === 'asc' ? 'up' : 'down'}`;
+            
+            // Aplicar ordenação
+            document.getElementById('ordenacao').value = `${coluna}_${direcao}`;
+            ordenarTabela();
+        });
+    });
+});
 </script>
 {% endblock %}
