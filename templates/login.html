@@ -324,16 +324,9 @@
                             Acesso seguro e protegido
                         </small>
                     </div>
-                    
-                    <!-- Botão para criar usuário -->
-                    <div class="text-center mt-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleCreateUser()">
-                            <i class="fas fa-user-plus me-1"></i>Criar Novo Usuário
-                        </button>
-                    </div>
 
                     <!-- Botão para recuperar senha -->
-                    <div class="text-center mt-2">
+                    <div class="text-center mt-3">
                         <small class="text-muted">
                             <i class="fas fa-question-circle me-1"></i>
                             <a href="{{ url_for('recuperar_senha') }}" class="text-decoration-none" 
@@ -342,116 +335,6 @@
                             </a>
                         </small>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Formulário de Criação de Usuário (inicialmente oculto) -->
-            <div class="col-lg-6" id="createUserForm" style="display: none;">
-                <div class="login-right">
-                    <div class="text-center mb-4">
-                        <h2>Criar Novo Usuário</h2>
-                        <p class="text-muted">Preencha os dados para criar uma conta</p>
-                    </div>
-                    
-                    <form method="POST" action="{{ url_for('criar_usuario_route') }}">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="nome_completo" class="form-label">
-                                    <i class="fas fa-user me-2"></i>Nome Completo *
-                                </label>
-                                <input type="text" class="form-control" id="nome_completo" name="nome_completo" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="new_username" class="form-label">
-                                    <i class="fas fa-user-circle me-2"></i>Nome de Usuário *
-                                </label>
-                                <input type="text" class="form-control" id="new_username" name="username" required>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">
-                                    <i class="fas fa-envelope me-2"></i>Email *
-                                </label>
-                                <input type="email" class="form-control" id="email" name="email" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="new_password" class="form-label">
-                                    <i class="fas fa-lock me-2"></i>Senha *
-                                </label>
-                                <input type="password" class="form-control" id="new_password" name="password" required minlength="6">
-                            </div>
-                        </div>
-                        
-                        <!-- Permissões -->
-                        <div class="mb-4">
-                            <label class="form-label">
-                                <i class="fas fa-key me-2"></i>Permissões do Usuário
-                            </label>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_vendas" name="permissao_vendas" checked>
-                                        <label class="form-check-label" for="permissao_vendas">
-                                            <i class="fas fa-cash-register me-1 text-primary"></i>Vendas
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_estoque" name="permissao_estoque" checked>
-                                        <label class="form-check-label" for="permissao_estoque">
-                                            <i class="fas fa-boxes me-1 text-success"></i>Estoque
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_clientes" name="permissao_clientes" checked>
-                                        <label class="form-check-label" for="permissao_clientes">
-                                            <i class="fas fa-users me-1 text-info"></i>Clientes
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_financeiro" name="permissao_financeiro">
-                                        <label class="form-check-label" for="permissao_financeiro">
-                                            <i class="fas fa-coins me-1 text-warning"></i>Financeiro
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_caixa" name="permissao_caixa">
-                                        <label class="form-check-label" for="permissao_caixa">
-                                            <i class="fas fa-cash-register me-1 text-primary"></i>Caixa
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_relatorios" name="permissao_relatorios">
-                                        <label class="form-check-label" for="permissao_relatorios">
-                                            <i class="fas fa-chart-bar me-1 text-secondary"></i>Relatórios
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="permissao_admin" name="permissao_admin">
-                                        <label class="form-check-label" for="permissao_admin">
-                                            <i class="fas fa-crown me-1 text-danger"></i>Administrador
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <button type="button" class="btn btn-secondary w-100" onclick="toggleCreateUser()">
-                                    <i class="fas fa-arrow-left me-2"></i>Voltar ao Login
-                                </button>
-                            </div>
-                            <div class="col-md-6">
-                                <button type="submit" class="btn btn-login w-100">
-                                    <i class="fas fa-user-plus me-2"></i>Criar Usuário
-                                </button>
-                            </div>
-                        </div>
-                    </form>
                 </div>
             </div>
         </div>
@@ -477,20 +360,6 @@
             }
         }
         
-        // Alternar entre login e criação de usuário
-        function toggleCreateUser() {
-            const loginForm = document.querySelector('.col-lg-6:not(#createUserForm)');
-            const createUserForm = document.getElementById('createUserForm');
-            
-            if (createUserForm.style.display === 'none') {
-                loginForm.style.display = 'none';
-                createUserForm.style.display = 'block';
-            } else {
-                loginForm.style.display = 'block';
-                createUserForm.style.display = 'none';
-            }
-        }
-        
         // Auto-hide alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
@@ -505,7 +374,7 @@
         // Enter key submit
         document.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                const visibleForm = document.querySelector('form:not([style*="display: none"])');
+                const visibleForm = document.querySelector('form');
                 if (visibleForm) {
                     visibleForm.submit();
                 }

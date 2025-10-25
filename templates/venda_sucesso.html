@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venda Registrada com Sucesso - FG Auto Peças</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .success-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .success-icon {
+            font-size: 4rem;
+            color: #28a745;
+            margin-bottom: 20px;
+            animation: bounce 1s ease-in-out;
+        }
+        
+        .success-title {
+            color: #2c3e50;
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .success-message {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        .btn-custom {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-print {
+            background: linear-gradient(135deg, #1a237e 0%, #37474f 100%);
+            color: white;
+            border: none;
+        }
+        
+        .btn-print:hover {
+            background: linear-gradient(135deg, #ff6d00 0%, #d32f2f 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 109, 0, 0.4);
+        }
+        
+        .btn-new-sale {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+        }
+        
+        .btn-new-sale:hover {
+            background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(32, 201, 151, 0.4);
+        }
+        
+        .btn-back {
+            background: #6c757d;
+            color: white;
+            border: none;
+        }
+        
+        .btn-back:hover {
+            background: #545b62;
+            color: white;
+            transform: translateY(-2px);
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 60%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            80% {
+                transform: translateY(-5px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        
+        <h1 class="success-title">Venda Registrada com Sucesso!</h1>
+        
+        <p class="success-message">
+            A venda <strong>#{{ venda_id }}</strong> foi registrada com sucesso no sistema.
+        </p>
+        
+        <div class="d-flex flex-column gap-3">
+            <button class="btn btn-custom btn-print" onclick="imprimirRecibo()">
+                <i class="fas fa-print me-2"></i>Imprimir Recibo
+            </button>
+            
+            <a href="{{ url_for('vendas') }}" class="btn btn-custom btn-new-sale">
+                <i class="fas fa-plus me-2"></i>Nova Venda
+            </a>
+            
+            <a href="{{ url_for('vendas') }}" class="btn btn-custom btn-back">
+                <i class="fas fa-arrow-left me-2"></i>Voltar às Vendas
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        function imprimirRecibo() {
+            // Abre o recibo em uma nova janela
+            const janelaRecibo = window.open('/vendas/{{ venda_id }}/recibo', '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+            
+            if (!janelaRecibo) {
+                alert('Por favor, permita pop-ups para imprimir o recibo.');
+                return;
+            }
+            
+            // Auto-imprimir quando a página carregar
+            janelaRecibo.onload = function() {
+                setTimeout(() => {
+                    janelaRecibo.print();
+                }, 1000);
+            };
+        }
+        
+        {% if imprimir %}
+        // Auto-imprimir se a opção foi marcada
+        window.onload = function() {
+            setTimeout(imprimirRecibo, 500);
+        };
+        {% endif %}
+    </script>
+</body>
+</html>

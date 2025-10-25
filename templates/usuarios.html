@@ -11,7 +11,12 @@
                 <h5 class="mb-0">
                     <i class="fas fa-users"></i> Usuários do Sistema
                 </h5>
-                <span class="badge bg-primary">{{ usuarios|length }} usuários</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-primary">{{ usuarios|length }} usuários</span>
+                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCriarUsuario">
+                        <i class="fas fa-user-plus me-1"></i> Novo Usuário
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <!-- Controles de Paginação -->
@@ -98,6 +103,16 @@
                                                 <i class="fas fa-crown"></i>
                                             </span>
                                         {% endif %}
+                                        {% if usuario.permissao_contas_pagar %}
+                                            <span class="badge bg-danger" title="Contas a Pagar">
+                                                <i class="fas fa-file-invoice-dollar"></i>
+                                            </span>
+                                        {% endif %}
+                                        {% if usuario.permissao_contas_receber %}
+                                            <span class="badge bg-success" title="Contas a Receber">
+                                                <i class="fas fa-receipt"></i>
+                                            </span>
+                                        {% endif %}
                                     </div>
                                 </td>
                                 <td>{{ usuario.created_at[:10] if usuario.created_at else 'N/A' }}</td>
@@ -121,6 +136,134 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Criar Usuário -->
+<div class="modal fade" id="modalCriarUsuario" tabindex="-1" aria-labelledby="modalCriarUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalCriarUsuarioLabel">
+                    <i class="fas fa-user-plus me-2"></i>Criar Novo Usuário
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="POST" action="{{ url_for('criar_usuario_route') }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Atenção:</strong> Apenas administradores podem criar novos usuários no sistema.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nome_completo_modal" class="form-label">
+                                <i class="fas fa-user me-2"></i>Nome Completo *
+                            </label>
+                            <input type="text" class="form-control" id="nome_completo_modal" name="nome_completo" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="username_modal" class="form-label">
+                                <i class="fas fa-user-circle me-2"></i>Nome de Usuário *
+                            </label>
+                            <input type="text" class="form-control" id="username_modal" name="username" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="email_modal" class="form-label">
+                                <i class="fas fa-envelope me-2"></i>Email *
+                            </label>
+                            <input type="email" class="form-control" id="email_modal" name="email" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="password_modal" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Senha *
+                            </label>
+                            <input type="password" class="form-control" id="password_modal" name="password" required minlength="6">
+                            <div class="form-text">Mínimo de 6 caracteres</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Permissões -->
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i class="fas fa-key me-2"></i>Permissões do Usuário
+                        </label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_vendas_modal" name="permissao_vendas" checked>
+                                    <label class="form-check-label" for="permissao_vendas_modal">
+                                        <i class="fas fa-cash-register me-1 text-primary"></i>Vendas
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_estoque_modal" name="permissao_estoque" checked>
+                                    <label class="form-check-label" for="permissao_estoque_modal">
+                                        <i class="fas fa-boxes me-1 text-success"></i>Estoque
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_clientes_modal" name="permissao_clientes" checked>
+                                    <label class="form-check-label" for="permissao_clientes_modal">
+                                        <i class="fas fa-users me-1 text-info"></i>Clientes
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_financeiro_modal" name="permissao_financeiro">
+                                    <label class="form-check-label" for="permissao_financeiro_modal">
+                                        <i class="fas fa-coins me-1 text-warning"></i>Financeiro
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_caixa_modal" name="permissao_caixa">
+                                    <label class="form-check-label" for="permissao_caixa_modal">
+                                        <i class="fas fa-cash-register me-1 text-primary"></i>Caixa
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_relatorios_modal" name="permissao_relatorios">
+                                    <label class="form-check-label" for="permissao_relatorios_modal">
+                                        <i class="fas fa-chart-bar me-1 text-secondary"></i>Relatórios
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_admin_modal" name="permissao_admin">
+                                    <label class="form-check-label" for="permissao_admin_modal">
+                                        <i class="fas fa-crown me-1 text-danger"></i>Administrador
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_contas_pagar_modal" name="permissao_contas_pagar">
+                                    <label class="form-check-label" for="permissao_contas_pagar_modal">
+                                        <i class="fas fa-file-invoice-dollar me-1 text-danger"></i>Contas a Pagar
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="permissao_contas_receber_modal" name="permissao_contas_receber">
+                                    <label class="form-check-label" for="permissao_contas_receber_modal">
+                                        <i class="fas fa-receipt me-1 text-success"></i>Contas a Receber
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-user-plus me-2"></i>Criar Usuário
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -206,6 +349,18 @@
                                         <i class="fas fa-crown me-1 text-danger"></i>Administrador
                                     </label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_contas_pagar" name="permissao_contas_pagar">
+                                    <label class="form-check-label" for="edit_permissao_contas_pagar">
+                                        <i class="fas fa-file-invoice-dollar me-1 text-danger"></i>Contas a Pagar
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="edit_permissao_contas_receber" name="permissao_contas_receber">
+                                    <label class="form-check-label" for="edit_permissao_contas_receber">
+                                        <i class="fas fa-receipt me-1 text-success"></i>Contas a Receber
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -281,6 +436,8 @@ function editarUsuario(userId) {
         document.getElementById('edit_permissao_caixa').checked = usuario.permissao_caixa;
         document.getElementById('edit_permissao_relatorios').checked = usuario.permissao_relatorios;
         document.getElementById('edit_permissao_admin').checked = usuario.permissao_admin;
+        document.getElementById('edit_permissao_contas_pagar').checked = usuario.permissao_contas_pagar || false;
+        document.getElementById('edit_permissao_contas_receber').checked = usuario.permissao_contas_receber || false;
         
         // Configurar ação do formulário
         document.getElementById('formEditarUsuario').action = `/usuarios/editar/${userId}`;

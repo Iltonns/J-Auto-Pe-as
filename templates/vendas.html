@@ -5,6 +5,32 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/vendas-layout.css') }}">
+<style>
+    /* Checkbox personalizado para impressão */
+    .form-check-custom .form-check-input {
+        border-radius: 4px;
+        border: 2px solid #1a237e;
+        width: 18px;
+        height: 18px;
+    }
+    
+    .form-check-custom .form-check-input:checked {
+        background-color: #1a237e;
+        border-color: #1a237e;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10l3 3l6-6'/%3e%3c/svg%3e");
+    }
+    
+    .form-check-custom .form-check-label {
+        color: #37474f;
+        font-weight: 500;
+        cursor: pointer;
+        padding-left: 8px;
+    }
+    
+    .form-check-custom .form-check-label:hover {
+        color: #1a237e;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -190,6 +216,17 @@
                                 Troco
                             </label>
                             <div class="form-control-plaintext fw-bold fs-4" id="troco">R$ 0,00</div>
+                        </div>
+                        
+                        <!-- OPÇÃO DE IMPRESSÃO -->
+                        <div class="mb-3">
+                            <div class="form-check form-check-custom">
+                                <input class="form-check-input" type="checkbox" id="imprimir_recibo" name="imprimir_recibo" checked>
+                                <label class="form-check-label" for="imprimir_recibo">
+                                    <i class="fas fa-print me-1"></i>
+                                    Imprimir recibo após finalizar venda
+                                </label>
+                            </div>
                         </div>
                         
                         <!-- BOTÕES DE AÇÃO -->
@@ -470,12 +507,11 @@
                                             title="Visualizar detalhes">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <a href="{{ url_for('visualizar_venda', venda_id=venda.id) }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-action btn-imprimir" 
-                                       title="Imprimir recibo">
+                                    <button class="btn btn-sm btn-action btn-imprimir" 
+                                            onclick="imprimirRecibo({{ venda.id }})"
+                                            title="Imprimir recibo">
                                         <i class="fas fa-print"></i>
-                                    </a>
+                                    </button>
                                     <button class="btn btn-sm btn-action btn-duplicar" 
                                             onclick="duplicarVenda({{ venda.id }})" 
                                             title="Duplicar venda">
@@ -545,35 +581,6 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="adicionarProdutoVenda(produtoTemp.id, produtoTemp.nome, produtoTemp.preco, produtoTemp.estoque, parseInt($('#quantidade_produto').val()))">
                     <i class="fas fa-plus"></i> Adicionar à Venda
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL RECIBO DE VENDA -->
-<div class="modal fade" id="modalReciboVenda" tabindex="-1" aria-labelledby="modalReciboVendaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalReciboVendaLabel">
-                    <i class="fas fa-receipt me-2"></i>
-                    Recibo de Venda
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="conteudoRecibo">
-                <!-- Conteúdo do recibo será carregado aqui -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>Fechar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="imprimirReciboModal()">
-                    <i class="fas fa-print me-2"></i>Imprimir
-                </button>
-                <button type="button" class="btn btn-success" onclick="novaVenda()" data-bs-dismiss="modal">
-                    <i class="fas fa-plus me-2"></i>Nova Venda
                 </button>
             </div>
         </div>
@@ -1122,10 +1129,24 @@ function visualizarVenda(vendaId) {
     window.location.href = `/vendas/${vendaId}`;
 }
 
-// Função para imprimir recibo de venda
+// Função para imprimir recibo de venda - Nova implementação
 function imprimirRecibo(vendaId) {
-    console.log('Redirecionando para visualização e impressão da venda:', vendaId);
-    window.open(`/vendas/${vendaId}`, '_blank');
+    console.log('Imprimindo recibo da venda:', vendaId);
+    
+    // Abre uma nova janela com o recibo para impressão
+    const janelaRecibo = window.open(`/vendas/${vendaId}/recibo`, '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+    
+    if (!janelaRecibo) {
+        alert('Por favor, permita pop-ups para imprimir o recibo.');
+        return;
+    }
+    
+    // Opcional: Auto-imprimir quando a página carregar
+    janelaRecibo.onload = function() {
+        setTimeout(() => {
+            janelaRecibo.print();
+        }, 1000);
+    };
 }
 
 // Função para duplicar venda

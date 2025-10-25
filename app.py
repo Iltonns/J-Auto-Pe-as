@@ -104,7 +104,7 @@ class User(UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     user_data = buscar_usuario_por_id(int(user_id))
-    if user_data:
+    if user_data and user_data.get('ativo', False):
         return User(user_data)
     return None
 
@@ -148,6 +148,23 @@ def utility_processor():
         return False
     return dict(has_permission=has_permission)
 
+# Verificação de usuário ativo antes de cada requisição
+@app.before_request
+def check_user_active():
+    """Verifica se o usuário logado ainda está ativo antes de cada requisição"""
+    # Lista de rotas que não precisam dessa verificação
+    excluded_routes = ['login', 'logout', 'static']
+    
+    # Se não for uma rota excluída e o usuário estiver autenticado
+    if request.endpoint not in excluded_routes and current_user.is_authenticated:
+        # Verificar se o usuário ainda existe e está ativo
+        user_data = buscar_usuario_por_id(int(current_user.id))
+        if not user_data or not user_data.get('ativo', False):
+            # Usuário foi inativado, fazer logout automaticamente
+            logout_user()
+            flash('Sua conta foi inativada. Entre em contato com o administrador.', 'error')
+            return redirect(url_for('login'))
+
 # ROTAS DE AUTENTICAÇÃO
 @app.route('/')
 def index():
@@ -167,7 +184,11 @@ def login():
             login_user(user)
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('dashboard'))
+        elif user_data is False:
+            # Usuário existe mas está inativo
+            flash('Sua conta está inativa. Entre em contato com o administrador.', 'error')
         else:
+            # Usuário ou senha incorretos
             flash('Usuário ou senha incorretos!', 'error')
     
     return render_template('login.html')
@@ -213,8 +234,10 @@ def recuperar_senha():
     
     return render_template('recuperar_senha.html')
 
-# ROTAS DE CRIAÇÃO DE USUÁRIO
+# ROTAS DE CRIAÇÃO DE USUÁRIO (apenas para admins logados)
 @app.route('/criar-usuario', methods=['POST'])
+@login_required
+@required_permission('admin')
 def criar_usuario_route():
     try:
         username = request.form['username']
@@ -230,11 +253,13 @@ def criar_usuario_route():
             'financeiro': request.form.get('permissao_financeiro') == 'on',
             'caixa': request.form.get('permissao_caixa') == 'on',
             'relatorios': request.form.get('permissao_relatorios') == 'on',
-            'admin': request.form.get('permissao_admin') == 'on'
+            'admin': request.form.get('permissao_admin') == 'on',
+            'contas_pagar': request.form.get('permissao_contas_pagar') == 'on',
+            'contas_receber': request.form.get('permissao_contas_receber') == 'on'
         }
         
-        # Se logado, usar o ID do usuário atual como created_by
-        created_by = current_user.id if current_user.is_authenticated else None
+        # Usar o ID do usuário atual como created_by
+        created_by = current_user.id
         
         success, message = criar_usuario(username, password, nome_completo, email, permissoes, created_by)
         
@@ -246,7 +271,7 @@ def criar_usuario_route():
     except Exception as e:
         flash(f'Erro ao criar usuário: {str(e)}', 'error')
     
-    return redirect(url_for('login'))
+    return redirect(url_for('usuarios'))
 
 # GERENCIAMENTO DE USUÁRIOS (apenas para admins)
 @app.route('/usuarios')
@@ -280,7 +305,9 @@ def editar_usuario_route(user_id):
             'financeiro': request.form.get('permissao_financeiro') == 'on',
             'caixa': request.form.get('permissao_caixa') == 'on',
             'relatorios': request.form.get('permissao_relatorios') == 'on',
-            'admin': request.form.get('permissao_admin') == 'on'
+            'admin': request.form.get('permissao_admin') == 'on',
+            'contas_pagar': request.form.get('permissao_contas_pagar') == 'on',
+            'contas_receber': request.form.get('permissao_contas_receber') == 'on'
         }
         
         success, message = editar_usuario(user_id, nome_completo, email, permissoes, ativo)
@@ -1277,6 +1304,23 @@ def api_venda(venda_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/vendas/<int:venda_id>/recibo')
+def recibo_venda(venda_id):
+    """Gera recibo para impressão"""
+    try:
+        from Minha_autopecas_web.logica_banco import obter_venda_por_id
+        
+        venda = obter_venda_por_id(venda_id)
+        if not venda:
+            flash('Venda não encontrada', 'error')
+            return redirect(url_for('vendas'))
+        
+        return render_template('recibo_venda.html', venda=venda)
+    
+    except Exception as e:
+        flash(f'Erro ao gerar recibo: {str(e)}', 'error')
+        return redirect(url_for('vendas'))
+
 @app.route('/api/configuracoes-empresa')
 @login_required
 def api_configuracoes_empresa():
@@ -1339,7 +1383,15 @@ def registrar_venda_route():
                 'message': f'Venda #{venda_id} registrada com sucesso!'
             })
         
-        flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
+        # Verificar se deve imprimir o recibo
+        imprimir_recibo = request.form.get('imprimir_recibo') == 'on'
+        
+        if imprimir_recibo:
+            flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
+            # Redireciona para o recibo em uma nova aba
+            return render_template('venda_sucesso.html', venda_id=venda_id, imprimir=True)
+        else:
+            flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
         
     except Exception as e:
         # Se a requisição é AJAX, retorna erro em JSON

@@ -90,6 +90,14 @@ def init_db():
         cursor.execute("ALTER TABLE usuarios ADD COLUMN created_by INTEGER")
     except:
         pass
+    try:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_pagar BOOLEAN DEFAULT 0")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_receber BOOLEAN DEFAULT 0")
+    except:
+        pass
     
     # Tabela de clientes
     cursor.execute('''
@@ -551,16 +559,21 @@ def popular_dados_exemplo():
 
 # FUNÇÕES DE USUÁRIOS
 def verificar_usuario(username, password):
-    """Verifica se o usuário e senha estão corretos"""
+    """Verifica se o usuário e senha estão corretos e se o usuário está ativo"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, password_hash FROM usuarios WHERE username = ?", (username,))
+    cursor.execute("SELECT id, password_hash, ativo FROM usuarios WHERE username = ?", (username,))
     user = cursor.fetchone()
     conn.close()
     
     if user and check_password_hash(user[1], password):
-        return {'id': user[0], 'username': username}
+        # Verificar se o usuário está ativo
+        if user[2]:  # ativo = True
+            return {'id': user[0], 'username': username}
+        else:
+            # Usuário existe mas está inativo
+            return False
     return None
 
 def buscar_usuario_por_id(user_id):
@@ -571,7 +584,8 @@ def buscar_usuario_por_id(user_id):
     cursor.execute('''
         SELECT id, username, email, nome_completo, ativo,
                permissao_vendas, permissao_estoque, permissao_clientes,
-               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
+               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+               permissao_contas_pagar, permissao_contas_receber
         FROM usuarios WHERE id = ?
     ''', (user_id,))
     user = cursor.fetchone()
@@ -590,7 +604,9 @@ def buscar_usuario_por_id(user_id):
             'permissao_financeiro': user[8],
             'permissao_caixa': user[9],
             'permissao_relatorios': user[10],
-            'permissao_admin': user[11]
+            'permissao_admin': user[11],
+            'permissao_contas_pagar': user[12] if len(user) > 12 else False,
+            'permissao_contas_receber': user[13] if len(user) > 13 else False
         }
     return None
 
@@ -651,7 +667,9 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
             'financeiro': False,
             'caixa': False,
             'relatorios': False,
-            'admin': False
+            'admin': False,
+            'contas_pagar': False,
+            'contas_receber': False
         }
     
     conn = sqlite3.connect(DB_PATH)
@@ -675,9 +693,9 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
                 username, password_hash, nome_completo, email,
                 permissao_vendas, permissao_estoque, permissao_clientes,
                 permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                created_by
+                permissao_contas_pagar, permissao_contas_receber, created_by
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             username, password_hash, nome_completo, email,
             permissoes.get('vendas', True),
@@ -687,6 +705,8 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
             permissoes.get('caixa', False),
             permissoes.get('relatorios', False),
             permissoes.get('admin', False),
+            permissoes.get('contas_pagar', False),
+            permissoes.get('contas_receber', False),
             created_by
         ))
         
@@ -707,7 +727,7 @@ def listar_usuarios():
         SELECT id, username, nome_completo, email, ativo,
                permissao_vendas, permissao_estoque, permissao_clientes,
                permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-               created_at
+               permissao_contas_pagar, permissao_contas_receber, created_at
         FROM usuarios
         ORDER BY nome_completo
     ''')
@@ -727,7 +747,9 @@ def listar_usuarios():
             'permissao_caixa': row[9],
             'permissao_relatorios': row[10],
             'permissao_admin': row[11],
-            'created_at': row[12]
+            'permissao_contas_pagar': row[12] if len(row) > 12 else False,
+            'permissao_contas_receber': row[13] if len(row) > 13 else False,
+            'created_at': row[14] if len(row) > 14 else row[12]
         })
     
     conn.close()
@@ -3616,6 +3638,88 @@ def deletar_lancamento_financeiro_db(lancamento_id):
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao deletar lançamento: {str(e)}"
+    finally:
+        conn.close()
+
+def deletar_todas_vendas(restaurar_estoque=True):
+    """
+    Deleta todas as vendas do sistema
+    
+    Args:
+        restaurar_estoque (bool): Se True, restaura o estoque dos produtos vendidos
+    
+    Returns:
+        dict: Informações sobre a operação realizada
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        resultado = {
+            'vendas_deletadas': 0,
+            'itens_deletados': 0,
+            'movimentacoes_caixa_deletadas': 0,
+            'estoque_restaurado': {},
+            'erro': None
+        }
+        
+        # Se deve restaurar estoque, primeiro obter todos os itens vendidos
+        if restaurar_estoque:
+            cursor.execute('''
+                SELECT iv.produto_id, p.nome, SUM(iv.quantidade) as total_vendido
+                FROM itens_venda iv
+                JOIN produtos p ON iv.produto_id = p.id
+                GROUP BY iv.produto_id, p.nome
+            ''')
+            produtos_vendidos = cursor.fetchall()
+            
+            # Restaurar estoque
+            for produto_id, nome_produto, quantidade_vendida in produtos_vendidos:
+                cursor.execute('''
+                    UPDATE produtos 
+                    SET estoque = estoque + ?
+                    WHERE id = ?
+                ''', (quantidade_vendida, produto_id))
+                
+                resultado['estoque_restaurado'][nome_produto] = quantidade_vendida
+        
+        # Contar registros antes de deletar
+        cursor.execute('SELECT COUNT(*) FROM vendas')
+        resultado['vendas_deletadas'] = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM itens_venda')
+        resultado['itens_deletados'] = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id IS NOT NULL')
+        resultado['movimentacoes_caixa_deletadas'] = cursor.fetchone()[0]
+        
+        # Deletar movimentações de caixa relacionadas às vendas
+        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id IS NOT NULL')
+        
+        # Deletar contas a receber relacionadas às vendas
+        cursor.execute('DELETE FROM contas_receber WHERE venda_id IS NOT NULL')
+        
+        # Deletar itens de venda
+        cursor.execute('DELETE FROM itens_venda')
+        
+        # Deletar vendas
+        cursor.execute('DELETE FROM vendas')
+        
+        # Reset dos IDs auto-increment
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('vendas', 'itens_venda')")
+        
+        conn.commit()
+        return resultado
+        
+    except Exception as e:
+        conn.rollback()
+        return {
+            'vendas_deletadas': 0,
+            'itens_deletados': 0,
+            'movimentacoes_caixa_deletadas': 0,
+            'estoque_restaurado': {},
+            'erro': str(e)
+        }
     finally:
         conn.close()
 
