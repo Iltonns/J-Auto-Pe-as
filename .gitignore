@@ -84,3 +84,7 @@ flask_session/
 # File uploads
 uploads/
 static/uploads/
+
+# Test files (optional)
+test_*.py
+*_test.py

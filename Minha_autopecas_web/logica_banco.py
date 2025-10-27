@@ -1171,6 +1171,7 @@ def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=N
     cursor.execute('''
         INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
         VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
     ''', (nome, telefone, email, cpf_cnpj, endereco))
     
     cliente_id = cursor.fetchone()[0]
@@ -1191,6 +1192,7 @@ def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=
     
     conn.commit()
     conn.close()
+    return True
 
 def deletar_cliente(id):
     """Deleta um cliente"""
@@ -1327,6 +1329,7 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
         INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
                             codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
           codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca))
     
@@ -1357,6 +1360,7 @@ def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=Non
     
     conn.commit()
     conn.close()
+    return True
 
 def deletar_produto(id):
     """Marca um produto como inativo"""
@@ -1456,6 +1460,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
         cursor.execute('''
             INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
             VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id))
         
         venda_id = cursor.fetchone()[0]
@@ -2218,6 +2223,7 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
         cursor.execute('''
             INSERT INTO orcamentos (numero_orcamento, cliente_id, total, desconto, observacoes, usuario_id)
             VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (numero_orcamento, cliente_id, total_com_desconto, desconto, observacoes, usuario_id))
         
         orcamento_id = cursor.fetchone()[0]
@@ -3353,10 +3359,12 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
             INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
                                     estado, cep, contato_pessoa, observacoes)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes))
         
+        fornecedor_id = cursor.fetchone()[0]
         conn.commit()
-        return cursor.fetchone()[0]
+        return fornecedor_id
     except Exception as e:
         conn.rollback()
         print(f"Erro ao adicionar fornecedor: {e}")
