@@ -515,6 +515,9 @@
         </div>
     </div>
 
+    <!-- Controles de Paginação -->
+    <div id="controlesPaginacaoProdutos"></div>
+
     <!-- Estatísticas Rápidas -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -1117,7 +1120,8 @@
 
 {% block extra_js %}
 <script>
-// Busca em tempo real
+// Sistema de filtros antigo - desabilitado em favor da paginação
+/*
 document.getElementById('searchInput').addEventListener('input', function() {
     filtrarTabela();
 });
@@ -1175,6 +1179,7 @@ function filtrarTabela() {
         row.style.display = showRow ? '' : 'none';
     });
 }
+*/
 
 // Calculadora de preços
 function calcularPreco(tipo) {
@@ -1475,6 +1480,102 @@ document.querySelector('input[name="arquivo_xml"]').addEventListener('change', f
         }
     } else {
         feedback.remove();
+    }
+});
+
+// Inicialização da Paginação de Produtos
+document.addEventListener('DOMContentLoaded', function() {
+    // Criar controles de paginação
+    createPaginationControls('controlesPaginacaoProdutos', {
+        searchId: 'buscaProdutos',
+        itemsPerPageId: 'itensPorPaginaProdutos',
+        visibleCountId: 'itensVisiveisProdutos',
+        totalCountId: 'totalItensProdutos',
+        prevBtnId: 'btnAnteriorProdutos',
+        nextBtnId: 'btnProximoProdutos',
+        paginationControlsId: 'controlesNavegacaoProdutos',
+        pageInfoId: 'infoPaginacaoProdutos',
+        searchPlaceholder: 'Buscar produtos por nome, marca, código, categoria...'
+    });
+
+    // Verificar se existem produtos para paginar
+    const produtos = document.querySelectorAll('#tabelaProdutos tbody tr');
+    if (produtos.length > 0) {
+        // Inicializar sistema de paginação
+        const paginationProdutos = new TablePagination({
+            tableId: 'tabelaProdutos',
+            searchId: 'buscaProdutos',
+            itemsPerPageId: 'itensPorPaginaProdutos',
+            visibleCountId: 'itensVisiveisProdutos',
+            totalCountId: 'totalItensProdutos',
+            prevBtnId: 'btnAnteriorProdutos',
+            nextBtnId: 'btnProximoProdutos',
+            paginationControlsId: 'controlesNavegacaoProdutos',
+            pageInfoId: 'infoPaginacaoProdutos',
+            defaultItemsPerPage: 20,
+            searchFields: ['nome', 'marca', 'categoria', 'codigo', 'status']
+        });
+
+        // Integrar com filtros existentes
+        const categoriaFilter = document.getElementById('categoriaFilter');
+        const statusFilter = document.getElementById('statusFilter');
+        
+        function aplicarFiltros() {
+            const categoria = categoriaFilter.value.toLowerCase();
+            const status = statusFilter.value.toLowerCase();
+            
+            // Reset da página para primeira
+            paginationProdutos.currentPage = 1;
+            
+            // Filtrar linhas baseado nos critérios
+            paginationProdutos.allRows.forEach(row => {
+                const $row = $(row);
+                const categoriaTexto = $row.find('td:nth-child(5)').text().toLowerCase();
+                const statusTexto = $row.find('td:nth-child(10)').text().toLowerCase();
+                
+                let mostrar = true;
+                
+                // Filtro por categoria
+                if (categoria && !categoriaTexto.includes(categoria)) {
+                    mostrar = false;
+                }
+                
+                // Filtro por status
+                if (status) {
+                    if (status === 'disponivel' && !statusTexto.includes('disponível')) {
+                        mostrar = false;
+                    } else if (status === 'estoque_baixo' && !statusTexto.includes('baixo')) {
+                        mostrar = false;
+                    } else if (status === 'indisponivel' && !statusTexto.includes('indisponível')) {
+                        mostrar = false;
+                    }
+                }
+                
+                // Adicionar ou remover da lista filtrada
+                if (mostrar) {
+                    if (!paginationProdutos.filteredRows.includes(row)) {
+                        paginationProdutos.filteredRows.push(row);
+                    }
+                } else {
+                    const index = paginationProdutos.filteredRows.indexOf(row);
+                    if (index > -1) {
+                        paginationProdutos.filteredRows.splice(index, 1);
+                    }
+                }
+            });
+            
+            paginationProdutos.updatePagination();
+        }
+        
+        // Eventos dos filtros
+        categoriaFilter.addEventListener('change', aplicarFiltros);
+        statusFilter.addEventListener('change', aplicarFiltros);
+        
+        // Remover o event listener do searchInput antigo se existir
+        const searchInputAntigo = document.getElementById('searchInput');
+        if (searchInputAntigo) {
+            searchInputAntigo.style.display = 'none'; // Ocultar o campo de busca antigo
+        }
     }
 });
 </script>

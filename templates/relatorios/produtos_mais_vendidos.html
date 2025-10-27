@@ -54,14 +54,44 @@
                     <h5 class="mb-0">
                         <i class="fas fa-trophy"></i> Ranking dos Produtos Mais Vendidos
                     </h5>
-                    <button class="btn btn-sm btn-success" onclick="exportarCSV()">
-                        <i class="fas fa-download"></i> Exportar CSV
-                    </button>
+                    <div class="export-buttons">
+                        <button class="btn btn-sm btn-success" onclick="exportarCSV()">
+                            <i class="fas fa-file-csv"></i> Exportar CSV
+                        </button>
+                        <a href="{{ url_for('exportar_produtos_mais_vendidos_pdf', data_inicio=data_inicio, data_fim=data_fim, limite=limite) }}" 
+                           class="btn btn-sm btn-danger">
+                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if relatorio.produtos %}
+                        <!-- Controles de Paginação Superior -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2">
+                                    <label for="itensPorPagina" class="form-label mb-0">Mostrar:</label>
+                                    <select id="itensPorPagina" class="form-select form-select-sm" style="width: auto;">
+                                        <option value="10" selected>10</option>
+                                        <option value="20">20</option>
+                                        <option value="50">50</option>
+                                        <option value="all">Todos</option>
+                                    </select>
+                                    <span class="text-muted">produtos</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-end">
+                                    <div class="input-group" style="max-width: 250px;">
+                                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        <input type="text" id="buscaPrincipal" class="form-control" placeholder="Buscar produtos...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
-                            <table class="table table-striped" id="tabelaProdutos">
+                            <table class="table table-striped relatorio-table" id="tabelaProdutos">
                                 <thead>
                                     <tr>
                                         <th>Posição</th>
@@ -94,6 +124,24 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- Controles de Paginação Inferior -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="text-muted">
+                                Mostrando <span id="itensVisiveis">0</span> de <span id="totalItens">0</span> produtos
+                            </div>
+                            <div id="controlesNavegacao" class="d-flex gap-2">
+                                <button id="btnAnterior" class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="fas fa-chevron-left"></i> Anterior
+                                </button>
+                                <button id="btnProximo" class="btn btn-outline-primary btn-sm" disabled>
+                                    Próximo <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Informações da Página -->
+                        <div id="infoPaginacao" class="text-center mt-2"></div>
 
                         <!-- Gráfico de barras simples -->
                         <div class="mt-4">
@@ -133,32 +181,29 @@
 
 <script>
 function exportarCSV() {
-    const table = document.getElementById('tabelaProdutos');
-    let csv = [];
-    
-    // Cabeçalhos
-    const headers = [];
-    table.querySelectorAll('thead th').forEach(th => {
-        headers.push(th.textContent);
-    });
-    csv.push(headers.join(','));
-    
-    // Dados
-    table.querySelectorAll('tbody tr').forEach(tr => {
-        const row = [];
-        tr.querySelectorAll('td').forEach(td => {
-            row.push('"' + td.textContent.replace(/"/g, '""') + '"');
-        });
-        csv.push(row.join(','));
-    });
-    
-    // Download
-    const csvContent = csv.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'produtos_mais_vendidos.csv';
-    link.click();
+    exportarCSVMelhorado('tabelaProdutos', 'relatorio_produtos_mais_vendidos.csv');
 }
+
+// Inicializar paginação quando o documento estiver carregado
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se existem produtos para paginar
+    const tabela = document.getElementById('tabelaProdutos');
+    if (tabela && tabela.querySelector('tbody tr')) {
+        // Inicializar sistema de paginação
+        const pagination = new TablePagination({
+            tableId: 'tabelaProdutos',
+            itemsPerPageId: 'itensPorPagina',
+            searchId: 'buscaPrincipal',
+            visibleCountId: 'itensVisiveis',
+            totalCountId: 'totalItens',
+            prevBtnId: 'btnAnterior',
+            nextBtnId: 'btnProximo',
+            paginationControlsId: 'controlesNavegacao',
+            pageInfoId: 'infoPaginacao',
+            defaultItemsPerPage: 10,
+            searchFields: ['codigo', 'nome', 'quantidade_vendida']
+        });
+    }
+});
 </script>
 {% endblock %}

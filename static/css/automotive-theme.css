@@ -655,3 +655,143 @@ body {
         padding-right: 5px !important;
     }
 }
+
+/* Estilos para botões de exportação de relatórios */
+.export-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.export-buttons .btn {
+    transition: all 0.3s ease;
+    border-radius: 6px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.export-buttons .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.export-buttons .btn-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+    color: white;
+}
+
+.export-buttons .btn-success:hover {
+    background: linear-gradient(135deg, #218838 0%, #1ea47b 100%);
+}
+
+.export-buttons .btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+    border: none;
+    color: white;
+}
+
+.export-buttons .btn-danger:hover {
+    background: linear-gradient(135deg, #c82333 0%, #c0392b 100%);
+}
+
+.export-buttons .btn i {
+    margin-right: 5px;
+}
+
+/* Efeito de loading para exportação */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin: auto;
+    border: 2px solid transparent;
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: button-loading-spinner 1s ease infinite;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+@keyframes button-loading-spinner {
+    from {
+        transform: rotate(0turn);
+    }
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+/* Responsividade para botões de exportação */
+@media (max-width: 768px) {
+    .export-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .export-buttons .btn {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+}
+
+/* Melhorias visuais para tabelas de relatórios */
+.relatorio-table {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.relatorio-table thead th {
+    background: var(--gradient-primary);
+    color: white;
+    font-weight: 600;
+    border: none;
+    padding: 12px 8px;
+}
+
+.relatorio-table tbody tr:hover {
+    background-color: rgba(41, 98, 255, 0.05);
+    transform: scale(1.01);
+    transition: all 0.2s ease;
+}
+
+.relatorio-table tbody td {
+    padding: 10px 8px;
+    vertical-align: middle;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Cards de resumo de relatórios */
+.relatorio-card {
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.relatorio-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.relatorio-card .card-header {
+    background: var(--gradient-neutral);
+    color: white;
+    border: none;
+    padding: 15px 20px;
+}
+
+.relatorio-card .card-body {
+    padding: 20px;
+}

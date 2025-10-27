@@ -103,6 +103,45 @@
                 </div>
             </div>
 
+            <!-- Botões de Exportação -->
+            <div class="row mb-4">
+                <div class="col-12 text-center">
+                    <div class="export-buttons justify-content-center">
+                        <button class="btn btn-success" onclick="exportarCSV()">
+                            <i class="fas fa-file-csv"></i> Exportar CSV
+                        </button>
+                        <a href="{{ url_for('exportar_financeiro_pdf', data_inicio=data_inicio, data_fim=data_fim) }}" 
+                           class="btn btn-danger">
+                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controles de Paginação -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="itensPorPagina" class="form-label mb-0">Mostrar:</label>
+                        <select id="itensPorPagina" class="form-select form-select-sm" style="width: auto;">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                            <option value="all">Todos</option>
+                        </select>
+                        <span class="text-muted">registros</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-end">
+                        <div class="input-group" style="max-width: 250px;">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" id="buscaPrincipal" class="form-control" placeholder="Buscar transações...">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="row">
                 <!-- Vendas por Forma de Pagamento -->
                 <div class="col-md-6 mb-4">
@@ -289,7 +328,142 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tabela Unificada de Transações -->
+            {% if relatorio.contas_receber or relatorio.contas_pagar %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-list"></i> Todas as Transações
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped relatorio-table" id="tabelaFinanceiro">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Data Vencimento</th>
+                                            <th>Descrição</th>
+                                            <th>Cliente/Fornecedor</th>
+                                            <th>Valor</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for conta in relatorio.contas_receber %}
+                                            <tr data-tipo="receber">
+                                                <td><span class="badge bg-success">A Receber</span></td>
+                                                <td>{{ conta.data_vencimento }}</td>
+                                                <td>{{ conta.descricao }}</td>
+                                                <td>{{ conta.cliente }}</td>
+                                                <td>R$ {{ "%.2f"|format(conta.valor) }}</td>
+                                                <td>
+                                                    <span class="badge bg-{% if conta.status == 'Pendente' %}warning{% else %}success{% endif %}">
+                                                        {{ conta.status }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                        {% for conta in relatorio.contas_pagar %}
+                                            <tr data-tipo="pagar">
+                                                <td><span class="badge bg-danger">A Pagar</span></td>
+                                                <td>{{ conta.data_vencimento }}</td>
+                                                <td>{{ conta.descricao }}</td>
+                                                <td>{{ conta.fornecedor }}</td>
+                                                <td>R$ {{ "%.2f"|format(conta.valor) }}</td>
+                                                <td>
+                                                    <span class="badge bg-{% if conta.status == 'Pendente' %}warning{% else %}success{% endif %}">
+                                                        {{ conta.status }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Controles de Paginação Inferior -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="text-muted">
+                                    Mostrando <span id="itensVisiveis">0</span> de <span id="totalItens">0</span> transações
+                                </div>
+                                <div id="controlesNavegacao" class="d-flex gap-2">
+                                    <button id="btnAnterior" class="btn btn-outline-primary btn-sm" disabled>
+                                        <i class="fas fa-chevron-left"></i> Anterior
+                                    </button>
+                                    <button id="btnProximo" class="btn btn-outline-primary btn-sm" disabled>
+                                        Próximo <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Informações da Página -->
+                            <div id="infoPaginacao" class="text-center mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         {% endif %}
     </div>
 </div>
+
+<script>
+function exportarCSV() {
+    // Criar dados CSV
+    let csvData = [];
+    
+    // Cabeçalho
+    csvData.push(['Tipo', 'Descrição', 'Data', 'Valor', 'Status']);
+    
+    // Adicionar contas a receber
+    {% if relatorio.contas_receber %}
+        {% for conta in relatorio.contas_receber %}
+            csvData.push(['Conta a Receber', '{{ conta.descricao }}', '{{ conta.data_vencimento }}', 'R$ {{ "%.2f"|format(conta.valor) }}', '{{ conta.status }}']);
+        {% endfor %}
+    {% endif %}
+    
+    // Adicionar contas a pagar
+    {% if relatorio.contas_pagar %}
+        {% for conta in relatorio.contas_pagar %}
+            csvData.push(['Conta a Pagar', '{{ conta.descricao }}', '{{ conta.data_vencimento }}', 'R$ {{ "%.2f"|format(conta.valor) }}', '{{ conta.status }}']);
+        {% endfor %}
+    {% endif %}
+    
+    // Converter para CSV
+    let csvContent = csvData.map(row => row.map(cell => '"' + cell.replace(/"/g, '""') + '"').join(',')).join('\n');
+    
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'relatorio_financeiro.csv';
+    link.click();
+}
+
+// Inicializar paginação quando o documento estiver carregado
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se existem transações para paginar
+    const tabela = document.getElementById('tabelaFinanceiro');
+    if (tabela && tabela.querySelector('tbody tr')) {
+        // Inicializar sistema de paginação
+        const pagination = new TablePagination({
+            tableId: 'tabelaFinanceiro',
+            itemsPerPageId: 'itensPorPagina',
+            searchId: 'buscaPrincipal',
+            visibleCountId: 'itensVisiveis',
+            totalCountId: 'totalItens',
+            prevBtnId: 'btnAnterior',
+            nextBtnId: 'btnProximo',
+            paginationControlsId: 'controlesNavegacao',
+            pageInfoId: 'infoPaginacao',
+            defaultItemsPerPage: 20,
+            searchFields: ['tipo', 'descricao', 'data_vencimento', 'status']
+        });
+    }
+});
+</script>
 {% endblock %}
