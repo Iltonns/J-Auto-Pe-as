@@ -862,6 +862,15 @@ def api_buscar_produtos():
                     produtos_filtrados.append(produto)
             produtos = produtos_filtrados
         
+        # Converter Decimals para float
+        for produto in produtos:
+            if 'preco' in produto and produto['preco'] is not None:
+                produto['preco'] = float(produto['preco'])
+            if 'preco_custo' in produto and produto['preco_custo'] is not None:
+                produto['preco_custo'] = float(produto['preco_custo'])
+            if 'margem_lucro' in produto and produto['margem_lucro'] is not None:
+                produto['margem_lucro'] = float(produto['margem_lucro'])
+        
         return jsonify(produtos[:50])  # Limitar a 50 resultados
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -873,30 +882,40 @@ def api_buscar_produto_unico(termo):
     try:
         produtos = listar_produtos()
         
+        def converter_decimals(produto):
+            """Converte campos Decimal para float"""
+            if 'preco' in produto and produto['preco'] is not None:
+                produto['preco'] = float(produto['preco'])
+            if 'preco_custo' in produto and produto['preco_custo'] is not None:
+                produto['preco_custo'] = float(produto['preco_custo'])
+            if 'margem_lucro' in produto and produto['margem_lucro'] is not None:
+                produto['margem_lucro'] = float(produto['margem_lucro'])
+            return produto
+        
         # Primeiro tenta encontrar por ID exato
         try:
             produto_id = int(termo)
             for produto in produtos:
                 if produto['id'] == produto_id:
-                    return jsonify(produto)
+                    return jsonify(converter_decimals(produto))
         except ValueError:
             pass
         
         # Depois busca por código de barras exato
         for produto in produtos:
             if produto.get('codigo_barras') and produto['codigo_barras'].lower() == termo.lower():
-                return jsonify(produto)
+                return jsonify(converter_decimals(produto))
         
         # Depois busca por código de fornecedor exato
         for produto in produtos:
             if produto.get('codigo_fornecedor') and produto['codigo_fornecedor'].lower() == termo.lower():
-                return jsonify(produto)
+                return jsonify(converter_decimals(produto))
         
         # Por último, busca por nome (primeiro que contenha o termo)
         termo_lower = termo.lower()
         for produto in produtos:
             if termo_lower in produto['nome'].lower():
-                return jsonify(produto)
+                return jsonify(converter_decimals(produto))
         
         return jsonify({'error': 'Produto não encontrado'})
     except Exception as e:

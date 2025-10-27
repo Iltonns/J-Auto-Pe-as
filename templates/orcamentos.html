@@ -120,8 +120,8 @@
                         </div>
                     </div>
                     
-                    <!-- Controles de Paginação -->
-                    <div id="controlesPaginacaoOrcamento"></div>
+                    <!-- Controles de Paginação - REMOVIDO (campo de busca duplicado) -->
+                    <!-- <div id="controlesPaginacaoOrcamento"></div> -->
 
                     <!-- Tabela de Produtos -->
                     <div class="table-responsive">
@@ -371,6 +371,97 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Cadastrar Novo Produto -->
+<div class="modal fade" id="modalNovoProduto" tabindex="-1" aria-labelledby="modalNovoProdutoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalNovoProdutoLabel">
+                    <i class="fas fa-plus-circle me-2"></i>
+                    Cadastrar Novo Produto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formNovoProduto" method="POST" action="{{ url_for('adicionar_produto_route') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Nome do Produto -->
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Nome do Produto: <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nome" required placeholder="Ex: Filtro de Óleo">
+                        </div>
+
+                        <!-- Código de Barras e Código Fornecedor -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Código de Barras:</label>
+                            <input type="text" class="form-control" name="codigo_barras" placeholder="EAN-13">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Código Fornecedor:</label>
+                            <input type="text" class="form-control" name="codigo_fornecedor" placeholder="Código do fabricante">
+                        </div>
+
+                        <!-- Categoria e Marca -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Categoria:</label>
+                            <input type="text" class="form-control" name="categoria" placeholder="Ex: Filtros">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Marca:</label>
+                            <input type="text" class="form-control" name="marca" placeholder="Ex: Tecfil">
+                        </div>
+
+                        <!-- Preço de Custo e Margem -->
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Preço de Custo: <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="preco_custo" step="0.01" min="0" required placeholder="0.00" id="precoCustoNovo">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Margem de Lucro (%):</label>
+                            <input type="number" class="form-control" name="margem_lucro" step="0.01" min="0" placeholder="100" value="100" id="margemLucroNovo">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Preço de Venda: <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="preco" step="0.01" min="0" required placeholder="0.00" id="precoVendaNovo" readonly>
+                        </div>
+
+                        <!-- Estoque e Estoque Mínimo -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Estoque Inicial: <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" name="estoque" min="0" required placeholder="0" value="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Estoque Mínimo:</label>
+                            <input type="number" class="form-control" name="estoque_minimo" min="0" placeholder="5" value="5">
+                        </div>
+
+                        <!-- Descrição -->
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Descrição:</label>
+                            <textarea class="form-control" name="descricao" rows="3" placeholder="Descrição detalhada do produto"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>O preço de venda será calculado automaticamente: <strong>Custo + (Custo × Margem/100)</strong></small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>
+                        Cadastrar Produto
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -834,7 +925,8 @@ function handleBuscaKeypress(e) {
 
 // Variáveis de paginação para orçamentos
 document.addEventListener('DOMContentLoaded', function() {
-    // Criar controles de paginação
+    // Criar controles de paginação - REMOVIDO para evitar duplicação de campo de busca
+    /* DESABILITADO - A busca de cima já funciona bem
     createPaginationControls('controlesPaginacaoOrcamento', {
         searchId: 'campoBusca',
         searchPlaceholder: '🔍 Buscar por nome, código fornecedor, código de barras ou categoria...',
@@ -847,6 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
         paginationControlsId: 'controlesNavegacaoOrcamento',
         pageInfoId: 'infoPaginacaoOrcamento'
     });
+    */
     
     // Inicializar paginação
     const paginationOrcamento = new TablePagination({
@@ -916,5 +1009,27 @@ function excluirOrcamento(orcamentoId, numeroOrcamento) {
         form.submit();
     }
 }
+
+// Função para calcular preço de venda automaticamente no modal de novo produto
+function calcularPrecoVendaNovo() {
+    const precoCusto = parseFloat(document.getElementById('precoCustoNovo').value) || 0;
+    const margemLucro = parseFloat(document.getElementById('margemLucroNovo').value) || 0;
+    
+    // Fórmula: Preço Venda = Custo + (Custo × Margem/100)
+    const precoVenda = precoCusto + (precoCusto * margemLucro / 100);
+    
+    document.getElementById('precoVendaNovo').value = precoVenda.toFixed(2);
+}
+
+// Adicionar eventos para calcular preço automaticamente
+document.addEventListener('DOMContentLoaded', function() {
+    const precoCustoInput = document.getElementById('precoCustoNovo');
+    const margemLucroInput = document.getElementById('margemLucroNovo');
+    
+    if (precoCustoInput && margemLucroInput) {
+        precoCustoInput.addEventListener('input', calcularPrecoVendaNovo);
+        margemLucroInput.addEventListener('input', calcularPrecoVendaNovo);
+    }
+});
 </script>
 {% endblock %}

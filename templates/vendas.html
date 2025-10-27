@@ -522,7 +522,7 @@
                             <td>
                                 <div class="venda-numero">
                                     <strong class="numero-principal">#{{ venda.id }}</strong>
-                                    <small class="data-criacao">{{ venda.data_venda[:10] if venda.data_venda and venda.data_venda|length >= 10 else '' }}</small>
+                                    <small class="data-criacao">{{ venda.data_venda.strftime('%Y-%m-%d') if venda.data_venda else '' }}</small>
                                 </div>
                             </td>
                             <td>
@@ -567,8 +567,8 @@
                             <td>
                                 <div class="data-hora-venda">
                                     {% if venda.data_venda %}
-                                        <div class="hora-principal">{{ venda.data_venda[-8:-3] if venda.data_venda|length > 8 else venda.data_venda }}</div>
-                                        <small class="data-completa">{{ venda.data_venda[:10] if venda.data_venda|length >= 10 else '' }}</small>
+                                        <div class="hora-principal">{{ venda.data_venda.strftime('%H:%M') }}</div>
+                                        <small class="data-completa">{{ venda.data_venda.strftime('%Y-%m-%d') }}</small>
                                     {% else %}
                                         <div class="hora-principal">--:--</div>
                                         <small class="data-completa">--/--/----</small>

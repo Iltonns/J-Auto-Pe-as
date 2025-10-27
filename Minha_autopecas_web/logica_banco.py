@@ -795,6 +795,7 @@ def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
                 data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura
             )
             VALUES (%s, %s, %s, %s)
+            RETURNING id
         ''', (datetime.now(), saldo_inicial, usuario_id, observacoes))
         
         sessao_id = cursor.fetchone()[0]
@@ -1008,6 +1009,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                 data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (tipo, categoria, descricao, valor, data_lancamento, data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes))
         
         lancamento_id = cursor.fetchone()[0]
@@ -1029,6 +1031,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     cursor.execute('''
                         INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
                     ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
                     
                     conta_id = cursor.fetchone()[0]
@@ -1056,6 +1059,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     cursor.execute('''
                         INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
                         VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
                     ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
                     
                     conta_id = cursor.fetchone()[0]
@@ -1776,7 +1780,8 @@ def obter_vendas_do_dia():
     print(f"DEBUG VENDAS: Vendas encontradas para {hoje}:")
     for row in vendas_encontradas:
         # Verificar se a data da venda realmente corresponde ao dia atual
-        data_venda = row[4][:10] if row[4] else ''
+        # row[4] é um objeto datetime do PostgreSQL, converter para string
+        data_venda = row[4].strftime('%Y-%m-%d') if row[4] else ''
         
         if data_venda == hoje:
             venda = {
@@ -1922,6 +1927,7 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
         cursor.execute('''
             INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
             VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
         
         conta_id = cursor.fetchone()[0]
@@ -2077,6 +2083,7 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
         cursor.execute('''
             INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
             VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
         ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
         
         conta_id = cursor.fetchone()[0]
@@ -2562,9 +2569,9 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                 codigo_produto = codigo_produto.text if codigo_produto is not None else ''
                 
                 codigo_ean = prod.find('nfe:cEAN', ns)
-                codigo_ean = codigo_ean.text if codigo_ean is not None else ''
-                if codigo_ean in ['SEM GTIN', '']:
-                    codigo_ean = ''
+                codigo_ean = codigo_ean.text if codigo_ean is not None else None
+                if codigo_ean in ['SEM GTIN', '', None]:
+                    codigo_ean = None  # NULL para produtos sem código de barras
                 
                 nome_produto = prod.find('nfe:xProd', ns)
                 nome_produto = nome_produto.text if nome_produto is not None else ''
@@ -2647,11 +2654,12 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
                      "Importado via NFe XML", preco_custo, preco_venda, 
-                     quantidade, estoque_minimo, unidade, ncm, 1))
+                     quantidade, estoque_minimo, unidade, ncm, True))
                 
                 produtos_importados += 1
                 
             except Exception as e:
+                conn.rollback()  # Fazer rollback para poder continuar processando
                 erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
                 continue
         
@@ -2784,9 +2792,9 @@ def importar_produtos_de_xml(conteudo_xml):
                 codigo_produto = codigo_produto.text if codigo_produto is not None else ''
                 
                 codigo_ean = prod.find('nfe:cEAN', ns)
-                codigo_ean = codigo_ean.text if codigo_ean is not None else ''
-                if codigo_ean in ['SEM GTIN', '']:
-                    codigo_ean = ''
+                codigo_ean = codigo_ean.text if codigo_ean is not None else None
+                if codigo_ean in ['SEM GTIN', '', None]:
+                    codigo_ean = None  # NULL para produtos sem código de barras
                 
                 nome_produto = prod.find('nfe:xProd', ns)
                 nome_produto = nome_produto.text if nome_produto is not None else ''
@@ -2865,6 +2873,7 @@ def importar_produtos_de_xml(conteudo_xml):
                     })
                 
             except Exception as e:
+                conn.rollback()  # Fazer rollback para poder continuar processando
                 erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
                 continue
         
@@ -2935,7 +2944,7 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
             params.append(cliente_id)
         
         query += '''
-            GROUP BY v.id
+            GROUP BY v.id, v.data_venda, c.nome, v.total, v.forma_pagamento, u.username
             ORDER BY v.data_venda DESC
         '''
         
@@ -3528,6 +3537,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 cursor.execute('''
                     INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
                 ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
                 
                 conta_id = cursor.fetchone()[0]
@@ -3569,6 +3579,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 cursor.execute('''
                     INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
                     VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id
                 ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
                 
                 conta_id = cursor.fetchone()[0]

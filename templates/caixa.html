@@ -26,7 +26,7 @@
                     <div class="row">
                         <div class="col-md-2">
                             <strong>Abertura:</strong><br>
-                            {{ status_caixa.data_abertura[:16] }}<br>
+                            {{ status_caixa.data_abertura.strftime('%Y-%m-%d %H:%M') if status_caixa.data_abertura else '' }}<br>
                             <small class="text-muted">{{ status_caixa.usuario_abertura }}</small>
                         </div>
                         <div class="col-md-2">
@@ -176,7 +176,7 @@
                     <tbody>
                         {% for mov in movimentacoes %}
                         <tr>
-                            <td>{{ mov.data_movimentacao[11:16] }}</td>
+                            <td>{{ mov.data_movimentacao.strftime('%H:%M') if mov.data_movimentacao else '' }}</td>
                             <td>
                                 {% if mov.tipo == 'entrada' %}
                                     <span class="badge bg-success">
