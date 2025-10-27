@@ -559,7 +559,7 @@ def buscar_usuario_por_email(email):
         SELECT id, username, email, nome_completo, ativo,
                permissao_vendas, permissao_estoque, permissao_clientes,
                permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
-        FROM usuarios WHERE email = %s AND ativo = 1
+        FROM usuarios WHERE email = %s AND ativo = TRUE
     ''', (email,))
     user = cursor.fetchone()
     conn.close()
@@ -751,7 +751,7 @@ def deletar_usuario(user_id):
     cursor = conn.cursor()
     
     try:
-        cursor.execute("UPDATE usuarios SET ativo = 0 WHERE id = %s", (user_id,))
+        cursor.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (user_id,))
         conn.commit()
         
         if cursor.rowcount > 0:
@@ -769,7 +769,7 @@ def verificar_permissao(user_id, permissao):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute(f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = 1", (user_id,))
+    cursor.execute(f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = TRUE", (user_id,))
     result = cursor.fetchone()
     conn.close()
     
@@ -1211,7 +1211,7 @@ def listar_produtos():
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
                codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca
         FROM produtos
-        WHERE ativo = 1
+        WHERE ativo = TRUE
         ORDER BY nome
     ''')
     
@@ -1247,7 +1247,7 @@ def buscar_produto(termo_busca):
     cursor.execute('''
         SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
         FROM produtos
-        WHERE ativo = 1 AND (
+        WHERE ativo = TRUE AND (
             nome LIKE %s OR 
             codigo_barras = %s OR 
             codigo_fornecedor LIKE %s OR
@@ -1284,7 +1284,7 @@ def obter_produto_por_id(produto_id):
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
                codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca
         FROM produtos
-        WHERE id = %s AND ativo = 1
+        WHERE id = %s AND ativo = TRUE
     ''', (produto_id,))
     
     row = cursor.fetchone()
@@ -1363,7 +1363,7 @@ def deletar_produto(id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("UPDATE produtos SET ativo = 0 WHERE id = %s", (id,))
+    cursor.execute("UPDATE produtos SET ativo = FALSE WHERE id = %s", (id,))
     conn.commit()
     conn.close()
 
@@ -1374,10 +1374,10 @@ def deletar_todos_os_produtos():
     
     try:
         # Marcar todos os produtos como inativos
-        cursor.execute("UPDATE produtos SET ativo = 0")
+        cursor.execute("UPDATE produtos SET ativo = FALSE")
         
         # Contar quantos produtos foram marcados como inativos
-        cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 0")
+        cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = FALSE")
         total_deletados = cursor.fetchone()[0]
         
         conn.commit()
@@ -2093,7 +2093,7 @@ def obter_estatisticas_dashboard():
     cursor = conn.cursor()
     
     # Total de produtos
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1")
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
     total_produtos = cursor.fetchone()[0]
     
     # Total de clientes
@@ -2101,26 +2101,26 @@ def obter_estatisticas_dashboard():
     total_clientes = cursor.fetchone()[0]
     
     # Total de fornecedores
-    cursor.execute("SELECT COUNT(*) FROM fornecedores WHERE ativo = 1")
+    cursor.execute("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
     total_fornecedores = cursor.fetchone()[0]
     
     # Valor do estoque
-    cursor.execute("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = 1")
+    cursor.execute("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
     valor_estoque = cursor.fetchone()[0] or 0
     
     # Produtos com estoque baixo
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1 AND estoque <= estoque_minimo")
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= estoque_minimo")
     produtos_estoque_baixo = cursor.fetchone()[0]
     
     # Produtos sem estoque
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1 AND estoque <= 0")
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= 0")
     produtos_sem_estoque = cursor.fetchone()[0]
     
     # Vendas do mês
     cursor.execute('''
         SELECT COUNT(*), SUM(total) 
         FROM vendas 
-        WHERE strftime('%Y-%m', data_venda) = strftime('%Y-%m', 'now')
+        WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
     ''')
     vendas_mes = cursor.fetchone()
     
@@ -2173,7 +2173,7 @@ def produtos_estoque_baixo():
     cursor.execute('''
         SELECT id, nome, estoque, estoque_minimo
         FROM produtos
-        WHERE ativo = 1 AND estoque <= estoque_minimo
+        WHERE ativo = TRUE AND estoque <= estoque_minimo
         ORDER BY estoque
     ''')
     
@@ -3060,7 +3060,7 @@ def gerar_relatorio_estoque():
                     ELSE 'Estoque OK'
                 END as status_estoque
             FROM produtos p
-            WHERE p.ativo = 1
+            WHERE p.ativo = TRUE
             ORDER BY p.categoria, p.nome
         ''')
         
@@ -3096,7 +3096,7 @@ def gerar_relatorio_estoque():
                 SUM(estoque) as total_estoque,
                 SUM(estoque * preco) as valor_categoria
             FROM produtos 
-            WHERE ativo = 1
+            WHERE ativo = TRUE
             GROUP BY categoria
             ORDER BY valor_categoria DESC
         ''')
@@ -3275,7 +3275,7 @@ def listar_fornecedores():
             SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
                    cep, contato_pessoa, observacoes, ativo, created_at
             FROM fornecedores 
-            WHERE ativo = 1
+            WHERE ativo = TRUE
             ORDER BY nome
         ''')
         
@@ -3395,12 +3395,12 @@ def deletar_fornecedor(fornecedor_id):
     
     try:
         # Verificar se há produtos vinculados a este fornecedor
-        cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = %s AND ativo = 1', (fornecedor_id,))
+        cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = %s AND ativo = TRUE', (fornecedor_id,))
         produtos_vinculados = cursor.fetchone()[0]
         
         if produtos_vinculados > 0:
             # Se há produtos vinculados, apenas desativar
-            cursor.execute('UPDATE fornecedores SET ativo = 0 WHERE id = %s', (fornecedor_id,))
+            cursor.execute('UPDATE fornecedores SET ativo = FALSE WHERE id = %s', (fornecedor_id,))
         else:
             # Se não há produtos vinculados, pode deletar fisicamente
             cursor.execute('DELETE FROM fornecedores WHERE id = %s', (fornecedor_id,))
@@ -3423,7 +3423,7 @@ def obter_fornecedores_para_select():
         cursor.execute('''
             SELECT id, nome 
             FROM fornecedores 
-            WHERE ativo = 1 
+            WHERE ativo = TRUE 
             ORDER BY nome
         ''')
         
@@ -3447,7 +3447,7 @@ def contar_fornecedores():
     cursor = conn.cursor()
     
     try:
-        cursor.execute('SELECT COUNT(*) FROM fornecedores WHERE ativo = 1')
+        cursor.execute('SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE')
         return cursor.fetchone()[0]
     except Exception as e:
         print(f"Erro ao contar fornecedores: {e}")
@@ -3464,7 +3464,7 @@ def listar_produtos_por_fornecedor(fornecedor_id):
         cursor.execute('''
             SELECT p.id, p.nome, p.preco, p.estoque, p.preco_custo, p.codigo_barras
             FROM produtos p
-            WHERE p.fornecedor_id = %s AND p.ativo = 1
+            WHERE p.fornecedor_id = %s AND p.ativo = TRUE
             ORDER BY p.nome
         ''', (fornecedor_id,))
         

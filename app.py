@@ -2673,10 +2673,10 @@ def inject_globals():
     }
 
 if __name__ == '__main__':
-    # Inicializar o banco de dados
-    init_db()
-    criar_usuario_admin()
-    popular_dados_exemplo()
+    # Inicializar o banco de dados (apenas cria tabelas se não existirem)
+    # init_db()  # Comentado - tabelas já criadas no deploy
+    # criar_usuario_admin()  # Comentado - usar script criar_admin.py
+    # popular_dados_exemplo()  # Comentado para não popular dados de exemplo
     
     # Rodar a aplicação
     app.run(debug=True, host='0.0.0.0', port=5000)
