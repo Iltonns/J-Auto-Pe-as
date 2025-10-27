@@ -565,12 +565,17 @@ simele <!DOCTYPE html>
                     </a>
                     {% endif %}
                     
+                    {% if has_permission('contas_pagar') %}
                     <a class="nav-link" href="{{ url_for('contas_a_pagar_hoje') }}">
                         <i class="fas fa-credit-card"></i> Contas a Pagar
                     </a>
+                    {% endif %}
+                    
+                    {% if has_permission('contas_receber') %}
                     <a class="nav-link" href="{{ url_for('contas_a_receber_hoje') }}">
                         <i class="fas fa-coins"></i> Contas a Receber
                     </a>
+                    {% endif %}
                     
                     <hr class="section-divider">
                     

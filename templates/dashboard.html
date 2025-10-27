@@ -409,6 +409,7 @@
 <!-- Estatísticas Principais -->
 <div class="stats-grid">
     <!-- Card 1: Peças Cadastradas -->
+    {% if has_permission('estoque') %}
     <div class="stat-card primary">
         <div class="stat-header">
             <div class="stat-content">
@@ -424,8 +425,10 @@
             Sistema Atualizado
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 2: Clientes Ativos -->
+    {% if has_permission('clientes') %}
     <div class="stat-card success">
         <div class="stat-header">
             <div class="stat-content">
@@ -441,8 +444,10 @@
             Base de Clientes
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 3: Vendas do Dia -->
+    {% if has_permission('vendas') %}
     <div class="stat-card info">
         <div class="stat-header">
             <div class="stat-content">
@@ -458,8 +463,10 @@
             
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 4: Estoque Baixo -->
+    {% if has_permission('estoque') %}
     <div class="stat-card warning">
         <div class="stat-header">
             <div class="stat-content">
@@ -475,8 +482,10 @@
             Requer Atenção
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 5: Fornecedores -->
+    {% if has_permission('estoque') %}
     <div class="stat-card info">
         <div class="stat-header">
             <div class="stat-content">
@@ -492,8 +501,10 @@
             Base de Fornecedores
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 6: Vendas do Mês -->
+    {% if has_permission('vendas') %}
     <div class="stat-card primary">
         <div class="stat-header">
             <div class="stat-content">
@@ -509,8 +520,10 @@
             
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 7: Sem Estoque -->
+    {% if has_permission('estoque') %}
     <div class="stat-card danger">
         <div class="stat-header">
             <div class="stat-content">
@@ -526,8 +539,10 @@
             Requer Reposição
         </div>
     </div>
+    {% endif %}
 
     <!-- Card 8: Orçamentos Pendentes -->
+    {% if has_permission('vendas') %}
     <div class="stat-card warning">
         <div class="stat-header">
             <div class="stat-content">
@@ -543,6 +558,7 @@
             Aguardando Aprovação
         </div>
     </div>
+    {% endif %}
 </div>
 
 <!-- Centro de Ações Rápidas -->
@@ -555,60 +571,82 @@
     </div>
     
     <div class="actions-grid">
+        {% if has_permission('vendas') %}
         <a href="{{ url_for('orcamentos') }}" class="action-btn purple featured">
             <i class="fas fa-file-invoice-dollar"></i>
             <span>Novo Orçamento</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('vendas') %}
         <a href="{{ url_for('vendas') }}" class="action-btn primary">
             <i class="fas fa-cash-register"></i>
             <span>Nova Venda</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('estoque') %}
         <a href="{{ url_for('produtos') }}" class="action-btn success">
             <i class="fas fa-car-battery"></i>
             <span>Nova Peça</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('clientes') %}
         <a href="{{ url_for('clientes') }}" class="action-btn info">
             <i class="fas fa-user-plus"></i>
             <span>Novo Cliente</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('caixa') %}
         <a href="{{ url_for('caixa') }}" class="action-btn dark">
             <i class="fas fa-wallet"></i>
             <span>Caixa</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('relatorios') %}
         <a href="{{ url_for('relatorios') }}" class="action-btn teal">
             <i class="fas fa-chart-line"></i>
             <span>Relatórios</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('contas_pagar') %}
         <a href="{{ url_for('contas_a_pagar_hoje') }}" class="action-btn warning">
             <i class="fas fa-credit-card"></i>
             <span>Contas a Pagar</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('contas_receber') %}
         <a href="{{ url_for('contas_a_receber_hoje') }}" class="action-btn danger">
             <i class="fas fa-coins"></i>
             <span>Contas a Receber</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('financeiro') %}
         <a href="{{ url_for('financeiro') }}" class="action-btn teal">
             <i class="fas fa-chart-pie"></i>
             <span>Financeiro</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('estoque') %}
         <a href="{{ url_for('fornecedores') }}" class="action-btn orange">
             <i class="fas fa-truck"></i>
             <span>Fornecedores</span>
         </a>
+        {% endif %}
         
+        {% if has_permission('admin') %}
         <a href="{{ url_for('usuarios') }}" class="action-btn purple">
             <i class="fas fa-users-cog"></i>
             <span>Usuários</span>
         </a>
+        {% endif %}
     </div>
 </div>
 
