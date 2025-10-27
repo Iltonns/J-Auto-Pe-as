@@ -1,52 +1,48 @@
 # LOGICA DE BANCO DE DADOS - SISTEMA DE AUTOPEÇAS FAMÍLIA
-# POSTGRESQL COM NEON
-import psycopg2
-import psycopg2.extras
+import sqlite3
 import os
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
 
-# Carregar variáveis de ambiente do arquivo .env
-load_dotenv()
+# Caminho do banco de dados
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'autopecas.db')
 
-# URL de conexão do PostgreSQL Neon
-DATABASE_URL = os.getenv('DATABASE_URL')
+# Configurações SQLite para melhor performance e reduzir locks
+def configure_sqlite_connection(conn):
+    """Configura a conexão SQLite para melhor performance"""
+    conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging para melhor concorrência
+    conn.execute("PRAGMA synchronous=NORMAL")  # Reduz I/O disk
+    conn.execute("PRAGMA cache_size=10000")  # Aumenta cache
+    conn.execute("PRAGMA temp_store=MEMORY")  # Usa memoria para tabelas temporárias
+    conn.execute("PRAGMA busy_timeout=30000")  # 30 segundos de timeout para locks
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL não encontrada! Configure o arquivo .env com suas credenciais do Neon.")
-
-def get_db_connection():
-    """Cria uma conexão com o banco PostgreSQL Neon"""
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        # PostgreSQL usa autocommit=False por padrão, o que é bom para transações
-        return conn
-    except psycopg2.Error as e:
-        print(f"Erro ao conectar ao banco de dados: {e}")
-        raise
+def get_db_connection(timeout=30.0):
+    """Cria uma conexão configurada com o banco"""
+    conn = sqlite3.connect(DB_PATH, timeout=timeout)
+    configure_sqlite_connection(conn)
+    return conn
 
 def init_db():
     """Inicializa o banco de dados criando todas as tabelas necessárias"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Tabela de usuários com permissões
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             nome_completo TEXT NOT NULL,
             email TEXT NOT NULL,
-            ativo BOOLEAN DEFAULT TRUE,
-            permissao_vendas BOOLEAN DEFAULT TRUE,
-            permissao_estoque BOOLEAN DEFAULT TRUE,
-            permissao_clientes BOOLEAN DEFAULT TRUE,
-            permissao_financeiro BOOLEAN DEFAULT FALSE,
-            permissao_caixa BOOLEAN DEFAULT FALSE,
-            permissao_relatorios BOOLEAN DEFAULT FALSE,
-            permissao_admin BOOLEAN DEFAULT FALSE,
+            ativo BOOLEAN DEFAULT 1,
+            permissao_vendas BOOLEAN DEFAULT 1,
+            permissao_estoque BOOLEAN DEFAULT 1,
+            permissao_clientes BOOLEAN DEFAULT 1,
+            permissao_financeiro BOOLEAN DEFAULT 0,
+            permissao_caixa BOOLEAN DEFAULT 0,
+            permissao_relatorios BOOLEAN DEFAULT 0,
+            permissao_admin BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_by INTEGER,
             FOREIGN KEY (created_by) REFERENCES usuarios (id)
@@ -59,35 +55,35 @@ def init_db():
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo BOOLEAN DEFAULT 1")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_vendas BOOLEAN DEFAULT TRUE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_vendas BOOLEAN DEFAULT 1")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_estoque BOOLEAN DEFAULT TRUE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_estoque BOOLEAN DEFAULT 1")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_clientes BOOLEAN DEFAULT TRUE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_clientes BOOLEAN DEFAULT 1")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_financeiro BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_financeiro BOOLEAN DEFAULT 0")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_caixa BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_caixa BOOLEAN DEFAULT 0")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_relatorios BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_relatorios BOOLEAN DEFAULT 0")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_admin BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_admin BOOLEAN DEFAULT 0")
     except:
         pass
     try:
@@ -95,18 +91,18 @@ def init_db():
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_pagar BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_pagar BOOLEAN DEFAULT 0")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_receber BOOLEAN DEFAULT FALSE")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_receber BOOLEAN DEFAULT 0")
     except:
         pass
     
     # Tabela de clientes
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             telefone TEXT,
             email TEXT,
@@ -119,15 +115,15 @@ def init_db():
     # Tabela de produtos
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
-            preco DECIMAL(10,2) NOT NULL,
+            preco REAL NOT NULL,
             estoque INTEGER DEFAULT 0,
             estoque_minimo INTEGER DEFAULT 5,
             codigo_barras TEXT UNIQUE,
             descricao TEXT,
             categoria TEXT,
-            ativo BOOLEAN DEFAULT TRUE,
+            ativo BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -148,11 +144,11 @@ def init_db():
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN preco_custo DECIMAL(10,2) DEFAULT 0")
+        cursor.execute("ALTER TABLE produtos ADD COLUMN preco_custo REAL DEFAULT 0")
     except:
         pass
     try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN margem_lucro DECIMAL(10,2) DEFAULT 0")
+        cursor.execute("ALTER TABLE produtos ADD COLUMN margem_lucro REAL DEFAULT 0")
     except:
         pass
     try:
@@ -181,11 +177,11 @@ def init_db():
     # Tabela de vendas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vendas (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             cliente_id INTEGER,
-            total DECIMAL(10,2) NOT NULL,
+            total REAL NOT NULL,
             forma_pagamento TEXT NOT NULL,
-            desconto DECIMAL(10,2) DEFAULT 0,
+            desconto REAL DEFAULT 0,
             observacoes TEXT,
             data_venda TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             usuario_id INTEGER,
@@ -197,12 +193,12 @@ def init_db():
     # Tabela de itens de venda
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS itens_venda (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             venda_id INTEGER NOT NULL,
             produto_id INTEGER NOT NULL,
             quantidade INTEGER NOT NULL,
-            preco_unitario DECIMAL(10,2) NOT NULL,
-            subtotal DECIMAL(10,2) NOT NULL,
+            preco_unitario REAL NOT NULL,
+            subtotal REAL NOT NULL,
             FOREIGN KEY (venda_id) REFERENCES vendas (id),
             FOREIGN KEY (produto_id) REFERENCES produtos (id)
         )
@@ -211,9 +207,9 @@ def init_db():
     # Tabela de contas a pagar
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS contas_pagar (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             descricao TEXT NOT NULL,
-            valor DECIMAL(10,2) NOT NULL,
+            valor REAL NOT NULL,
             data_vencimento DATE NOT NULL,
             data_pagamento DATE,
             status TEXT DEFAULT 'pendente',
@@ -222,16 +218,17 @@ def init_db():
             fornecedor_id INTEGER,
             lancamento_financeiro_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- FKs removidas para evitar dependência circular
+            FOREIGN KEY (fornecedor_id) REFERENCES fornecedores (id),
+            FOREIGN KEY (lancamento_financeiro_id) REFERENCES lancamentos_financeiros (id)
         )
     ''')
     
     # Tabela de contas a receber
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS contas_receber (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             descricao TEXT NOT NULL,
-            valor DECIMAL(10,2) NOT NULL,
+            valor REAL NOT NULL,
             data_vencimento DATE NOT NULL,
             data_recebimento DATE,
             status TEXT DEFAULT 'pendente',
@@ -247,11 +244,11 @@ def init_db():
     # Tabela de orçamentos
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orcamentos (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             numero_orcamento TEXT UNIQUE NOT NULL,
             cliente_id INTEGER,
-            total DECIMAL(10,2) NOT NULL DEFAULT 0,
-            desconto DECIMAL(10,2) DEFAULT 0,
+            total REAL NOT NULL DEFAULT 0,
+            desconto REAL DEFAULT 0,
             observacoes TEXT,
             status TEXT DEFAULT 'pendente',
             data_validade DATE,
@@ -265,12 +262,12 @@ def init_db():
     # Tabela de itens de orçamento
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS itens_orcamento (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             orcamento_id INTEGER NOT NULL,
             produto_id INTEGER NOT NULL,
             quantidade INTEGER NOT NULL,
-            preco_unitario DECIMAL(10,2) NOT NULL,
-            subtotal DECIMAL(10,2) NOT NULL,
+            preco_unitario REAL NOT NULL,
+            subtotal REAL NOT NULL,
             FOREIGN KEY (orcamento_id) REFERENCES orcamentos (id),
             FOREIGN KEY (produto_id) REFERENCES produtos (id)
         )
@@ -279,11 +276,11 @@ def init_db():
     # Tabela de caixa - movimentações financeiras
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS caixa_movimentacoes (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             tipo TEXT NOT NULL, -- 'entrada', 'saida'
             categoria TEXT NOT NULL, -- 'venda', 'conta_paga', 'conta_recebida', 'despesa', 'receita'
             descricao TEXT NOT NULL,
-            valor DECIMAL(10,2) NOT NULL,
+            valor REAL NOT NULL,
             data_movimentacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             usuario_id INTEGER NOT NULL,
             venda_id INTEGER, -- Link com venda se aplicável
@@ -292,20 +289,21 @@ def init_db():
             observacoes TEXT,
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
             FOREIGN KEY (venda_id) REFERENCES vendas (id),
-            -- FKs removidas para evitar dependência circular
+            FOREIGN KEY (conta_pagar_id) REFERENCES contas_pagar (id),
+            FOREIGN KEY (conta_receber_id) REFERENCES contas_receber (id)
         )
     ''')
     
     # Tabela de abertura/fechamento de caixa
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS caixa_sessoes (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_abertura TIMESTAMP NOT NULL,
             data_fechamento TIMESTAMP,
-            saldo_inicial DECIMAL(10,2) NOT NULL DEFAULT 0,
-            saldo_final DECIMAL(10,2),
-            total_entradas DECIMAL(10,2) DEFAULT 0,
-            total_saidas DECIMAL(10,2) DEFAULT 0,
+            saldo_inicial REAL NOT NULL DEFAULT 0,
+            saldo_final REAL,
+            total_entradas REAL DEFAULT 0,
+            total_saidas REAL DEFAULT 0,
             usuario_abertura INTEGER NOT NULL,
             usuario_fechamento INTEGER,
             status TEXT DEFAULT 'aberto', -- 'aberto', 'fechado'
@@ -319,11 +317,11 @@ def init_db():
     # Tabela de lançamentos financeiros - adicionar colunas de referência
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS lancamentos_financeiros (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             tipo TEXT NOT NULL, -- 'receita', 'despesa'
             categoria TEXT NOT NULL, -- 'combustivel', 'energia', 'telefone', 'aluguel', etc
             descricao TEXT NOT NULL,
-            valor DECIMAL(10,2) NOT NULL,
+            valor REAL NOT NULL,
             data_lancamento DATE NOT NULL,
             data_vencimento DATE,
             data_pagamento DATE,
@@ -336,14 +334,15 @@ def init_db():
             conta_pagar_id INTEGER,
             conta_receber_id INTEGER,
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-            -- FKs removidas para evitar dependência circular
+            FOREIGN KEY (conta_pagar_id) REFERENCES contas_pagar (id),
+            FOREIGN KEY (conta_receber_id) REFERENCES contas_receber (id)
         )
     ''')
     
     # Tabela de fornecedores
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS fornecedores (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             cnpj TEXT UNIQUE,
             telefone TEXT,
@@ -354,7 +353,7 @@ def init_db():
             cep TEXT,
             contato_pessoa TEXT,
             observacoes TEXT,
-            ativo BOOLEAN DEFAULT TRUE,
+            ativo BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -362,7 +361,7 @@ def init_db():
     # Tabela de configurações da empresa
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS configuracoes_empresa (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome_empresa TEXT NOT NULL DEFAULT 'FG AUTO PEÇAS',
             cnpj TEXT,
             endereco TEXT DEFAULT 'Rua Exemplo, 123 - Centro',
@@ -383,7 +382,7 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO configuracoes_empresa (nome_empresa, endereco, telefone, email)
-            VALUES (%s, %s, %s, %s)
+            VALUES (?, ?, ?, ?)
         ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
     
     # Adicionar colunas para sincronização financeira se não existirem
@@ -409,7 +408,7 @@ def init_db():
 
 def criar_usuario_admin():
     """Cria um usuário administrador padrão se não existir"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
@@ -421,7 +420,7 @@ def criar_usuario_admin():
                 permissao_vendas, permissao_estoque, permissao_clientes,
                 permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', ('admin', password_hash, 'Administrador do Sistema', 'admin@autopecas.com',
               1, 1, 1, 1, 1, 1, 1))  # Admin tem todas as permissões
         conn.commit()
@@ -445,7 +444,7 @@ def criar_usuario_admin():
 
 def popular_dados_exemplo():
     """Popula o banco com dados de exemplo se estiver vazio"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Verificar se já existem produtos
@@ -468,7 +467,7 @@ def popular_dados_exemplo():
         for produto in produtos_exemplo:
             cursor.execute('''
                 INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', produto)
         
         # Adicionar alguns clientes de exemplo
@@ -481,7 +480,7 @@ def popular_dados_exemplo():
         for cliente in clientes_exemplo:
             cursor.execute('''
                 INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', cliente)
         
         # Adicionar fornecedores de exemplo
@@ -501,7 +500,7 @@ def popular_dados_exemplo():
         for fornecedor in fornecedores_exemplo:
             cursor.execute('''
                 INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', fornecedor)
         
         # Verificar se há usuário para as vendas
@@ -524,11 +523,10 @@ def popular_dados_exemplo():
                 # Criar venda
                 cursor.execute('''
                     INSERT INTO vendas (cliente_id, total, forma_pagamento, data_venda, usuario_id)
-                    VALUES (%s, %s, %s, %s, %s)
-                    RETURNING id
+                    VALUES (?, ?, ?, ?, ?)
                 ''', (cliente_id, 0, forma_pagamento, data_venda, admin_id))
                 
-                venda_id = cursor.fetchone()[0]
+                venda_id = cursor.lastrowid
                 total_venda = 0
                 
                 # Adicionar 1-3 itens por venda
@@ -538,7 +536,7 @@ def popular_dados_exemplo():
                     quantidade = random.randint(1, 3)
                     
                     # Buscar preço do produto
-                    cursor.execute("SELECT preco FROM produtos WHERE id = %s", (produto_id,))
+                    cursor.execute("SELECT preco FROM produtos WHERE id = ?", (produto_id,))
                     preco_result = cursor.fetchone()
                     if preco_result:
                         preco = preco_result[0]
@@ -546,13 +544,13 @@ def popular_dados_exemplo():
                         
                         cursor.execute('''
                             INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-                            VALUES (%s, %s, %s, %s, %s)
+                            VALUES (?, ?, ?, ?, ?)
                         ''', (venda_id, produto_id, quantidade, preco, subtotal))
                         
                         total_venda += subtotal
                 
                 # Atualizar total da venda
-                cursor.execute("UPDATE vendas SET total = %s WHERE id = %s", (total_venda, venda_id))
+                cursor.execute("UPDATE vendas SET total = ? WHERE id = ?", (total_venda, venda_id))
         
         conn.commit()
         print("Dados de exemplo adicionados com sucesso!")
@@ -562,10 +560,10 @@ def popular_dados_exemplo():
 # FUNÇÕES DE USUÁRIOS
 def verificar_usuario(username, password):
     """Verifica se o usuário e senha estão corretos e se o usuário está ativo"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, password_hash, ativo FROM usuarios WHERE username = %s", (username,))
+    cursor.execute("SELECT id, password_hash, ativo FROM usuarios WHERE username = ?", (username,))
     user = cursor.fetchone()
     conn.close()
     
@@ -580,7 +578,7 @@ def verificar_usuario(username, password):
 
 def buscar_usuario_por_id(user_id):
     """Busca um usuário pelo ID"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -588,7 +586,7 @@ def buscar_usuario_por_id(user_id):
                permissao_vendas, permissao_estoque, permissao_clientes,
                permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
                permissao_contas_pagar, permissao_contas_receber
-        FROM usuarios WHERE id = %s
+        FROM usuarios WHERE id = ?
     ''', (user_id,))
     user = cursor.fetchone()
     conn.close()
@@ -614,14 +612,14 @@ def buscar_usuario_por_id(user_id):
 
 def buscar_usuario_por_email(email):
     """Busca um usuário pelo email"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT id, username, email, nome_completo, ativo,
                permissao_vendas, permissao_estoque, permissao_clientes,
                permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
-        FROM usuarios WHERE email = %s AND ativo = 1
+        FROM usuarios WHERE email = ? AND ativo = 1
     ''', (email,))
     user = cursor.fetchone()
     conn.close()
@@ -645,12 +643,12 @@ def buscar_usuario_por_email(email):
 
 def atualizar_senha_usuario(user_id, nova_senha):
     """Atualiza a senha de um usuário"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     password_hash = generate_password_hash(nova_senha)
     cursor.execute('''
-        UPDATE usuarios SET password_hash = %s WHERE id = %s
+        UPDATE usuarios SET password_hash = ? WHERE id = ?
     ''', (password_hash, user_id))
     
     conn.commit()
@@ -674,17 +672,17 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
             'contas_receber': False
         }
     
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se username já existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = %s", (username,))
+        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = ?", (username,))
         if cursor.fetchone()[0] > 0:
             return False, "Nome de usuário já existe"
         
         # Verificar se email já existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = %s", (email,))
+        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = ?", (email,))
         if cursor.fetchone()[0] > 0:
             return False, "Email já está em uso"
         
@@ -697,7 +695,7 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
                 permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
                 permissao_contas_pagar, permissao_contas_receber, created_by
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             username, password_hash, nome_completo, email,
             permissoes.get('vendas', True),
@@ -722,7 +720,7 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
 
 def listar_usuarios():
     """Lista todos os usuários do sistema"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -759,7 +757,7 @@ def listar_usuarios():
 
 def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ativo=None):
     """Edita um usuário existente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -768,31 +766,31 @@ def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ati
         params = []
         
         if nome_completo is not None:
-            updates.append("nome_completo = %s")
+            updates.append("nome_completo = ?")
             params.append(nome_completo)
         
         if email is not None:
             # Verificar se email já existe em outro usuário
-            cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = %s AND id != %s", (email, user_id))
+            cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = ? AND id != ?", (email, user_id))
             if cursor.fetchone()[0] > 0:
                 return False, "Email já está em uso por outro usuário"
-            updates.append("email = %s")
+            updates.append("email = ?")
             params.append(email)
         
         if ativo is not None:
-            updates.append("ativo = %s")
+            updates.append("ativo = ?")
             params.append(ativo)
         
         if permissoes:
             for perm, value in permissoes.items():
-                updates.append(f"permissao_{perm} = %s")
+                updates.append(f"permissao_{perm} = ?")
                 params.append(value)
         
         if not updates:
             return False, "Nenhuma alteração especificada"
         
         params.append(user_id)
-        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = %s"
+        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = ?"
         
         cursor.execute(query, params)
         conn.commit()
@@ -809,11 +807,11 @@ def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ati
 
 def deletar_usuario(user_id):
     """Deleta um usuário (marca como inativo)"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
-        cursor.execute("UPDATE usuarios SET ativo = 0 WHERE id = %s", (user_id,))
+        cursor.execute("UPDATE usuarios SET ativo = 0 WHERE id = ?", (user_id,))
         conn.commit()
         
         if cursor.rowcount > 0:
@@ -828,10 +826,10 @@ def deletar_usuario(user_id):
 
 def verificar_permissao(user_id, permissao):
     """Verifica se um usuário tem uma permissão específica"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute(f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = 1", (user_id,))
+    cursor.execute(f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = ? AND ativo = 1", (user_id,))
     result = cursor.fetchone()
     conn.close()
     
@@ -843,7 +841,7 @@ def verificar_permissao(user_id, permissao):
 # FUNÇÕES DE CAIXA
 def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
     """Abre uma nova sessão de caixa"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -856,10 +854,10 @@ def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
             INSERT INTO caixa_sessoes (
                 data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura
             )
-            VALUES (%s, %s, %s, %s)
+            VALUES (?, ?, ?, ?)
         ''', (datetime.now(), saldo_inicial, usuario_id, observacoes))
         
-        sessao_id = cursor.fetchone()[0]
+        sessao_id = cursor.lastrowid
         conn.commit()
         return True, f"Caixa aberto com sucesso. Sessão: {sessao_id}"
         
@@ -870,7 +868,7 @@ def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
 
 def fechar_caixa(usuario_id, observacoes=""):
     """Fecha a sessão de caixa atual"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -890,7 +888,7 @@ def fechar_caixa(usuario_id, observacoes=""):
                 COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as total_saidas
             FROM caixa_movimentacoes 
             WHERE data_movimentacao >= (
-                SELECT data_abertura FROM caixa_sessoes WHERE id = %s
+                SELECT data_abertura FROM caixa_sessoes WHERE id = ?
             )
         ''', (caixa_id,))
         
@@ -902,14 +900,14 @@ def fechar_caixa(usuario_id, observacoes=""):
         # Fechar caixa
         cursor.execute('''
             UPDATE caixa_sessoes SET 
-                data_fechamento = %s, 
-                saldo_final = %s, 
-                total_entradas = %s, 
-                total_saidas = %s, 
-                usuario_fechamento = %s,
-                observacoes_fechamento = %s,
+                data_fechamento = ?, 
+                saldo_final = ?, 
+                total_entradas = ?, 
+                total_saidas = ?, 
+                usuario_fechamento = ?,
+                observacoes_fechamento = ?,
                 status = 'fechado'
-            WHERE id = %s
+            WHERE id = ?
         ''', (datetime.now(), saldo_final, total_entradas, total_saidas, usuario_id, observacoes, caixa_id))
         
         conn.commit()
@@ -922,7 +920,7 @@ def fechar_caixa(usuario_id, observacoes=""):
 
 def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, venda_id=None, conta_pagar_id=None, conta_receber_id=None, observacoes=""):
     """Registra uma movimentação no caixa"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -936,7 +934,7 @@ def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, 
                 tipo, categoria, descricao, valor, usuario_id, 
                 venda_id, conta_pagar_id, conta_receber_id, observacoes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (tipo, categoria, descricao, valor, usuario_id, venda_id, conta_pagar_id, conta_receber_id, observacoes))
         
         conn.commit()
@@ -949,7 +947,7 @@ def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, 
 
 def obter_status_caixa():
     """Obtém o status atual do caixa"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -969,7 +967,7 @@ def obter_status_caixa():
     caixa_id, data_abertura, saldo_inicial, usuario_abertura, observacoes = caixa_aberto
     
     # Buscar nome do usuário
-    cursor.execute("SELECT nome_completo, username FROM usuarios WHERE id = %s", (usuario_abertura,))
+    cursor.execute("SELECT nome_completo, username FROM usuarios WHERE id = ?", (usuario_abertura,))
     usuario = cursor.fetchone()
     nome_usuario = usuario[0] if usuario and usuario[0] else usuario[1] if usuario else "Usuário desconhecido"
     
@@ -980,7 +978,7 @@ def obter_status_caixa():
             COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as total_saidas,
             COUNT(*) as total_movimentacoes
         FROM caixa_movimentacoes 
-        WHERE data_movimentacao >= %s
+        WHERE data_movimentacao >= ?
     ''', (data_abertura,))
     
     movimentacoes = cursor.fetchone()
@@ -1005,7 +1003,7 @@ def obter_status_caixa():
 
 def listar_movimentacoes_caixa(limit=50):
     """Lista as movimentações do caixa atual"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Buscar data de abertura do caixa atual
@@ -1022,9 +1020,9 @@ def listar_movimentacoes_caixa(limit=50):
         SELECT cm.*, u.nome_completo, u.username
         FROM caixa_movimentacoes cm
         JOIN usuarios u ON cm.usuario_id = u.id
-        WHERE cm.data_movimentacao >= %s
+        WHERE cm.data_movimentacao >= ?
         ORDER BY cm.data_movimentacao DESC
-        LIMIT %s
+        LIMIT ?
     ''', (data_abertura, limit))
     
     movimentacoes = []
@@ -1049,14 +1047,14 @@ def listar_movimentacoes_caixa(limit=50):
 
 def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", auto_criar_conta=True):
     """Cria um lançamento financeiro (receita ou despesa) e automaticamente cria a conta correspondente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se já existe lançamento similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM lancamentos_financeiros 
-            WHERE tipo = %s AND descricao = %s AND valor = %s AND data_lancamento = %s AND status = 'pendente'
+            WHERE tipo = ? AND descricao = ? AND valor = ? AND data_lancamento = ? AND status = 'pendente'
         ''', (tipo, descricao, valor, data_lancamento))
         
         lancamento_existente = cursor.fetchone()
@@ -1069,10 +1067,10 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                 tipo, categoria, descricao, valor, data_lancamento, 
                 data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (tipo, categoria, descricao, valor, data_lancamento, data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes))
         
-        lancamento_id = cursor.fetchone()[0]
+        lancamento_id = cursor.lastrowid
         conn.commit()
         
         # Automaticamente criar conta correspondente se solicitado e há data de vencimento
@@ -1082,7 +1080,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Buscar fornecedor pelo nome se informado
                     fornecedor_id = None
                     if fornecedor_cliente:
-                        cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
                         fornecedor_result = cursor.fetchone()
                         if fornecedor_result:
                             fornecedor_id = fornecedor_result[0]
@@ -1090,16 +1088,16 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Criar conta a pagar
                     cursor.execute('''
                         INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
                     
-                    conta_id = cursor.fetchone()[0]
+                    conta_id = cursor.lastrowid
                     
                     # Atualizar lançamento com referência à conta
                     cursor.execute('''
                         UPDATE lancamentos_financeiros 
-                        SET conta_pagar_id = %s
-                        WHERE id = %s
+                        SET conta_pagar_id = ?
+                        WHERE id = ?
                     ''', (conta_id, lancamento_id))
                     
                     conn.commit()
@@ -1109,7 +1107,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Buscar cliente pelo nome se informado
                     cliente_id = None
                     if fornecedor_cliente:
-                        cursor.execute('SELECT id FROM clientes WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        cursor.execute('SELECT id FROM clientes WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
                         cliente_result = cursor.fetchone()
                         if cliente_result:
                             cliente_id = cliente_result[0]
@@ -1117,16 +1115,16 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Criar conta a receber
                     cursor.execute('''
                         INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-                        VALUES (%s, %s, %s, %s, %s)
+                        VALUES (?, ?, ?, ?, ?)
                     ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
                     
-                    conta_id = cursor.fetchone()[0]
+                    conta_id = cursor.lastrowid
                     
                     # Atualizar lançamento com referência à conta
                     cursor.execute('''
                         UPDATE lancamentos_financeiros 
-                        SET conta_receber_id = %s
-                        WHERE id = %s
+                        SET conta_receber_id = ?
+                        WHERE id = ?
                     ''', (conta_id, lancamento_id))
                     
                     conn.commit()
@@ -1146,7 +1144,7 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
 
 def listar_lancamentos_financeiros(tipo=None, status='pendente'):
     """Lista lançamentos financeiros"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     query = '''
@@ -1163,11 +1161,11 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
     params = []
     
     if tipo:
-        query += " AND lf.tipo = %s"
+        query += " AND lf.tipo = ?"
         params.append(tipo)
     
     if status:
-        query += " AND lf.status = %s"
+        query += " AND lf.status = ?"
         params.append(status)
     
     query += " ORDER BY lf.data_vencimento, lf.data_lancamento"
@@ -1202,7 +1200,7 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
 # FUNÇÕES DE CLIENTES
 def listar_clientes():
     """Lista todos os clientes"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1227,28 +1225,28 @@ def listar_clientes():
 
 def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=None):
     """Adiciona um novo cliente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (?, ?, ?, ?, ?)
     ''', (nome, telefone, email, cpf_cnpj, endereco))
     
-    cliente_id = cursor.fetchone()[0]
+    cliente_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return cliente_id
 
 def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=None):
     """Edita um cliente existente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         UPDATE clientes 
-        SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s
-        WHERE id = %s
+        SET nome = ?, telefone = ?, email = ?, cpf_cnpj = ?, endereco = ?
+        WHERE id = ?
     ''', (nome, telefone, email, cpf_cnpj, endereco, id))
     
     conn.commit()
@@ -1256,17 +1254,17 @@ def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=
 
 def deletar_cliente(id):
     """Deleta um cliente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM clientes WHERE id = %s", (id,))
+    cursor.execute("DELETE FROM clientes WHERE id = ?", (id,))
     conn.commit()
     conn.close()
 
 # FUNÇÕES DE PRODUTOS
 def listar_produtos():
     """Lista todos os produtos ativos"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1303,18 +1301,18 @@ def listar_produtos():
 
 def buscar_produto(termo_busca):
     """Busca produto por nome, código de barras, código do fornecedor, marca ou ID"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
         FROM produtos
         WHERE ativo = 1 AND (
-            nome LIKE %s OR 
-            codigo_barras = %s OR 
-            codigo_fornecedor LIKE %s OR
-            marca LIKE %s OR
-            CAST(id AS TEXT) = %s
+            nome LIKE ? OR 
+            codigo_barras = ? OR 
+            codigo_fornecedor LIKE ? OR
+            marca LIKE ? OR
+            CAST(id AS TEXT) = ?
         )
         LIMIT 10
     ''', (f'%{termo_busca}%', termo_busca, f'%{termo_busca}%', f'%{termo_busca}%', termo_busca))
@@ -1339,14 +1337,14 @@ def buscar_produto(termo_busca):
 
 def obter_produto_por_id(produto_id):
     """Obtém um produto específico pelo ID"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
                codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca
         FROM produtos
-        WHERE id = %s AND ativo = 1
+        WHERE id = ? AND ativo = 1
     ''', (produto_id,))
     
     row = cursor.fetchone()
@@ -1376,7 +1374,7 @@ def obter_produto_por_id(produto_id):
 def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None, 
                      codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None):
     """Adiciona um novo produto"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Calcular preço de venda baseado no custo e margem se fornecidos
@@ -1388,11 +1386,11 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     cursor.execute('''
         INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
                             codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
           codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca))
     
-    produto_id = cursor.fetchone()[0]
+    produto_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return produto_id
@@ -1400,7 +1398,7 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
 def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
                   codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None):
     """Edita um produto existente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Calcular preço de venda baseado no custo e margem se fornecidos
@@ -1410,10 +1408,10 @@ def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=Non
     
     cursor.execute('''
         UPDATE produtos 
-        SET nome = %s, preco = %s, estoque = %s, estoque_minimo = %s, 
-            codigo_barras = %s, descricao = %s, categoria = %s,
-            codigo_fornecedor = %s, preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s
-        WHERE id = %s
+        SET nome = ?, preco = ?, estoque = ?, estoque_minimo = ?, 
+            codigo_barras = ?, descricao = ?, categoria = ?,
+            codigo_fornecedor = ?, preco_custo = ?, margem_lucro = ?, foto_url = ?, marca = ?
+        WHERE id = ?
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
           codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, id))
     
@@ -1422,16 +1420,16 @@ def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=Non
 
 def deletar_produto(id):
     """Marca um produto como inativo"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("UPDATE produtos SET ativo = 0 WHERE id = %s", (id,))
+    cursor.execute("UPDATE produtos SET ativo = 0 WHERE id = ?", (id,))
     conn.commit()
     conn.close()
 
 def deletar_todos_os_produtos():
     """Marca todos os produtos como inativos - FUNÇÃO DE TESTE"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -1455,7 +1453,7 @@ def deletar_todos_os_produtos():
 
 def limpar_completamente_produtos():
     """Remove completamente todos os produtos do banco - CUIDADO!"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -1485,8 +1483,8 @@ def atualizar_estoque(produto_id, quantidade):
     
     cursor.execute('''
         UPDATE produtos 
-        SET estoque = estoque - %s 
-        WHERE id = %s
+        SET estoque = estoque - ? 
+        WHERE id = ?
     ''', (quantidade, produto_id))
     
     conn.commit()
@@ -1501,7 +1499,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
     try:
         # Verificar estoque antes de processar a venda
         for item in itens:
-            cursor.execute('SELECT nome, estoque FROM produtos WHERE id = %s', (item['produto_id'],))
+            cursor.execute('SELECT nome, estoque FROM produtos WHERE id = ?', (item['produto_id'],))
             produto = cursor.fetchone()
             
             if not produto:
@@ -1517,31 +1515,31 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
         # Insere a venda
         cursor.execute('''
             INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id))
         
-        venda_id = cursor.fetchone()[0]
+        venda_id = cursor.lastrowid
         
         # Insere os itens da venda
         for item in itens:
             cursor.execute('''
                 INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', (venda_id, item['produto_id'], item['quantidade'], 
                   item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
             
             # Atualiza o estoque diretamente na mesma transação
             cursor.execute('''
                 UPDATE produtos 
-                SET estoque = estoque - %s 
-                WHERE id = %s
+                SET estoque = estoque - ? 
+                WHERE id = ?
             ''', (item['quantidade'], item['produto_id']))
         
         # Se for venda a prazo, cria conta a receber
         if forma_pagamento == 'prazo':
             cursor.execute('''
                 INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id)
-                VALUES (%s, %s, DATE('now', '+30 days'), %s, %s)
+                VALUES (?, ?, DATE('now', '+30 days'), ?, ?)
             ''', (f'Venda #{venda_id}', total, cliente_id, venda_id))
         else:
             # Se não for a prazo, registrar entrada no caixa (se houver caixa aberto)
@@ -1552,7 +1550,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
                     # Registrar movimentação de entrada no caixa
                     cliente_nome = "Cliente Avulso"
                     if cliente_id:
-                        cursor.execute("SELECT nome FROM clientes WHERE id = %s", (cliente_id,))
+                        cursor.execute("SELECT nome FROM clientes WHERE id = ?", (cliente_id,))
                         cliente_result = cursor.fetchone()
                         if cliente_result:
                             cliente_nome = cliente_result[0]
@@ -1561,7 +1559,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
                         INSERT INTO caixa_movimentacoes (
                             tipo, categoria, descricao, valor, usuario_id, venda_id
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
             except Exception as e:
                 # Se der erro no caixa, não afeta a venda
@@ -1578,7 +1576,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
 
 def listar_vendas(limit=50):
     """Lista as vendas mais recentes"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1586,7 +1584,7 @@ def listar_vendas(limit=50):
         FROM vendas v
         LEFT JOIN clientes c ON v.cliente_id = c.id
         ORDER BY v.data_venda DESC
-        LIMIT %s
+        LIMIT ?
     ''', (limit,))
     
     vendas = []
@@ -1604,7 +1602,7 @@ def listar_vendas(limit=50):
 
 def obter_venda_por_id(venda_id):
     """Obtém os detalhes completos de uma venda específica"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -1617,7 +1615,7 @@ def obter_venda_por_id(venda_id):
             FROM vendas v
             LEFT JOIN clientes c ON v.cliente_id = c.id
             LEFT JOIN usuarios u ON v.usuario_id = u.id
-            WHERE v.id = %s
+            WHERE v.id = ?
         ''', (venda_id,))
         
         venda_data = cursor.fetchone()
@@ -1633,7 +1631,7 @@ def obter_venda_por_id(venda_id):
                    p.codigo_barras, iv.quantidade, iv.preco_unitario, iv.subtotal
             FROM itens_venda iv
             JOIN produtos p ON iv.produto_id = p.id
-            WHERE iv.venda_id = %s
+            WHERE iv.venda_id = ?
         ''', (venda_id,))
         
         itens = []
@@ -1681,7 +1679,7 @@ def obter_venda_por_id(venda_id):
 
 def limpar_sincronizacoes_incorretas():
     """Remove movimentações de caixa de vendas que não são do dia atual"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -1694,8 +1692,8 @@ def limpar_sincronizacoes_incorretas():
             FROM caixa_movimentacoes cm
             JOIN vendas v ON cm.venda_id = v.id
             WHERE cm.categoria = 'venda'
-            AND SUBSTR(v.data_venda, 1, 10) != %s
-            AND DATE(cm.data_movimentacao) = %s
+            AND SUBSTR(v.data_venda, 1, 10) != ?
+            AND DATE(cm.data_movimentacao) = ?
         ''', (hoje, hoje))
         
         movimentacoes_incorretas = cursor.fetchall()
@@ -1708,7 +1706,7 @@ def limpar_sincronizacoes_incorretas():
             data_venda_formatada = data_venda[:10] if data_venda else ''
             print(f"DEBUG LIMPEZA: Removendo mov #{mov_id} - Venda #{venda_id} de {data_venda_formatada} (R$ {valor})")
             
-            cursor.execute('DELETE FROM caixa_movimentacoes WHERE id = %s', (mov_id,))
+            cursor.execute('DELETE FROM caixa_movimentacoes WHERE id = ?', (mov_id,))
         
         conn.commit()
         return True, f"Removidas {len(movimentacoes_incorretas)} sincronizações incorretas"
@@ -1721,7 +1719,7 @@ def limpar_sincronizacoes_incorretas():
 
 def sincronizar_vendas_com_caixa():
     """Sincroniza vendas existentes do dia atual com o caixa (caso não tenham sido registradas)"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -1739,7 +1737,7 @@ def sincronizar_vendas_com_caixa():
         cursor.execute('''
             SELECT v.id, v.cliente_id, v.total, v.forma_pagamento, v.usuario_id, v.data_venda
             FROM vendas v
-            WHERE SUBSTR(v.data_venda, 1, 10) = %s
+            WHERE SUBSTR(v.data_venda, 1, 10) = ?
             AND v.forma_pagamento != 'prazo'
             AND NOT EXISTS (
                 SELECT 1 FROM caixa_movimentacoes cm 
@@ -1766,7 +1764,7 @@ def sincronizar_vendas_com_caixa():
             # Buscar nome do cliente
             cliente_nome = "Cliente Avulso"
             if cliente_id:
-                cursor.execute("SELECT nome FROM clientes WHERE id = %s", (cliente_id,))
+                cursor.execute("SELECT nome FROM clientes WHERE id = ?", (cliente_id,))
                 cliente_result = cursor.fetchone()
                 if cliente_result:
                     cliente_nome = cliente_result[0]
@@ -1776,7 +1774,7 @@ def sincronizar_vendas_com_caixa():
                 INSERT INTO caixa_movimentacoes (
                     tipo, categoria, descricao, valor, usuario_id, venda_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
             
             vendas_sincronizadas += 1
@@ -1794,7 +1792,7 @@ def sincronizar_vendas_com_caixa():
 
 def obter_vendas_do_dia():
     """Obtém as vendas do dia atual"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Limpar sincronizações incorretas primeiro
@@ -1819,7 +1817,7 @@ def obter_vendas_do_dia():
         LEFT JOIN clientes c ON v.cliente_id = c.id
         LEFT JOIN itens_venda iv ON v.id = iv.venda_id
         LEFT JOIN usuarios u ON v.usuario_id = u.id
-        WHERE SUBSTR(v.data_venda, 1, 10) = %s
+        WHERE SUBSTR(v.data_venda, 1, 10) = ?
         GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, u.nome_completo, u.username, v.usuario_id
         ORDER BY v.data_venda DESC
     ''', (hoje,))
@@ -1869,7 +1867,7 @@ def obter_vendas_do_dia():
 # FUNÇÕES DE CONTAS A PAGAR
 def listar_contas_pagar_hoje():
     """Lista contas a pagar com vencimento hoje"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1899,7 +1897,7 @@ def listar_contas_pagar_hoje():
 
 def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
     """Lista contas a pagar com filtros de período"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     base_query = '''
@@ -1909,7 +1907,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
                cp.data_pagamento
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.status = %s
+        WHERE cp.status = ?
     '''
     
     params = [status]
@@ -1925,7 +1923,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     elif filtro == 'proximos_30_dias':
         base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND date(cp.data_vencimento) BETWEEN %s AND %s"
+        base_query += " AND date(cp.data_vencimento) BETWEEN ? AND ?"
         params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cp.data_vencimento"
@@ -1961,14 +1959,14 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
 
 def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None, auto_sincronizar=True):
     """Adiciona uma nova conta a pagar"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se já existe conta similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM contas_pagar 
-            WHERE descricao = %s AND valor = %s AND data_vencimento = %s AND status = 'pendente'
+            WHERE descricao = ? AND valor = ? AND data_vencimento = ? AND status = 'pendente'
         ''', (descricao, valor, data_vencimento))
         
         conta_existente = cursor.fetchone()
@@ -1978,10 +1976,10 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
         
         cursor.execute('''
             INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
         
-        conta_id = cursor.fetchone()[0]
+        conta_id = cursor.lastrowid
         conn.commit()
         
         
@@ -1998,13 +1996,13 @@ def pagar_conta(conta_id, data_pagamento=None):
     if not data_pagamento:
         data_pagamento = date.today().isoformat()
     
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         UPDATE contas_pagar 
-        SET status = 'pago', data_pagamento = %s
-        WHERE id = %s
+        SET status = 'pago', data_pagamento = ?
+        WHERE id = ?
     ''', (data_pagamento, conta_id))
     
     conn.commit()
@@ -2013,7 +2011,7 @@ def pagar_conta(conta_id, data_pagamento=None):
 # FUNÇÕES DE CONTAS A RECEBER
 def listar_contas_receber_hoje():
     """Lista contas a receber com vencimento hoje"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -2040,7 +2038,7 @@ def listar_contas_receber_hoje():
 
 def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
     """Lista contas a receber com filtros de período"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     base_query = '''
@@ -2049,7 +2047,7 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
                cr.data_recebimento
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE cr.status = %s
+        WHERE cr.status = ?
     '''
     
     params = [status]
@@ -2065,7 +2063,7 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     elif filtro == 'proximos_30_dias':
         base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND date(cr.data_vencimento) BETWEEN %s AND %s"
+        base_query += " AND date(cr.data_vencimento) BETWEEN ? AND ?"
         params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cr.data_vencimento"
@@ -2102,13 +2100,13 @@ def receber_conta(conta_id, data_recebimento=None):
     if not data_recebimento:
         data_recebimento = date.today().isoformat()
     
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
         UPDATE contas_receber 
-        SET status = 'recebido', data_recebimento = %s
-        WHERE id = %s
+        SET status = 'recebido', data_recebimento = ?
+        WHERE id = ?
     ''', (data_recebimento, conta_id))
     
     conn.commit()
@@ -2116,14 +2114,14 @@ def receber_conta(conta_id, data_recebimento=None):
 
 def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None, auto_sincronizar=True):
     """Adiciona uma nova conta a receber"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se já existe conta similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM contas_receber 
-            WHERE descricao = %s AND valor = %s AND data_vencimento = %s AND status = 'pendente'
+            WHERE descricao = ? AND valor = ? AND data_vencimento = ? AND status = 'pendente'
         ''', (descricao, valor, data_vencimento))
         
         conta_existente = cursor.fetchone()
@@ -2133,10 +2131,10 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
         
         cursor.execute('''
             INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?)
         ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
         
-        conta_id = cursor.fetchone()[0]
+        conta_id = cursor.lastrowid
         conn.commit()
         
         
@@ -2151,7 +2149,7 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
     """Obtém estatísticas para o dashboard"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Total de produtos
@@ -2229,7 +2227,7 @@ def obter_estatisticas_dashboard():
 
 def produtos_estoque_baixo():
     """Lista produtos com estoque baixo"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -2262,7 +2260,7 @@ def gerar_numero_orcamento():
 
 def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_id=None):
     """Cria um novo orçamento"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -2279,17 +2277,17 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
         # Inserir orçamento (salvar o total final e a porcentagem de desconto)
         cursor.execute('''
             INSERT INTO orcamentos (numero_orcamento, cliente_id, total, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (numero_orcamento, cliente_id, total_com_desconto, desconto, observacoes, usuario_id))
         
-        orcamento_id = cursor.fetchone()[0]
+        orcamento_id = cursor.lastrowid
         
         # Inserir itens do orçamento
         for item in itens:
             subtotal = item['quantidade'] * item['preco_unitario']
             cursor.execute('''
                 INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', (orcamento_id, item['produto_id'], item['quantidade'], item['preco_unitario'], subtotal))
         
         conn.commit()
@@ -2302,7 +2300,7 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
 
 def listar_orcamentos():
     """Lista todos os orçamentos"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -2329,7 +2327,7 @@ def listar_orcamentos():
 
 def obter_orcamento(orcamento_id):
     """Obtém um orçamento específico com seus itens"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Buscar orçamento
@@ -2338,7 +2336,7 @@ def obter_orcamento(orcamento_id):
                c.email as cliente_email
         FROM orcamentos o
         LEFT JOIN clientes c ON o.cliente_id = c.id
-        WHERE o.id = %s
+        WHERE o.id = ?
     ''', (orcamento_id,))
     
     orcamento_data = cursor.fetchone()
@@ -2351,7 +2349,7 @@ def obter_orcamento(orcamento_id):
         SELECT io.*, p.nome as produto_nome
         FROM itens_orcamento io
         JOIN produtos p ON io.produto_id = p.id
-        WHERE io.orcamento_id = %s
+        WHERE io.orcamento_id = ?
     ''', (orcamento_id,))
     
     itens = []
@@ -2394,12 +2392,12 @@ def obter_orcamento(orcamento_id):
 
 def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observacoes=""):
     """Atualiza um orçamento existente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se o orçamento existe e está pendente
-        cursor.execute('SELECT status FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute('SELECT status FROM orcamentos WHERE id = ?', (orcamento_id,))
         resultado = cursor.fetchone()
         
         if not resultado:
@@ -2418,18 +2416,18 @@ def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observ
         # Atualizar dados principais do orçamento
         cursor.execute('''
             UPDATE orcamentos 
-            SET cliente_id = %s, total = %s, desconto = %s, observacoes = %s
-            WHERE id = %s
+            SET cliente_id = ?, total = ?, desconto = ?, observacoes = ?
+            WHERE id = ?
         ''', (cliente_id, total_com_desconto, desconto, observacoes, orcamento_id))
         
         # Remover itens antigos
-        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = %s', (orcamento_id,))
+        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = ?', (orcamento_id,))
         
         # Inserir novos itens
         for item in itens:
             cursor.execute('''
                 INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', (orcamento_id, item['produto_id'], item['quantidade'], 
                   item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
         
@@ -2444,12 +2442,12 @@ def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observ
 
 def excluir_orcamento(orcamento_id):
     """Exclui um orçamento e seus itens"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se o orçamento existe
-        cursor.execute('SELECT status FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute('SELECT status FROM orcamentos WHERE id = ?', (orcamento_id,))
         resultado = cursor.fetchone()
         
         if not resultado:
@@ -2460,10 +2458,10 @@ def excluir_orcamento(orcamento_id):
             raise Exception("Apenas orçamentos pendentes ou rejeitados podem ser excluídos")
         
         # Excluir itens do orçamento primeiro (devido à foreign key)
-        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = %s', (orcamento_id,))
+        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = ?', (orcamento_id,))
         
         # Excluir o orçamento
-        cursor.execute('DELETE FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute('DELETE FROM orcamentos WHERE id = ?', (orcamento_id,))
         
         conn.commit()
         return True
@@ -2476,7 +2474,7 @@ def excluir_orcamento(orcamento_id):
 
 def converter_orcamento_em_venda(orcamento_id, forma_pagamento):
     """Converte um orçamento aprovado em venda"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -2488,32 +2486,32 @@ def converter_orcamento_em_venda(orcamento_id, forma_pagamento):
         # Criar venda
         cursor.execute('''
             INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (orcamento['cliente_id'], orcamento['total'], forma_pagamento, 
               orcamento['desconto'], orcamento['observacoes'], orcamento['usuario_id']))
         
-        venda_id = cursor.fetchone()[0]
+        venda_id = cursor.lastrowid
         
         # Copiar itens para venda
         for item in orcamento['itens']:
             cursor.execute('''
                 INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             ''', (venda_id, item['produto_id'], item['quantidade'], 
                   item['preco_unitario'], item['subtotal']))
             
             # Atualizar estoque
             cursor.execute('''
                 UPDATE produtos 
-                SET estoque = estoque - %s 
-                WHERE id = %s
+                SET estoque = estoque - ? 
+                WHERE id = ?
             ''', (item['quantidade'], item['produto_id']))
         
         # Atualizar status do orçamento
         cursor.execute('''
             UPDATE orcamentos 
             SET status = 'convertido' 
-            WHERE id = %s
+            WHERE id = ?
         ''', (orcamento_id,))
         
         conn.commit()
@@ -2603,7 +2601,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
         if not produtos_xml:
             raise ValueError("Nenhum produto encontrado no XML")
         
-        conn = get_db_connection()
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         for det in produtos_xml:
@@ -2654,7 +2652,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                     cursor.execute('''
                         SELECT id, nome, preco, estoque 
                         FROM produtos 
-                        WHERE codigo_barras = %s
+                        WHERE codigo_barras = ?
                     ''', (codigo_ean,))
                     produto_existente = cursor.fetchone()
                 
@@ -2662,7 +2660,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                     cursor.execute('''
                         SELECT id, nome, preco, estoque 
                         FROM produtos 
-                        WHERE codigo_fornecedor = %s OR nome LIKE %s
+                        WHERE codigo_fornecedor = ? OR nome LIKE ?
                     ''', (codigo_produto, f'%{codigo_produto}%'))
                     produto_existente = cursor.fetchone()
                 
@@ -2676,8 +2674,8 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                         novo_estoque = produto_existente[3] + quantidade
                         cursor.execute('''
                             UPDATE produtos 
-                            SET estoque = %s
-                            WHERE id = %s
+                            SET estoque = ?
+                            WHERE id = ?
                         ''', (novo_estoque, produto_id))
                         produtos_atualizados += 1
                         continue
@@ -2686,10 +2684,10 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                         produto_id = produto_existente[0]
                         cursor.execute('''
                             UPDATE produtos 
-                            SET nome = %s, codigo_fornecedor = %s, codigo_barras = %s, categoria = %s, 
-                                preco_custo = %s, preco = %s, estoque = %s, estoque_minimo = %s,
-                                unidade = %s, ncm = %s
-                            WHERE id = %s
+                            SET nome = ?, codigo_fornecedor = ?, codigo_barras = ?, categoria = ?, 
+                                preco_custo = ?, preco = ?, estoque = ?, estoque_minimo = ?,
+                                unidade = ?, ncm = ?
+                            WHERE id = ?
                         ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
                              preco_custo, preco_venda, quantidade, estoque_minimo, 
                              unidade, ncm, produto_id))
@@ -2700,7 +2698,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                 cursor.execute('''
                     INSERT INTO produtos (nome, codigo_fornecedor, codigo_barras, categoria, descricao,
                                         preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
                      "Importado via NFe XML", preco_custo, preco_venda, 
                      quantidade, estoque_minimo, unidade, ncm, 1))
@@ -2825,7 +2823,7 @@ def importar_produtos_de_xml(conteudo_xml):
         if not produtos_xml:
             raise ValueError("Nenhum produto encontrado no XML")
         
-        conn = get_db_connection()
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         for det in produtos_xml:
@@ -2869,7 +2867,7 @@ def importar_produtos_de_xml(conteudo_xml):
                     cursor.execute('''
                         SELECT id, nome, preco, estoque 
                         FROM produtos 
-                        WHERE codigo_barras = %s
+                        WHERE codigo_barras = ?
                     ''', (codigo_ean,))
                     produto_existente = cursor.fetchone()
                 
@@ -2877,7 +2875,7 @@ def importar_produtos_de_xml(conteudo_xml):
                     cursor.execute('''
                         SELECT id, nome, preco, estoque 
                         FROM produtos 
-                        WHERE codigo_fornecedor = %s OR nome LIKE %s
+                        WHERE codigo_fornecedor = ? OR nome LIKE ?
                     ''', (codigo_produto, f'%{codigo_produto}%'))
                     produto_existente = cursor.fetchone()
                 
@@ -2889,8 +2887,8 @@ def importar_produtos_de_xml(conteudo_xml):
                     
                     cursor.execute('''
                         UPDATE produtos 
-                        SET estoque = %s, preco = %s, ncm = %s, unidade = %s, categoria = %s
-                        WHERE id = %s
+                        SET estoque = ?, preco = ?, ncm = ?, unidade = ?, categoria = ?
+                        WHERE id = ?
                     ''', (novo_estoque, valor_unitario, ncm, unidade, categoria, produto_id))
                     
                     produtos_atualizados.append({
@@ -2906,10 +2904,10 @@ def importar_produtos_de_xml(conteudo_xml):
                     
                     cursor.execute('''
                         INSERT INTO produtos (nome, preco, estoque, codigo_barras, ncm, unidade, codigo_fornecedor, categoria)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (nome_produto, valor_unitario, quantidade, codigo_ean, ncm, unidade, codigo_produto, categoria))
                     
-                    produto_id = cursor.fetchone()[0]
+                    produto_id = cursor.lastrowid
                     produtos_importados.append({
                         'id': produto_id,
                         'nome': nome_produto,
@@ -2956,7 +2954,7 @@ def importar_produtos_de_xml(conteudo_xml):
 
 def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
     """Gera relatório de vendas por período e/ou cliente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -2981,13 +2979,13 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
         
         # Filtros por data
         if data_inicio:
-            query += " AND DATE(v.data_venda) >= %s"
+            query += " AND DATE(v.data_venda) >= ?"
             params.append(data_inicio)
         if data_fim:
-            query += " AND DATE(v.data_venda) <= %s"
+            query += " AND DATE(v.data_venda) <= ?"
             params.append(data_fim)
         if cliente_id:
-            query += " AND v.cliente_id = %s"
+            query += " AND v.cliente_id = ?"
             params.append(cliente_id)
         
         query += '''
@@ -3022,9 +3020,9 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
                 COUNT(*) as quantidade_por_forma
             FROM vendas v
             WHERE 1=1
-        ''' + (" AND DATE(v.data_venda) >= %s" if data_inicio else "") +
-              (" AND DATE(v.data_venda) <= %s" if data_fim else "") +
-              (" AND v.cliente_id = %s" if cliente_id else "") +
+        ''' + (" AND DATE(v.data_venda) >= ?" if data_inicio else "") +
+              (" AND DATE(v.data_venda) <= ?" if data_fim else "") +
+              (" AND v.cliente_id = ?" if cliente_id else "") +
               " GROUP BY forma_pagamento", params)
         
         formas_pagamento = cursor.fetchall()
@@ -3045,7 +3043,7 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
 
 def gerar_relatorio_produtos_mais_vendidos(data_inicio=None, data_fim=None, limit=10):
     """Gera relatório dos produtos mais vendidos"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3066,16 +3064,16 @@ def gerar_relatorio_produtos_mais_vendidos(data_inicio=None, data_fim=None, limi
         params = []
         
         if data_inicio:
-            query += " AND DATE(v.data_venda) >= %s"
+            query += " AND DATE(v.data_venda) >= ?"
             params.append(data_inicio)
         if data_fim:
-            query += " AND DATE(v.data_venda) <= %s"
+            query += " AND DATE(v.data_venda) <= ?"
             params.append(data_fim)
         
         query += '''
             GROUP BY p.id, p.nome, p.codigo_barras
             ORDER BY total_vendido DESC
-            LIMIT %s
+            LIMIT ?
         '''
         params.append(limit)
         
@@ -3102,7 +3100,7 @@ def gerar_relatorio_produtos_mais_vendidos(data_inicio=None, data_fim=None, limi
 
 def gerar_relatorio_estoque():
     """Gera relatório completo do estoque"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3192,7 +3190,7 @@ def gerar_relatorio_estoque():
 
 def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
     """Gera relatório financeiro completo"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3209,10 +3207,10 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         params = []
         
         if data_inicio:
-            query_vendas += " AND DATE(data_venda) >= %s"
+            query_vendas += " AND DATE(data_venda) >= ?"
             params.append(data_inicio)
         if data_fim:
-            query_vendas += " AND DATE(data_venda) <= %s"
+            query_vendas += " AND DATE(data_venda) <= ?"
             params.append(data_fim)
         
         query_vendas += " GROUP BY forma_pagamento"
@@ -3241,9 +3239,9 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         '''
         
         if data_inicio:
-            query_receber += " AND DATE(data_vencimento) >= %s"
+            query_receber += " AND DATE(data_vencimento) >= ?"
         if data_fim:
-            query_receber += " AND DATE(data_vencimento) <= %s"
+            query_receber += " AND DATE(data_vencimento) <= ?"
         
         query_receber += " GROUP BY status"
         
@@ -3287,9 +3285,9 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         '''
         
         if data_inicio:
-            query_caixa += " AND DATE(cm.data_movimentacao) >= %s"
+            query_caixa += " AND DATE(cm.data_movimentacao) >= ?"
         if data_fim:
-            query_caixa += " AND DATE(cm.data_movimentacao) <= %s"
+            query_caixa += " AND DATE(cm.data_movimentacao) <= ?"
         
         query_caixa += " GROUP BY tipo"
         
@@ -3377,7 +3375,7 @@ def buscar_fornecedor(fornecedor_id):
             SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
                    cep, contato_pessoa, observacoes, ativo, created_at
             FROM fornecedores 
-            WHERE id = %s
+            WHERE id = ?
         ''', (fornecedor_id,))
         
         row = cursor.fetchone()
@@ -3414,11 +3412,11 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
         cursor.execute('''
             INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
                                     estado, cep, contato_pessoa, observacoes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes))
         
         conn.commit()
-        return cursor.fetchone()[0]
+        return cursor.lastrowid
     except Exception as e:
         conn.rollback()
         print(f"Erro ao adicionar fornecedor: {e}")
@@ -3435,9 +3433,9 @@ def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None,
     try:
         cursor.execute('''
             UPDATE fornecedores 
-            SET nome = %s, cnpj = %s, telefone = %s, email = %s, endereco = %s, 
-                cidade = %s, estado = %s, cep = %s, contato_pessoa = %s, observacoes = %s
-            WHERE id = %s
+            SET nome = ?, cnpj = ?, telefone = ?, email = ?, endereco = ?, 
+                cidade = ?, estado = ?, cep = ?, contato_pessoa = ?, observacoes = ?
+            WHERE id = ?
         ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, 
               contato_pessoa, observacoes, fornecedor_id))
         
@@ -3457,15 +3455,15 @@ def deletar_fornecedor(fornecedor_id):
     
     try:
         # Verificar se há produtos vinculados a este fornecedor
-        cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = %s AND ativo = 1', (fornecedor_id,))
+        cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = ? AND ativo = 1', (fornecedor_id,))
         produtos_vinculados = cursor.fetchone()[0]
         
         if produtos_vinculados > 0:
             # Se há produtos vinculados, apenas desativar
-            cursor.execute('UPDATE fornecedores SET ativo = 0 WHERE id = %s', (fornecedor_id,))
+            cursor.execute('UPDATE fornecedores SET ativo = 0 WHERE id = ?', (fornecedor_id,))
         else:
             # Se não há produtos vinculados, pode deletar fisicamente
-            cursor.execute('DELETE FROM fornecedores WHERE id = %s', (fornecedor_id,))
+            cursor.execute('DELETE FROM fornecedores WHERE id = ?', (fornecedor_id,))
         
         conn.commit()
         return cursor.rowcount > 0
@@ -3526,7 +3524,7 @@ def listar_produtos_por_fornecedor(fornecedor_id):
         cursor.execute('''
             SELECT p.id, p.nome, p.preco, p.estoque, p.preco_custo, p.codigo_barras
             FROM produtos p
-            WHERE p.fornecedor_id = %s AND p.ativo = 1
+            WHERE p.fornecedor_id = ? AND p.ativo = 1
             ORDER BY p.nome
         ''', (fornecedor_id,))
         
@@ -3551,7 +3549,7 @@ def listar_produtos_por_fornecedor(fornecedor_id):
 
 def sincronizar_lancamentos_com_contas(usuario_id):
     """Sincroniza lançamentos financeiros existentes criando as contas correspondentes"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     resultado = {"despesas": 0, "receitas": 0, "erros": []}
@@ -3573,7 +3571,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Buscar fornecedor pelo nome se informado
                 fornecedor_id = None
                 if fornecedor_cliente:
-                    cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
                     fornecedor_result = cursor.fetchone()
                     if fornecedor_result:
                         fornecedor_id = fornecedor_result[0]
@@ -3581,16 +3579,16 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Criar conta a pagar
                 cursor.execute('''
                     INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
                 
-                conta_id = cursor.fetchone()[0]
+                conta_id = cursor.lastrowid
                 
                 # Atualizar lançamento com referência à conta
                 cursor.execute('''
                     UPDATE lancamentos_financeiros 
-                    SET conta_pagar_id = %s
-                    WHERE id = %s
+                    SET conta_pagar_id = ?
+                    WHERE id = ?
                 ''', (conta_id, lancamento_id))
                 
                 resultado["despesas"] += 1
@@ -3614,7 +3612,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Buscar cliente pelo nome se informado
                 cliente_id = None
                 if fornecedor_cliente:
-                    cursor.execute('SELECT id FROM clientes WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    cursor.execute('SELECT id FROM clientes WHERE nome LIKE ? LIMIT 1', (f'%{fornecedor_cliente}%',))
                     cliente_result = cursor.fetchone()
                     if cliente_result:
                         cliente_id = cliente_result[0]
@@ -3622,16 +3620,16 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Criar conta a receber
                 cursor.execute('''
                     INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?)
                 ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
                 
-                conta_id = cursor.fetchone()[0]
+                conta_id = cursor.lastrowid
                 
                 # Atualizar lançamento com referência à conta
                 cursor.execute('''
                     UPDATE lancamentos_financeiros 
-                    SET conta_receber_id = %s
-                    WHERE id = %s
+                    SET conta_receber_id = ?
+                    WHERE id = ?
                 ''', (conta_id, lancamento_id))
                 
                 resultado["receitas"] += 1
@@ -3651,7 +3649,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
 # FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
 def obter_configuracoes_empresa():
     """Obtém as configurações da empresa"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3720,7 +3718,7 @@ def obter_configuracoes_padrao():
 
 def atualizar_configuracoes_empresa(dados):
     """Atualiza as configurações da empresa"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3732,9 +3730,9 @@ def atualizar_configuracoes_empresa(dados):
             # Atualizar existente
             cursor.execute('''
                 UPDATE configuracoes_empresa SET
-                    nome_empresa = %s, cnpj = %s, endereco = %s, cidade = %s, 
-                    estado = %s, cep = %s, telefone = %s, email = %s, 
-                    website = %s, observacoes = %s, updated_at = CURRENT_TIMESTAMP
+                    nome_empresa = ?, cnpj = ?, endereco = ?, cidade = ?, 
+                    estado = ?, cep = ?, telefone = ?, email = ?, 
+                    website = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = (SELECT id FROM configuracoes_empresa ORDER BY id DESC LIMIT 1)
             ''', (
                 dados['nome_empresa'], dados['cnpj'], dados['endereco'],
@@ -3748,7 +3746,7 @@ def atualizar_configuracoes_empresa(dados):
                 INSERT INTO configuracoes_empresa (
                     nome_empresa, cnpj, endereco, cidade, estado, cep,
                     telefone, email, website, observacoes
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 dados['nome_empresa'], dados['cnpj'], dados['endereco'],
                 dados['cidade'], dados['estado'], dados['cep'],
@@ -3769,12 +3767,12 @@ def atualizar_configuracoes_empresa(dados):
 # Inicialização automática
 def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes=""):
     """Edita um lançamento financeiro existente"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se o lançamento existe e está pendente
-        cursor.execute('SELECT id, status FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute('SELECT id, status FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
         lancamento = cursor.fetchone()
         
         if not lancamento:
@@ -3786,9 +3784,9 @@ def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, 
         # Atualizar o lançamento
         cursor.execute('''
             UPDATE lancamentos_financeiros 
-            SET categoria = %s, descricao = %s, valor = %s, data_vencimento = %s,
-                fornecedor_cliente = %s, numero_documento = %s, observacoes = %s
-            WHERE id = %s
+            SET categoria = ?, descricao = ?, valor = ?, data_vencimento = ?,
+                fornecedor_cliente = ?, numero_documento = ?, observacoes = ?
+            WHERE id = ?
         ''', (categoria, descricao, valor, data_vencimento, fornecedor_cliente, numero_documento, observacoes, lancamento_id))
         
         conn.commit()
@@ -3802,12 +3800,12 @@ def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, 
 
 def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagamento="", data_pagamento=None):
     """Altera o status de um lançamento financeiro (pago/recebido/cancelado)"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
         # Verificar se o lançamento existe
-        cursor.execute('SELECT id, tipo, status FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute('SELECT id, tipo, status FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
         lancamento = cursor.fetchone()
         
         if not lancamento:
@@ -3823,8 +3821,8 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
         # Atualizar o status do lançamento
         cursor.execute('''
             UPDATE lancamentos_financeiros 
-            SET status = %s, forma_pagamento = %s, data_pagamento = %s
-            WHERE id = %s
+            SET status = ?, forma_pagamento = ?, data_pagamento = ?
+            WHERE id = ?
         ''', (novo_status, forma_pagamento, data_pagamento, lancamento_id))
         
         conn.commit()
@@ -3842,7 +3840,7 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
 
 def listar_vendas_por_periodo(data_inicio, data_fim):
     """Lista vendas por período específico com estatísticas"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3856,7 +3854,7 @@ def listar_vendas_por_periodo(data_inicio, data_fim):
                    (SELECT COUNT(*) FROM itens_venda iv WHERE iv.venda_id = v.id) as total_itens
             FROM vendas v
             LEFT JOIN clientes c ON v.cliente_id = c.id
-            WHERE v.data_venda BETWEEN %s AND %s
+            WHERE v.data_venda BETWEEN ? AND ?
             ORDER BY v.data_venda DESC
         ''', (data_inicio_completa, data_fim_completa))
         
@@ -3882,7 +3880,7 @@ def listar_vendas_por_periodo(data_inicio, data_fim):
 
 def deletar_lancamento_financeiro_db(lancamento_id):
     """Deleta um lançamento financeiro e suas contas associadas"""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:
@@ -3890,7 +3888,7 @@ def deletar_lancamento_financeiro_db(lancamento_id):
         cursor.execute('''
             SELECT id, tipo, status, conta_pagar_id, conta_receber_id 
             FROM lancamentos_financeiros 
-            WHERE id = %s
+            WHERE id = ?
         ''', (lancamento_id,))
         lancamento = cursor.fetchone()
         
@@ -3903,13 +3901,13 @@ def deletar_lancamento_financeiro_db(lancamento_id):
         
         # Deletar contas associadas se existirem
         if lancamento[3]:  # conta_pagar_id
-            cursor.execute('DELETE FROM contas_pagar WHERE id = %s', (lancamento[3],))
+            cursor.execute('DELETE FROM contas_pagar WHERE id = ?', (lancamento[3],))
         
         if lancamento[4]:  # conta_receber_id
-            cursor.execute('DELETE FROM contas_receber WHERE id = %s', (lancamento[4],))
+            cursor.execute('DELETE FROM contas_receber WHERE id = ?', (lancamento[4],))
         
         # Deletar o lançamento
-        cursor.execute('DELETE FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute('DELETE FROM lancamentos_financeiros WHERE id = ?', (lancamento_id,))
         
         conn.commit()
         tipo_texto = "receita" if lancamento[1] == 'receita' else "despesa"
@@ -3947,7 +3945,7 @@ def deletar_venda(venda_id, restaurar_estoque=True):
         }
         
         # Verificar se a venda existe
-        cursor.execute('SELECT id, total, forma_pagamento FROM vendas WHERE id = %s', (venda_id,))
+        cursor.execute('SELECT id, total, forma_pagamento FROM vendas WHERE id = ?', (venda_id,))
         venda = cursor.fetchone()
         
         if not venda:
@@ -3960,7 +3958,7 @@ def deletar_venda(venda_id, restaurar_estoque=True):
                 SELECT iv.produto_id, p.nome, iv.quantidade
                 FROM itens_venda iv
                 JOIN produtos p ON iv.produto_id = p.id
-                WHERE iv.venda_id = %s
+                WHERE iv.venda_id = ?
             ''', (venda_id,))
             itens_venda = cursor.fetchall()
             
@@ -3968,29 +3966,29 @@ def deletar_venda(venda_id, restaurar_estoque=True):
             for produto_id, nome_produto, quantidade in itens_venda:
                 cursor.execute('''
                     UPDATE produtos 
-                    SET estoque = estoque + %s
-                    WHERE id = %s
+                    SET estoque = estoque + ?
+                    WHERE id = ?
                 ''', (quantidade, produto_id))
                 
                 resultado['estoque_restaurado'][nome_produto] = quantidade
         
         # Contar e deletar itens da venda
-        cursor.execute('SELECT COUNT(*) FROM itens_venda WHERE venda_id = %s', (venda_id,))
+        cursor.execute('SELECT COUNT(*) FROM itens_venda WHERE venda_id = ?', (venda_id,))
         resultado['itens_deletados'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM itens_venda WHERE venda_id = %s', (venda_id,))
+        cursor.execute('DELETE FROM itens_venda WHERE venda_id = ?', (venda_id,))
         
         # Contar e deletar movimentações de caixa relacionadas à venda
-        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id = %s', (venda_id,))
+        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id = ?', (venda_id,))
         resultado['movimentacoes_caixa_deletadas'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id = %s', (venda_id,))
+        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id = ?', (venda_id,))
         
         # Contar e deletar contas a receber relacionadas à venda
-        cursor.execute('SELECT COUNT(*) FROM contas_receber WHERE venda_id = %s', (venda_id,))
+        cursor.execute('SELECT COUNT(*) FROM contas_receber WHERE venda_id = ?', (venda_id,))
         resultado['contas_receber_deletadas'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM contas_receber WHERE venda_id = %s', (venda_id,))
+        cursor.execute('DELETE FROM contas_receber WHERE venda_id = ?', (venda_id,))
         
         # Deletar a venda
-        cursor.execute('DELETE FROM vendas WHERE id = %s', (venda_id,))
+        cursor.execute('DELETE FROM vendas WHERE id = ?', (venda_id,))
         
         if cursor.rowcount > 0:
             resultado['venda_deletada'] = True
@@ -4042,8 +4040,8 @@ def deletar_todas_vendas(restaurar_estoque=True):
             for produto_id, nome_produto, quantidade_vendida in produtos_vendidos:
                 cursor.execute('''
                     UPDATE produtos 
-                    SET estoque = estoque + %s
-                    WHERE id = %s
+                    SET estoque = estoque + ?
+                    WHERE id = ?
                 ''', (quantidade_vendida, produto_id))
                 
                 resultado['estoque_restaurado'][nome_produto] = quantidade_vendida

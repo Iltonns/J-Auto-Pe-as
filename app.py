@@ -14,6 +14,10 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
@@ -53,7 +57,8 @@ from Minha_autopecas_web.logica_banco import (
 )
 
 app = Flask(__name__)
-app.secret_key = 'sua_chave_secreta_aqui_mude_em_producao'
+# Usar SECRET_KEY do .env ou gerar uma aleatória
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
 # Configuração para upload de arquivos
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'produtos')

@@ -1,0 +1,68 @@
+=========================================================================
+🔧 CONFIGURAÇÃO DO NEON - PREENCHA AQUI
+=========================================================================
+
+📝 INSTRUÇÕES:
+
+1. Acesse https://neon.tech e faça login
+2. Clique em "New Project" ou abra seu projeto existente
+3. Copie os dados abaixo do painel do Neon
+4. Cole no arquivo .env
+
+=========================================================================
+
+🔗 DADOS DO NEON (copie do painel):
+
+Host: _______________________________________________
+   (Exemplo: ep-cool-darkness-123456.us-east-2.aws.neon.tech)
+
+Database: _______________________________________________
+   (Exemplo: neondb ou autopecas)
+
+User: _______________________________________________
+   (Exemplo: neondb_owner)
+
+Password: _______________________________________________
+   (A senha será gerada automaticamente, copie ela)
+
+Port: 5432 (padrão do PostgreSQL)
+
+=========================================================================
+
+✏️  MONTE SUA STRING DE CONEXÃO:
+
+Formato:
+postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
+
+Exemplo preenchido:
+postgresql://neondb_owner:abc123xyz@ep-cool-darkness-123456.us-east-2.aws.neon.tech/neondb?sslmode=require
+
+Sua string (preencha):
+postgresql://__________:__________@__________/__________?sslmode=require
+
+=========================================================================
+
+📋 COPIE E COLE NO ARQUIVO .env:
+
+DATABASE_URL=postgresql://[COLE_SUA_STRING_AQUI]
+
+=========================================================================
+
+🔐 NÃO SE ESQUEÇA!
+
+1. Altere também o SECRET_KEY no .env para algo aleatório
+   Exemplo: k8#mX9pL@2qR$7nW&5tY!vB4cZ
+
+2. NUNCA compartilhe essas credenciais
+3. NUNCA faça commit do arquivo .env no Git
+
+=========================================================================
+
+✅ APÓS CONFIGURAR:
+
+1. Salve o arquivo .env
+2. Execute: pip install -r requirements.txt
+3. Execute: python app.py
+4. Acesse: http://localhost:5000
+
+=========================================================================
