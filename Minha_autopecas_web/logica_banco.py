@@ -2,6 +2,7 @@
 # POSTGRESQL COM NEON
 import psycopg2
 import psycopg2.extras
+import psycopg2.errors
 import os
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,6 +26,27 @@ def get_db_connection():
     except psycopg2.Error as e:
         print(f"Erro ao conectar ao banco de dados: {e}")
         raise
+
+def add_column_if_not_exists(cursor, conn, table_name, column_definition):
+    """Adiciona uma coluna em uma tabela se ela não existir"""
+    try:
+        # Extrair o nome da coluna da definição
+        column_name = column_definition.split()[0]
+        
+        # Verificar se a coluna já existe
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name=%s AND column_name=%s
+        """, (table_name, column_name))
+        
+        if cursor.fetchone() is None:
+            # Coluna não existe, adicionar
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao adicionar coluna {column_definition} na tabela {table_name}: {e}")
 
 def init_db():
     """Inicializa o banco de dados criando todas as tabelas necessárias"""
@@ -52,56 +74,21 @@ def init_db():
             FOREIGN KEY (created_by) REFERENCES usuarios (id)
         )
     ''')
+    conn.commit()  # Commit da tabela de usuários
     
     # Verificar e adicionar colunas se não existirem (para compatibilidade com DB existente)
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN nome_completo TEXT DEFAULT ''")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_vendas BOOLEAN DEFAULT TRUE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_estoque BOOLEAN DEFAULT TRUE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_clientes BOOLEAN DEFAULT TRUE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_financeiro BOOLEAN DEFAULT FALSE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_caixa BOOLEAN DEFAULT FALSE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_relatorios BOOLEAN DEFAULT FALSE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_admin BOOLEAN DEFAULT FALSE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN created_by INTEGER")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_pagar BOOLEAN DEFAULT FALSE")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN permissao_contas_receber BOOLEAN DEFAULT FALSE")
-    except:
-        pass
+    add_column_if_not_exists(cursor, conn, 'usuarios', "nome_completo TEXT DEFAULT ''")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "ativo BOOLEAN DEFAULT TRUE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_vendas BOOLEAN DEFAULT TRUE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_estoque BOOLEAN DEFAULT TRUE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_clientes BOOLEAN DEFAULT TRUE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_financeiro BOOLEAN DEFAULT FALSE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_caixa BOOLEAN DEFAULT FALSE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_relatorios BOOLEAN DEFAULT FALSE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_admin BOOLEAN DEFAULT FALSE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "created_by INTEGER")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_contas_pagar BOOLEAN DEFAULT FALSE")
+    add_column_if_not_exists(cursor, conn, 'usuarios', "permissao_contas_receber BOOLEAN DEFAULT FALSE")
     
     # Tabela de clientes
     cursor.execute('''
@@ -115,6 +102,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    conn.commit()  # Commit da tabela de clientes
     
     # Tabela de produtos
     cursor.execute('''
@@ -131,52 +119,17 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    conn.commit()  # Commit da tabela de produtos
     
-    # Adicionar colunas para dados da NFe se não existirem
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN ncm TEXT")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN unidade TEXT DEFAULT 'UN'")
-    except:
-        pass
-    
-    # Adicionar colunas para gestão comercial
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN codigo_fornecedor TEXT")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN preco_custo DECIMAL(10,2) DEFAULT 0")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN margem_lucro DECIMAL(10,2) DEFAULT 0")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN fornecedor_id INTEGER")
-    except:
-        pass
-    
-    # Adicionar coluna para foto do produto se não existir
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN foto_url TEXT")
-    except:
-        pass
-    
-    # Adicionar coluna para marca do produto se não existir
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN marca TEXT")
-    except:
-        pass
-    
-    # Adicionar coluna para fornecedor na tabela contas_pagar se não existir
-    try:
-        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN fornecedor_id INTEGER")
-    except:
-        pass
+    # Adicionar colunas para dados da NFe e gestão comercial se não existirem
+    add_column_if_not_exists(cursor, conn, 'produtos', "ncm TEXT")
+    add_column_if_not_exists(cursor, conn, 'produtos', "unidade TEXT DEFAULT 'UN'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "codigo_fornecedor TEXT")
+    add_column_if_not_exists(cursor, conn, 'produtos', "preco_custo DECIMAL(10,2) DEFAULT 0")
+    add_column_if_not_exists(cursor, conn, 'produtos', "margem_lucro DECIMAL(10,2) DEFAULT 0")
+    add_column_if_not_exists(cursor, conn, 'produtos', "fornecedor_id INTEGER")
+    add_column_if_not_exists(cursor, conn, 'produtos', "foto_url TEXT")
+    add_column_if_not_exists(cursor, conn, 'produtos', "marca TEXT")
     
     # Tabela de vendas
     cursor.execute('''
@@ -221,8 +174,7 @@ def init_db():
             observacoes TEXT,
             fornecedor_id INTEGER,
             lancamento_financeiro_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- FKs removidas para evitar dependência circular
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -291,8 +243,7 @@ def init_db():
             conta_receber_id INTEGER, -- Link com conta a receber se aplicável
             observacoes TEXT,
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-            FOREIGN KEY (venda_id) REFERENCES vendas (id),
-            -- FKs removidas para evitar dependência circular
+            FOREIGN KEY (venda_id) REFERENCES vendas (id)
         )
     ''')
     
@@ -335,8 +286,7 @@ def init_db():
             observacoes TEXT,
             conta_pagar_id INTEGER,
             conta_receber_id INTEGER,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-            -- FKs removidas para evitar dependência circular
+            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
         )
     ''')
     
@@ -387,22 +337,10 @@ def init_db():
         ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
     
     # Adicionar colunas para sincronização financeira se não existirem
-    try:
-        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN fornecedor_id INTEGER")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE contas_pagar ADD COLUMN lancamento_financeiro_id INTEGER")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE lancamentos_financeiros ADD COLUMN conta_pagar_id INTEGER")
-    except:
-        pass
-    try:
-        cursor.execute("ALTER TABLE lancamentos_financeiros ADD COLUMN conta_receber_id INTEGER")
-    except:
-        pass
+    add_column_if_not_exists(cursor, conn, 'contas_pagar', "fornecedor_id INTEGER")
+    add_column_if_not_exists(cursor, conn, 'contas_pagar', "lancamento_financeiro_id INTEGER")
+    add_column_if_not_exists(cursor, conn, 'lancamentos_financeiros', "conta_pagar_id INTEGER")
+    add_column_if_not_exists(cursor, conn, 'lancamentos_financeiros', "conta_receber_id INTEGER")
     
     conn.commit()
     conn.close()
@@ -423,20 +361,20 @@ def criar_usuario_admin():
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', ('admin', password_hash, 'Administrador do Sistema', 'admin@autopecas.com',
-              1, 1, 1, 1, 1, 1, 1))  # Admin tem todas as permissões
+              True, True, True, True, True, True, True))  # Admin tem todas as permissões
         conn.commit()
     else:
         # Atualizar usuário admin existente para ter todas as permissões
         cursor.execute('''
             UPDATE usuarios SET 
                 nome_completo = COALESCE(nome_completo, 'Administrador do Sistema'),
-                permissao_vendas = 1,
-                permissao_estoque = 1,
-                permissao_clientes = 1,
-                permissao_financeiro = 1,
-                permissao_caixa = 1,
-                permissao_relatorios = 1,
-                permissao_admin = 1
+                permissao_vendas = TRUE,
+                permissao_estoque = TRUE,
+                permissao_clientes = TRUE,
+                permissao_financeiro = TRUE,
+                permissao_caixa = TRUE,
+                permissao_relatorios = TRUE,
+                permissao_admin = TRUE
             WHERE username = 'admin'
         ''')
         conn.commit()
