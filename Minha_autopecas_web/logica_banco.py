@@ -1479,7 +1479,7 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
         if forma_pagamento == 'prazo':
             cursor.execute('''
                 INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id)
-                VALUES (%s, %s, DATE('now', '+30 days'), %s, %s)
+                VALUES (%s, %s, (CURRENT_DATE + INTERVAL '30 days'), %s, %s)
             ''', (f'Venda #{venda_id}', total, cliente_id, venda_id))
         else:
             # Se não for a prazo, registrar entrada no caixa (se houver caixa aberto)
@@ -1633,7 +1633,7 @@ def limpar_sincronizacoes_incorretas():
             JOIN vendas v ON cm.venda_id = v.id
             WHERE cm.categoria = 'venda'
             AND SUBSTR(v.data_venda, 1, 10) != %s
-            AND DATE(cm.data_movimentacao) = %s
+            AND cm.data_movimentacao::date = %s
         ''', (hoje, hoje))
         
         movimentacoes_incorretas = cursor.fetchall()
@@ -1815,7 +1815,7 @@ def listar_contas_pagar_hoje():
                f.nome as fornecedor_nome
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE date(cp.data_vencimento) = date('now') AND cp.status = 'pendente'
+        WHERE cp.data_vencimento::date = CURRENT_DATE AND cp.status = 'pendente'
         ORDER BY cp.valor DESC
     ''')
     
@@ -1853,17 +1853,17 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     params = [status]
     
     if filtro == 'hoje':
-        base_query += " AND date(cp.data_vencimento) = date('now')"
+        base_query += " AND cp.data_vencimento::date = CURRENT_DATE"
     elif filtro == 'atrasadas':
-        base_query += " AND date(cp.data_vencimento) < date('now')"
+        base_query += " AND cp.data_vencimento::date < CURRENT_DATE"
     elif filtro == 'futuras':
-        base_query += " AND date(cp.data_vencimento) > date('now')"
+        base_query += " AND cp.data_vencimento::date > CURRENT_DATE"
     elif filtro == 'proximos_7_dias':
-        base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+7 days')"
+        base_query += " AND cp.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
     elif filtro == 'proximos_30_dias':
-        base_query += " AND date(cp.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
+        base_query += " AND cp.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND date(cp.data_vencimento) BETWEEN %s AND %s"
+        base_query += " AND cp.data_vencimento::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cp.data_vencimento"
@@ -1958,7 +1958,7 @@ def listar_contas_receber_hoje():
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE date(cr.data_vencimento) = date('now') AND cr.status = 'pendente'
+        WHERE cr.data_vencimento::date = CURRENT_DATE AND cr.status = 'pendente'
         ORDER BY cr.valor DESC
     ''')
     
@@ -1993,17 +1993,17 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     params = [status]
     
     if filtro == 'hoje':
-        base_query += " AND date(cr.data_vencimento) = date('now')"
+        base_query += " AND cr.data_vencimento::date = CURRENT_DATE"
     elif filtro == 'atrasadas':
-        base_query += " AND date(cr.data_vencimento) < date('now')"
+        base_query += " AND cr.data_vencimento::date < CURRENT_DATE"
     elif filtro == 'futuras':
-        base_query += " AND date(cr.data_vencimento) > date('now')"
+        base_query += " AND cr.data_vencimento::date > CURRENT_DATE"
     elif filtro == 'proximos_7_dias':
-        base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+7 days')"
+        base_query += " AND cr.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
     elif filtro == 'proximos_30_dias':
-        base_query += " AND date(cr.data_vencimento) BETWEEN date('now') AND date('now', '+30 days')"
+        base_query += " AND cr.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND date(cr.data_vencimento) BETWEEN %s AND %s"
+        base_query += " AND cr.data_vencimento::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
     base_query += " ORDER BY cr.data_vencimento"
@@ -2128,7 +2128,7 @@ def obter_estatisticas_dashboard():
     cursor.execute('''
         SELECT COUNT(*), SUM(total) 
         FROM vendas 
-        WHERE date(data_venda) = date('now')
+        WHERE data_venda::date = CURRENT_DATE
     ''')
     vendas_dia = cursor.fetchone()
     
@@ -2136,7 +2136,7 @@ def obter_estatisticas_dashboard():
     cursor.execute('''
         SELECT SUM(valor) 
         FROM contas_receber 
-        WHERE date(data_vencimento) < date('now') AND status = 'pendente'
+        WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
     ''')
     valor_atraso_receber = cursor.fetchone()[0] or 0
     
@@ -2144,7 +2144,7 @@ def obter_estatisticas_dashboard():
     cursor.execute('''
         SELECT SUM(valor) 
         FROM contas_pagar 
-        WHERE date(data_vencimento) < date('now') AND status = 'pendente'
+        WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
     ''')
     valor_atraso_pagar = cursor.fetchone()[0] or 0
     
@@ -2919,10 +2919,10 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
         
         # Filtros por data
         if data_inicio:
-            query += " AND DATE(v.data_venda) >= %s"
+            query += " AND v.data_venda::date >= %s"
             params.append(data_inicio)
         if data_fim:
-            query += " AND DATE(v.data_venda) <= %s"
+            query += " AND v.data_venda::date <= %s"
             params.append(data_fim)
         if cliente_id:
             query += " AND v.cliente_id = %s"
@@ -2960,8 +2960,8 @@ def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
                 COUNT(*) as quantidade_por_forma
             FROM vendas v
             WHERE 1=1
-        ''' + (" AND DATE(v.data_venda) >= %s" if data_inicio else "") +
-              (" AND DATE(v.data_venda) <= %s" if data_fim else "") +
+        ''' + (" AND v.data_venda::date >= %s" if data_inicio else "") +
+              (" AND v.data_venda::date <= %s" if data_fim else "") +
               (" AND v.cliente_id = %s" if cliente_id else "") +
               " GROUP BY forma_pagamento", params)
         
@@ -3004,10 +3004,10 @@ def gerar_relatorio_produtos_mais_vendidos(data_inicio=None, data_fim=None, limi
         params = []
         
         if data_inicio:
-            query += " AND DATE(v.data_venda) >= %s"
+            query += " AND v.data_venda::date >= %s"
             params.append(data_inicio)
         if data_fim:
-            query += " AND DATE(v.data_venda) <= %s"
+            query += " AND v.data_venda::date <= %s"
             params.append(data_fim)
         
         query += '''
@@ -3225,9 +3225,9 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         '''
         
         if data_inicio:
-            query_caixa += " AND DATE(cm.data_movimentacao) >= %s"
+            query_caixa += " AND cm.data_movimentacao::date >= %s"
         if data_fim:
-            query_caixa += " AND DATE(cm.data_movimentacao) <= %s"
+            query_caixa += " AND cm.data_movimentacao::date <= %s"
         
         query_caixa += " GROUP BY tipo"
         
