@@ -1632,7 +1632,7 @@ def limpar_sincronizacoes_incorretas():
             FROM caixa_movimentacoes cm
             JOIN vendas v ON cm.venda_id = v.id
             WHERE cm.categoria = 'venda'
-            AND SUBSTR(v.data_venda, 1, 10) != %s
+            AND v.data_venda::date::text != %s
             AND cm.data_movimentacao::date = %s
         ''', (hoje, hoje))
         
@@ -1677,7 +1677,7 @@ def sincronizar_vendas_com_caixa():
         cursor.execute('''
             SELECT v.id, v.cliente_id, v.total, v.forma_pagamento, v.usuario_id, v.data_venda
             FROM vendas v
-            WHERE SUBSTR(v.data_venda, 1, 10) = %s
+            WHERE v.data_venda::date::text = %s
             AND v.forma_pagamento != 'prazo'
             AND NOT EXISTS (
                 SELECT 1 FROM caixa_movimentacoes cm 
@@ -1757,7 +1757,7 @@ def obter_vendas_do_dia():
         LEFT JOIN clientes c ON v.cliente_id = c.id
         LEFT JOIN itens_venda iv ON v.id = iv.venda_id
         LEFT JOIN usuarios u ON v.usuario_id = u.id
-        WHERE SUBSTR(v.data_venda, 1, 10) = %s
+        WHERE v.data_venda::date::text = %s
         GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, u.nome_completo, u.username, v.usuario_id
         ORDER BY v.data_venda DESC
     ''', (hoje,))
@@ -1843,7 +1843,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     base_query = '''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome,
-               julianday(cp.data_vencimento) - julianday('now') as dias_restantes,
+               (cp.data_vencimento::date - CURRENT_DATE) as dias_restantes,
                cp.data_pagamento
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
@@ -1983,7 +1983,7 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     
     base_query = '''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
-               julianday(cr.data_vencimento) - julianday('now') as dias_restantes,
+               (cr.data_vencimento::date - CURRENT_DATE) as dias_restantes,
                cr.data_recebimento
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
@@ -3593,10 +3593,10 @@ def obter_configuracoes_empresa():
     cursor = conn.cursor()
     
     try:
-        # Primeiro, verificar se a tabela existe
+        # Primeiro, verificar se a tabela existe (PostgreSQL)
         cursor.execute('''
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='configuracoes_empresa'
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'configuracoes_empresa'
         ''')
         
         if not cursor.fetchone():
