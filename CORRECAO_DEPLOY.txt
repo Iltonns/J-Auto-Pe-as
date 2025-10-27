@@ -1,0 +1,28 @@
+# CORREÇÃO DO ERRO - COMANDOS PARA EXECUTAR AGORA
+
+## 🔧 O PROBLEMA:
+Python 3.13 não é totalmente compatível com psycopg2-binary ainda.
+
+## ✅ SOLUÇÃO APLICADA:
+Arquivo runtime.txt atualizado para Python 3.11.9
+
+## 📝 EXECUTE ESTES COMANDOS NO POWERSHELL:
+
+# 1. Adicionar a mudança
+git add runtime.txt
+
+# 2. Fazer commit
+git commit -m "Fix: Especificar Python 3.11.9 para compatibilidade com psycopg2"
+
+# 3. Enviar para GitHub
+git push origin main
+
+# O Render fará deploy automático com a versão correta!
+
+## ⏱️ AGUARDE:
+- O Render detectará a mudança automaticamente
+- Fará um novo deploy (3-5 minutos)
+- Desta vez deve funcionar! ✅
+
+## 🔍 ACOMPANHAR:
+Vá no painel do Render e acompanhe os logs do novo deploy.
