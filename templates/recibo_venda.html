@@ -34,8 +34,8 @@
         }
         
         .empresa-logo-img {
-            max-width: 140px;
-            max-height: 90px;
+            max-width: 180px;
+            max-height: 120px;
             width: auto;
             height: auto;
             margin-bottom: 15px;
@@ -43,7 +43,8 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             object-fit: contain;
             background: white;
-            padding: 5px;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
         }
         
         .empresa-logo {
@@ -53,15 +54,24 @@
         }
         
         .empresa-nome {
-            font-size: 1.8rem;
+            font-size: 2rem;
             font-weight: bold;
             color: #1a237e;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .empresa-info {
-            color: #666;
+            color: #555;
             font-size: 0.9rem;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .empresa-info strong {
+            color: #333;
         }
         
         .recibo-titulo {
@@ -200,8 +210,24 @@
             }
             
             .empresa-logo-img {
-                max-width: 100px;
-                max-height: 70px;
+                max-width: 150px;
+                max-height: 100px;
+                border: 1px solid #333;
+                box-shadow: none;
+            }
+            
+            .empresa-nome {
+                font-size: 1.6rem;
+                color: #000 !important;
+            }
+            
+            .empresa-info {
+                color: #000 !important;
+                font-size: 0.85rem;
+            }
+            
+            .empresa-info strong {
+                color: #000 !important;
             }
             
             .recibo-titulo {
@@ -237,18 +263,46 @@
     <div class="recibo-container">
         <!-- Cabeçalho da empresa -->
         <div class="recibo-header">
-            <img src="{{ url_for('static', filename='logo.jpg') }}" 
-                 alt="FG Auto Peças" 
+            {% if empresa.logo_path %}
+            <img src="{{ url_for('static', filename='images/empresa/' + empresa.logo_path) }}" 
+                 alt="{{ empresa.nome_empresa }}" 
                  class="empresa-logo-img"
-                 onerror="handleLogoError();">
-            <div class="empresa-logo" style="display: none;">
+                 onerror="this.style.display='none'; document.getElementById('logo-icon').style.display='block';">
+            {% endif %}
+            <div class="empresa-logo" id="logo-icon" style="{% if empresa.logo_path %}display: none;{% endif %}">
                 <i class="fas fa-car"></i>
             </div>
-            <div class="empresa-nome">FG Auto Peças</div>
+            
+            <div class="empresa-nome">{{ empresa.nome_empresa }}</div>
+            
             <div class="empresa-info">
-                🚗 Autopeças e Acessórios Automotivos<br>
-                📍 Atendimento Profissional e Personalizado<br>
-                📞 Sistema de Gestão Integrado
+                {% if empresa.cnpj %}
+                <strong>CNPJ:</strong> {{ empresa.cnpj }}<br>
+                {% endif %}
+                
+                {% if empresa.endereco %}
+                📍 {{ empresa.endereco }}
+                {% if empresa.cidade or empresa.estado %}
+                    - {{ empresa.cidade }}{% if empresa.estado %}/{{ empresa.estado }}{% endif %}
+                {% endif %}
+                {% if empresa.cep %}
+                    - CEP: {{ empresa.cep }}
+                {% endif %}
+                <br>
+                {% endif %}
+                
+                {% if empresa.telefone %}
+                📞 {{ empresa.telefone }}
+                {% endif %}
+                
+                {% if empresa.email %}
+                {% if empresa.telefone %} | {% endif %}
+                📧 {{ empresa.email }}
+                {% endif %}
+                
+                {% if empresa.website %}
+                <br>🌐 {{ empresa.website }}
+                {% endif %}
             </div>
         </div>
         
@@ -360,8 +414,30 @@
         <!-- Rodapé -->
         <div class="recibo-footer">
             <p><strong>Obrigado pela preferência!</strong></p>
-            <p>Sistema de Autopeças - FG Auto Peças<br>
-            Recibo gerado automaticamente</p>
+            
+            {% if empresa.observacoes %}
+            <p style="font-style: italic; color: #666; margin: 10px 0;">
+                {{ empresa.observacoes }}
+            </p>
+            {% endif %}
+            
+            <p>
+                <strong>{{ empresa.nome_empresa }}</strong>
+                {% if empresa.cnpj %}<br>CNPJ: {{ empresa.cnpj }}{% endif %}
+                {% if empresa.telefone or empresa.email %}
+                <br>
+                {% if empresa.telefone %}📞 {{ empresa.telefone }}{% endif %}
+                {% if empresa.telefone and empresa.email %} | {% endif %}
+                {% if empresa.email %}📧 {{ empresa.email }}{% endif %}
+                {% endif %}
+                {% if empresa.website %}
+                <br>🌐 {{ empresa.website }}
+                {% endif %}
+            </p>
+            
+            <p style="font-size: 0.75rem; color: #999; margin-top: 15px;">
+                Recibo gerado automaticamente em {{ venda.data_venda.strftime('%d/%m/%Y às %H:%M:%S') if venda.data_venda else 'data não informada' }}
+            </p>
         </div>
     </div>
     

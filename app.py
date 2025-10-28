@@ -1559,16 +1559,19 @@ def api_venda(venda_id):
 
 @app.route('/vendas/<int:venda_id>/recibo')
 def recibo_venda(venda_id):
-    """Gera recibo para impressão"""
+    """Gera recibo para impressão com informações completas da empresa"""
     try:
-        from Minha_autopecas_web.logica_banco import obter_venda_por_id
+        from Minha_autopecas_web.logica_banco import obter_venda_por_id, obter_configuracoes_empresa
         
         venda = obter_venda_por_id(venda_id)
         if not venda:
             flash('Venda não encontrada', 'error')
             return redirect(url_for('vendas'))
         
-        return render_template('recibo_venda.html', venda=venda)
+        # Buscar configurações da empresa
+        empresa = obter_configuracoes_empresa()
+        
+        return render_template('recibo_venda.html', venda=venda, empresa=empresa)
     
     except Exception as e:
         flash(f'Erro ao gerar recibo: {str(e)}', 'error')
