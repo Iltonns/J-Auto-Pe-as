@@ -811,23 +811,37 @@
                         <h6 class="text-primary mb-3">
                             <i class="fas fa-calculator me-2"></i>Calculadora de Preços
                         </h6>
+                        <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.85rem;">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Como usar:</strong> Preencha o custo e margem para calcular o preço automaticamente, OU edite o preço de venda diretamente como preferir.
+                        </div>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Preço de Custo (R$)</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-tag me-1"></i>Preço de Custo (R$)
+                                    </label>
                                     <input type="number" class="form-control" name="preco_custo" step="0.01" min="0" id="preco_custo_add" oninput="calcularPreco('add')">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Margem de Lucro (%)</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-percent me-1"></i>Margem de Lucro (%)
+                                    </label>
                                     <input type="number" class="form-control" name="margem_lucro" step="0.01" min="0" id="margem_lucro_add" oninput="calcularPreco('add')">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Preço de Venda (R$) *</label>
-                                    <input type="number" class="form-control" name="preco" step="0.01" min="0.01" id="preco_venda_add" required>
+                                    <label class="form-label">
+                                        <i class="fas fa-dollar-sign me-1"></i>Preço de Venda (R$) *
+                                        <i class="fas fa-edit ms-1 text-success" title="Editável"></i>
+                                    </label>
+                                    <input type="number" class="form-control border-success" name="preco" step="0.01" min="0.01" id="preco_venda_add" required oninput="calcularMargemReversa('add')" style="font-weight: 600;">
+                                    <small class="text-success">
+                                        <i class="fas fa-check-circle"></i> Você pode editar este valor livremente
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -974,23 +988,37 @@
                         <h6 class="text-primary mb-3">
                             <i class="fas fa-calculator me-2"></i>Calculadora de Preços
                         </h6>
+                        <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.85rem;">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Como usar:</strong> Preencha o custo e margem para calcular o preço automaticamente, OU edite o preço de venda diretamente como preferir.
+                        </div>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Preço de Custo (R$)</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-tag me-1"></i>Preço de Custo (R$)
+                                    </label>
                                     <input type="number" class="form-control" name="preco_custo" step="0.01" min="0" id="preco_custo_edit" oninput="calcularPreco('edit')">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Margem de Lucro (%)</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-percent me-1"></i>Margem de Lucro (%)
+                                    </label>
                                     <input type="number" class="form-control" name="margem_lucro" step="0.01" min="0" id="margem_lucro_edit" oninput="calcularPreco('edit')">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
-                                    <label class="form-label">Preço de Venda (R$) *</label>
-                                    <input type="number" class="form-control" name="preco" step="0.01" min="0.01" id="preco_venda_edit" required>
+                                    <label class="form-label">
+                                        <i class="fas fa-dollar-sign me-1"></i>Preço de Venda (R$) *
+                                        <i class="fas fa-edit ms-1 text-success" title="Editável"></i>
+                                    </label>
+                                    <input type="number" class="form-control border-success" name="preco" step="0.01" min="0.01" id="preco_venda_edit" required oninput="calcularMargemReversa('edit')" style="font-weight: 600;">
+                                    <small class="text-success">
+                                        <i class="fas fa-check-circle"></i> Você pode editar este valor livremente
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -1189,6 +1217,18 @@ function calcularPreco(tipo) {
     if (custo > 0 && margem >= 0) {
         const precoVenda = custo + (custo * margem / 100);
         document.getElementById(`preco_venda_${tipo}`).value = precoVenda.toFixed(2);
+    }
+}
+
+// Calcular margem reversa quando o preço de venda for alterado manualmente
+function calcularMargemReversa(tipo) {
+    const custo = parseFloat(document.getElementById(`preco_custo_${tipo}`).value) || 0;
+    const precoVenda = parseFloat(document.getElementById(`preco_venda_${tipo}`).value) || 0;
+    
+    if (custo > 0 && precoVenda > 0) {
+        // Calcular margem: ((precoVenda - custo) / custo) * 100
+        const margemCalculada = ((precoVenda - custo) / custo) * 100;
+        document.getElementById(`margem_lucro_${tipo}`).value = margemCalculada.toFixed(2);
     }
 }
 

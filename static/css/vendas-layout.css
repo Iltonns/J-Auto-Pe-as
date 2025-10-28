@@ -151,10 +151,25 @@
 }
 
 .btn-finalizar {
-    background: linear-gradient(135deg, var(--success) 0%, #ff6d00 100%);
-    color: white;
+    background: linear-gradient(135deg, #ff6d00 0%, #ff8c00 100%) !important;
+    color: white !important;
     font-size: 1.1rem;
     padding: 0.8rem 2rem;
+    border: none !important;
+}
+
+.btn-finalizar:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ff8c00 0%, #ffa500 100%) !important;
+    color: white !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 109, 0, 0.4) !important;
+}
+
+.btn-finalizar:disabled {
+    background: linear-gradient(135deg, #999 0%, #bbb 100%) !important;
+    color: #666 !important;
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 .btn-limpar {

@@ -262,23 +262,56 @@
                                     <strong>R$ <span id="subtotalVenda">0,00</span></strong>
                                 </div>
                                 
-                                <!-- DESCONTO -->
-                                <div class="row mb-3">
-                                    <div class="col-6">
-                                        <label for="desconto_percentual" class="form-label small">Desconto (%)</label>
-                                        <input type="number" class="form-control form-control-sm" 
-                                               id="desconto_percentual" name="desconto_percentual" 
-                                               min="0" max="100" step="0.01" value="0" 
-                                               placeholder="0.00">
+                                <!-- DESCONTO APRIMORADO -->
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">
+                                        <i class="fas fa-percent me-1"></i>Aplicar Desconto
+                                    </label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label for="desconto_percentual" class="form-label small">Desconto (%)</label>
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="desconto_percentual" name="desconto_percentual" 
+                                                   min="0" max="100" step="0.01" value="0" 
+                                                   placeholder="0.00"
+                                                   oninput="calcularDescontoPorcentual()">
+                                        </div>
+                                        <div class="col-6">
+                                            <label for="desconto_reais" class="form-label small">Desconto (R$)</label>
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="desconto_reais" name="desconto_reais" 
+                                                   min="0" step="0.01" value="0" 
+                                                   placeholder="0.00"
+                                                   oninput="calcularDescontoReais()">
+                                        </div>
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small">Valor do Desconto</label>
-                                        <div class="form-control-plaintext small text-danger" id="valorDesconto">R$ 0,00</div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Valor do desconto: 
+                                            <span class="text-danger fw-bold" id="valorDesconto">R$ 0,00</span>
+                                        </small>
                                     </div>
                                 </div>
                                 
-                                <div class="total-venda">
-                                    R$ <span id="totalVenda">0,00</span>
+                                <!-- TOTAL COM CONTROLE MANUAL -->
+                                <div class="mb-3">
+                                    <label for="total_editavel" class="form-label small fw-bold">
+                                        <i class="fas fa-dollar-sign me-1"></i>Total da Venda
+                                        <i class="fas fa-edit ms-1 text-success" title="Editável"></i>
+                                    </label>
+                                    <input type="number" class="form-control form-control-lg fw-bold text-success border-success" 
+                                           id="total_editavel" name="total_editavel" 
+                                           step="0.01" min="0" value="0.00" 
+                                           oninput="calcularDescontoReverso()"
+                                           style="font-size: 1.5rem; text-align: right;">
+                                    <small class="text-success">
+                                        <i class="fas fa-check-circle"></i> Você pode editar este valor diretamente
+                                    </small>
+                                </div>
+                                
+                                <div class="alert alert-info py-2 px-3" style="font-size: 0.75rem;">
+                                    <i class="fas fa-lightbulb me-1"></i>
+                                    <strong>Dica:</strong> Use desconto % ou R$, OU edite o total diretamente!
                                 </div>
                             </div>
                         </div>
@@ -801,17 +834,113 @@ function atualizarTotais() {
     const totalItens = itensVenda.reduce((sum, item) => sum + item.quantidade, 0);
     const subtotal = itensVenda.reduce((sum, item) => sum + item.subtotal, 0);
     
-    const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-    const valorDesconto = (subtotal * descontoPercentual) / 100;
-    const totalComDesconto = subtotal - valorDesconto;
-    
     subtotalVendaCalculado = subtotal;
-    totalComDescontoCalculado = totalComDesconto;
 
     $('#totalItens').text(totalItens);
     $('#subtotalVenda').text(subtotal.toFixed(2).replace('.', ','));
+    
+    // Recalcular desconto e total baseado nos valores atuais
+    recalcularDesconto();
+}
+
+// Calcular desconto por percentual
+function calcularDescontoPorcentual() {
+    const subtotal = subtotalVendaCalculado;
+    const percentual = parseFloat($('#desconto_percentual').val()) || 0;
+    
+    if (percentual > 100) {
+        $('#desconto_percentual').val(100);
+        return;
+    }
+    
+    const valorDesconto = (subtotal * percentual) / 100;
+    const totalComDesconto = subtotal - valorDesconto;
+    
+    // Atualizar campo de desconto em R$ sem disparar evento
+    $('#desconto_reais').val(valorDesconto.toFixed(2));
     $('#valorDesconto').text(`R$ ${valorDesconto.toFixed(2).replace('.', ',')}`);
-    $('#totalVenda').text(totalComDesconto.toFixed(2).replace('.', ','));
+    $('#total_editavel').val(totalComDesconto.toFixed(2));
+    
+    totalComDescontoCalculado = totalComDesconto;
+    calcularTroco();
+}
+
+// Calcular desconto em reais
+function calcularDescontoReais() {
+    const subtotal = subtotalVendaCalculado;
+    const valorDesconto = parseFloat($('#desconto_reais').val()) || 0;
+    
+    if (valorDesconto > subtotal) {
+        $('#desconto_reais').val(subtotal.toFixed(2));
+        return;
+    }
+    
+    const totalComDesconto = subtotal - valorDesconto;
+    const percentual = subtotal > 0 ? (valorDesconto / subtotal) * 100 : 0;
+    
+    // Atualizar campo de desconto % sem disparar evento
+    $('#desconto_percentual').val(percentual.toFixed(2));
+    $('#valorDesconto').text(`R$ ${valorDesconto.toFixed(2).replace('.', ',')}`);
+    $('#total_editavel').val(totalComDesconto.toFixed(2));
+    
+    totalComDescontoCalculado = totalComDesconto;
+    calcularTroco();
+}
+
+// Calcular desconto reverso (quando o total é editado manualmente)
+function calcularDescontoReverso() {
+    const subtotal = subtotalVendaCalculado;
+    const totalEditado = parseFloat($('#total_editavel').val()) || 0;
+    
+    if (totalEditado > subtotal) {
+        // Não permitir total maior que subtotal
+        $('#total_editavel').val(subtotal.toFixed(2));
+        $('#desconto_percentual').val(0);
+        $('#desconto_reais').val(0);
+        $('#valorDesconto').text('R$ 0,00');
+        totalComDescontoCalculado = subtotal;
+        calcularTroco();
+        return;
+    }
+    
+    const valorDesconto = subtotal - totalEditado;
+    const percentual = subtotal > 0 ? (valorDesconto / subtotal) * 100 : 0;
+    
+    // Atualizar campos de desconto sem disparar eventos
+    $('#desconto_percentual').val(percentual.toFixed(2));
+    $('#desconto_reais').val(valorDesconto.toFixed(2));
+    $('#valorDesconto').text(`R$ ${valorDesconto.toFixed(2).replace('.', ',')}`);
+    
+    totalComDescontoCalculado = totalEditado;
+    calcularTroco();
+}
+
+// Recalcular desconto (chamado quando itens mudam)
+function recalcularDesconto() {
+    const subtotal = subtotalVendaCalculado;
+    const descontoReais = parseFloat($('#desconto_reais').val()) || 0;
+    
+    // Se há desconto aplicado, recalcular proporcionalmente
+    if (descontoReais > 0) {
+        if (descontoReais > subtotal) {
+            $('#desconto_reais').val(subtotal.toFixed(2));
+            calcularDescontoReais();
+        } else {
+            const percentual = subtotal > 0 ? (descontoReais / subtotal) * 100 : 0;
+            $('#desconto_percentual').val(percentual.toFixed(2));
+            
+            const totalComDesconto = subtotal - descontoReais;
+            $('#valorDesconto').text(`R$ ${descontoReais.toFixed(2).replace('.', ',')}`);
+            $('#total_editavel').val(totalComDesconto.toFixed(2));
+            
+            totalComDescontoCalculado = totalComDesconto;
+        }
+    } else {
+        // Sem desconto
+        $('#valorDesconto').text('R$ 0,00');
+        $('#total_editavel').val(subtotal.toFixed(2));
+        totalComDescontoCalculado = subtotal;
+    }
     
     calcularTroco();
 }
@@ -843,6 +972,9 @@ function limparVenda() {
     $('#forma_pagamento').val('dinheiro');
     $('#valor_pago').val('');
     $('#desconto_percentual').val('0');
+    $('#desconto_reais').val('0');
+    $('#total_editavel').val('0.00');
+    $('#valorDesconto').text('R$ 0,00');
     $('#busca_produto').val('');
     $('#quantidade_produto').val(1);
 }
@@ -1187,13 +1319,8 @@ $(document).ready(function() {
     
     $('#valor_pago').off('input').on('input', calcularTroco);
     
-    $('#desconto_percentual').off('input').on('input', function() {
-        const valor = parseFloat($(this).val()) || 0;
-        if (valor > 100) {
-            $(this).val(100);
-        }
-        atualizarTotais();
-    });
+    // Event listeners para desconto já estão definidos nas funções inline (oninput)
+    // Não é necessário adicionar aqui para evitar duplicação
     
     $('#forma_pagamento').off('change').change(function() {
         const formaPagamento = $(this).val();
@@ -1234,9 +1361,8 @@ $(document).ready(function() {
             value: JSON.stringify(itensFormatados)
         });
         
-        const descontoPercentual = parseFloat($('#desconto_percentual').val()) || 0;
-        const subtotalVenda = subtotalVendaCalculado;
-        const valorDescontoAbsoluto = (subtotalVenda * descontoPercentual) / 100;
+        // Usar o valor do desconto em R$ (mais preciso)
+        const valorDescontoAbsoluto = parseFloat($('#desconto_reais').val()) || 0;
         
         const descontoInput = $('<input>').attr({
             type: 'hidden',
@@ -1244,10 +1370,20 @@ $(document).ready(function() {
             value: valorDescontoAbsoluto.toFixed(2)
         });
         
+        // Adicionar também o total editável para referência
+        const totalInput = $('<input>').attr({
+            type: 'hidden',
+            name: 'total_final',
+            value: totalComDesconto.toFixed(2)
+        });
+        
         $(this).append(itensInput);
         $(this).append(descontoInput);
+        $(this).append(totalInput);
         
         console.log('Enviando formulário de venda...');
+        console.log('Desconto aplicado: R$', valorDescontoAbsoluto.toFixed(2));
+        console.log('Total final: R$', totalComDesconto.toFixed(2));
         this.submit();
     });
     
