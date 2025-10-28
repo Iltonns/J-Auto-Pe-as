@@ -60,6 +60,10 @@ app = Flask(__name__)
 # Usar SECRET_KEY do .env ou gerar uma aleatória
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
+# Dicionário para controlar sessões únicas por usuário
+# Formato: {user_id: session_id}
+active_sessions = {}
+
 # Configuração para upload de arquivos
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'produtos')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -113,6 +117,24 @@ class User(UserMixin):
         self.id = str(user_data['id'])
         self.username = user_data['username']
         self.email = user_data.get('email', '')
+
+# Middleware para verificar sessão única
+@app.before_request
+def check_session_validity():
+    """Verifica se a sessão do usuário ainda é válida (não foi substituída por outro login)"""
+    if current_user.is_authenticated:
+        user_id = current_user.id
+        current_session_id = session.get('session_id')
+        
+        # Verificar se existe uma sessão ativa para este usuário
+        if user_id in active_sessions:
+            # Se o session_id não corresponde, significa que houve um novo login
+            if active_sessions[user_id] != current_session_id:
+                # Derrubar esta sessão antiga
+                logout_user()
+                session.clear()
+                flash('Sua sessão foi encerrada porque você fez login em outro dispositivo/navegador.', 'warning')
+                return redirect(url_for('login'))
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -195,6 +217,16 @@ def login():
         if user_data:
             user = User(user_data)
             login_user(user)
+            
+            # Gerar um ID único para esta sessão
+            import uuid
+            session_id = str(uuid.uuid4())
+            session['session_id'] = session_id
+            
+            # Armazenar esta sessão como a sessão ativa do usuário
+            # Isso automaticamente invalida qualquer sessão anterior
+            active_sessions[user.id] = session_id
+            
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('dashboard'))
         elif user_data is False:
@@ -209,7 +241,13 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+    # Remover a sessão ativa do usuário
+    user_id = current_user.id
+    if user_id in active_sessions:
+        del active_sessions[user_id]
+    
     logout_user()
+    session.clear()
     flash('Logout realizado com sucesso!', 'success')
     return redirect(url_for('login'))
 
