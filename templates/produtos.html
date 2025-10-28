@@ -757,6 +757,26 @@
                                 <i class="fas fa-barcode me-2"></i>Códigos e Estoque
                             </h6>
                             
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-truck me-1"></i>Fornecedor
+                                </label>
+                                <div class="input-group">
+                                    <select class="form-select" name="fornecedor_id" id="fornecedor_select_add">
+                                        <option value="">Selecione um fornecedor...</option>
+                                        {% for fornecedor in fornecedores %}
+                                        <option value="{{ fornecedor.id }}">{{ fornecedor.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-primary" onclick="abrirModalNovoFornecedor('add')" title="Cadastrar novo fornecedor">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> Clique no botão <i class="fas fa-plus"></i> para cadastrar um novo fornecedor
+                                </small>
+                            </div>
+                            
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
@@ -918,6 +938,26 @@
                             <h6 class="text-primary mb-3">
                                 <i class="fas fa-barcode me-2"></i>Códigos e Estoque
                             </h6>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-truck me-1"></i>Fornecedor
+                                </label>
+                                <div class="input-group">
+                                    <select class="form-select" name="fornecedor_id" id="edit_fornecedor_id">
+                                        <option value="">Selecione um fornecedor...</option>
+                                        {% for fornecedor in fornecedores %}
+                                        <option value="{{ fornecedor.id }}">{{ fornecedor.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-primary" onclick="abrirModalNovoFornecedor('edit')" title="Cadastrar novo fornecedor">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> Clique no botão <i class="fas fa-plus"></i> para cadastrar um novo fornecedor
+                                </small>
+                            </div>
                             
                             <div class="row">
                                 <div class="col-md-6">
@@ -1144,6 +1184,108 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Cadastro Rápido de Fornecedor -->
+<div class="modal fade" id="modalNovoFornecedor" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
+                <h5 class="modal-title">
+                    <i class="fas fa-truck me-2"></i>Cadastrar Novo Fornecedor
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formNovoFornecedor" onsubmit="salvarNovoFornecedor(event)">
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 px-3" style="font-size: 0.85rem;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Preencha os dados básicos do fornecedor. Você poderá editar mais informações na seção de fornecedores.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Nome do Fornecedor *</label>
+                        <input type="text" class="form-control" name="nome" id="novo_fornecedor_nome" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" name="cnpj" id="novo_fornecedor_cnpj" placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Telefone</label>
+                                <input type="text" class="form-control" name="telefone" id="novo_fornecedor_telefone" placeholder="(00) 00000-0000">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" id="novo_fornecedor_email" placeholder="fornecedor@exemplo.com">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Endereço</label>
+                        <input type="text" class="form-control" name="endereco" id="novo_fornecedor_endereco" placeholder="Rua, Número, Bairro">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">Cidade</label>
+                                <input type="text" class="form-control" name="cidade" id="novo_fornecedor_cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" name="estado" id="novo_fornecedor_estado">
+                                    <option value="">-</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AP">AP</option>
+                                    <option value="AM">AM</option>
+                                    <option value="BA">BA</option>
+                                    <option value="CE">CE</option>
+                                    <option value="DF">DF</option>
+                                    <option value="ES">ES</option>
+                                    <option value="GO">GO</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MT">MT</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MG">MG</option>
+                                    <option value="PA">PA</option>
+                                    <option value="PB">PB</option>
+                                    <option value="PR">PR</option>
+                                    <option value="PE">PE</option>
+                                    <option value="PI">PI</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="RN">RN</option>
+                                    <option value="RS">RS</option>
+                                    <option value="RO">RO</option>
+                                    <option value="RR">RR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SP">SP</option>
+                                    <option value="SE">SE</option>
+                                    <option value="TO">TO</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Salvar e Vincular
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1359,6 +1501,7 @@ function editarProduto(id) {
             document.getElementById('edit_categoria').value = produto.categoria || '';
             document.getElementById('edit_marca').value = produto.marca || '';
             document.getElementById('edit_descricao').value = produto.descricao || '';
+            document.getElementById('edit_fornecedor_id').value = produto.fornecedor_id || '';
             document.getElementById('edit_codigo_barras').value = produto.codigo_barras || '';
             document.getElementById('edit_codigo_fornecedor').value = produto.codigo_fornecedor || '';
             document.getElementById('edit_estoque').value = produto.estoque || 0;
@@ -1618,5 +1761,99 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+// ========== GESTÃO DE FORNECEDORES ==========
+
+// Variável global para rastrear qual modal de produto está aberto
+let modalProdutoAtivo = null;
+
+// Função para abrir modal de novo fornecedor
+function abrirModalNovoFornecedor(tipoModal) {
+    // Guardar qual modal de produto está aberto ('add' ou 'edit')
+    modalProdutoAtivo = tipoModal;
+    
+    // Limpar formulário
+    document.getElementById('formNovoFornecedor').reset();
+    
+    // Abrir modal de fornecedor
+    const modalFornecedor = new bootstrap.Modal(document.getElementById('modalNovoFornecedor'));
+    modalFornecedor.show();
+}
+
+// Função para salvar novo fornecedor via AJAX
+function salvarNovoFornecedor(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('formNovoFornecedor');
+    const formData = new FormData(form);
+    
+    // Mostrar indicador de carregamento
+    const btnSalvar = form.querySelector('button[type="submit"]');
+    const textoOriginal = btnSalvar.innerHTML;
+    btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Salvando...';
+    btnSalvar.disabled = true;
+    
+    // Enviar requisição AJAX
+    fetch('{{ url_for("adicionar_fornecedor_ajax") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            // Fechar modal de fornecedor
+            bootstrap.Modal.getInstance(document.getElementById('modalNovoFornecedor')).hide();
+            
+            // Adicionar novo fornecedor aos selects
+            const novaOpcao = `<option value="${data.fornecedor_id}" selected>${data.fornecedor_nome}</option>`;
+            
+            if (modalProdutoAtivo === 'add') {
+                const select = document.getElementById('fornecedor_select_add');
+                select.insertAdjacentHTML('beforeend', novaOpcao);
+                select.value = data.fornecedor_id;
+            } else if (modalProdutoAtivo === 'edit') {
+                const select = document.getElementById('edit_fornecedor_id');
+                select.insertAdjacentHTML('beforeend', novaOpcao);
+                select.value = data.fornecedor_id;
+            }
+            
+            // Mostrar mensagem de sucesso
+            mostrarAlerta('Fornecedor cadastrado e vinculado com sucesso!', 'success');
+            
+        } else {
+            mostrarAlerta('Erro ao cadastrar fornecedor: ' + data.erro, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        mostrarAlerta('Erro ao cadastrar fornecedor. Tente novamente.', 'error');
+    })
+    .finally(() => {
+        // Restaurar botão
+        btnSalvar.innerHTML = textoOriginal;
+        btnSalvar.disabled = false;
+    });
+}
+
+// Função auxiliar para mostrar alertas
+function mostrarAlerta(mensagem, tipo) {
+    // Criar elemento de alerta
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    alerta.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 300px;';
+    alerta.innerHTML = `
+        <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+        ${mensagem}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Adicionar ao body
+    document.body.appendChild(alerta);
+    
+    // Remover após 5 segundos
+    setTimeout(() => {
+        alerta.remove();
+    }, 5000);
+}
 </script>
 {% endblock %}

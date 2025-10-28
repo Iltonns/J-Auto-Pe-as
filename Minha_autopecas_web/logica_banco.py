@@ -1372,7 +1372,7 @@ def obter_produto_por_id(produto_id):
     return None
 
 def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None, 
-                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None):
+                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
     """Adiciona um novo produto"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1385,11 +1385,11 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     
     cursor.execute('''
         INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                            codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca))
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id))
     
     produto_id = cursor.fetchone()[0]
     conn.commit()
@@ -1397,7 +1397,7 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     return produto_id
 
 def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
-                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None):
+                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
     """Edita um produto existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1411,10 +1411,11 @@ def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=Non
         UPDATE produtos 
         SET nome = %s, preco = %s, estoque = %s, estoque_minimo = %s, 
             codigo_barras = %s, descricao = %s, categoria = %s,
-            codigo_fornecedor = %s, preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s
+            codigo_fornecedor = %s, preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s,
+            fornecedor_id = %s
         WHERE id = %s
     ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, id))
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, id))
     
     conn.commit()
     conn.close()
@@ -2580,6 +2581,7 @@ def mapear_ncm_para_categoria(ncm):
 def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=5, usar_preco_nfe=True, acao_existente='atualizar_estoque'):
     """
     Importa produtos de um arquivo XML de NFe com configurações avançadas
+    Também extrai e cadastra/atualiza automaticamente o fornecedor baseado nos dados do emitente da NF-e
     
     Args:
         conteudo_xml: Conteúdo do arquivo XML como string
@@ -2594,6 +2596,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
     produtos_atualizados = 0
     produtos_ignorados = 0
     erros = []
+    fornecedor_id = None
     
     try:
         # Parse do XML
@@ -2602,6 +2605,93 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
         # Namespace da NFe
         ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
         
+        # ===== EXTRAIR E CADASTRAR/ATUALIZAR FORNECEDOR =====
+        emit = root.find('.//nfe:emit', ns)
+        if emit is not None:
+            try:
+                # Extrair dados do emitente (fornecedor)
+                cnpj_fornecedor = emit.find('nfe:CNPJ', ns)
+                cnpj_fornecedor = cnpj_fornecedor.text if cnpj_fornecedor is not None else None
+                
+                nome_fornecedor = emit.find('nfe:xNome', ns)
+                nome_fornecedor = nome_fornecedor.text if nome_fornecedor is not None else None
+                
+                nome_fantasia = emit.find('nfe:xFant', ns)
+                nome_fantasia = nome_fantasia.text if nome_fantasia is not None else None
+                
+                # Dados de endereço
+                enderEmit = emit.find('nfe:enderEmit', ns)
+                endereco_completo = None
+                cidade = None
+                estado = None
+                cep = None
+                telefone = None
+                
+                if enderEmit is not None:
+                    xLgr = enderEmit.find('nfe:xLgr', ns)
+                    nro = enderEmit.find('nfe:nro', ns)
+                    xBairro = enderEmit.find('nfe:xBairro', ns)
+                    xCpl = enderEmit.find('nfe:xCpl', ns)
+                    
+                    cidade_elem = enderEmit.find('nfe:xMun', ns)
+                    cidade = cidade_elem.text if cidade_elem is not None else None
+                    
+                    estado_elem = enderEmit.find('nfe:UF', ns)
+                    estado = estado_elem.text if estado_elem is not None else None
+                    
+                    cep_elem = enderEmit.find('nfe:CEP', ns)
+                    cep = cep_elem.text if cep_elem is not None else None
+                    
+                    fone_elem = enderEmit.find('nfe:fone', ns)
+                    telefone = fone_elem.text if fone_elem is not None else None
+                    
+                    # Montar endereço completo
+                    partes_endereco = []
+                    if xLgr is not None:
+                        partes_endereco.append(xLgr.text)
+                    if nro is not None:
+                        partes_endereco.append(f"nº {nro.text}")
+                    if xCpl is not None and xCpl.text:
+                        partes_endereco.append(xCpl.text)
+                    if xBairro is not None:
+                        partes_endereco.append(xBairro.text)
+                    
+                    endereco_completo = ', '.join(partes_endereco) if partes_endereco else None
+                
+                # Buscar ou criar fornecedor
+                if cnpj_fornecedor and nome_fornecedor:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    
+                    # Verificar se fornecedor já existe pelo CNPJ
+                    cursor.execute('SELECT id FROM fornecedores WHERE cnpj = %s', (cnpj_fornecedor,))
+                    fornecedor_existente = cursor.fetchone()
+                    
+                    if fornecedor_existente:
+                        # Atualizar fornecedor existente
+                        fornecedor_id = fornecedor_existente[0]
+                        cursor.execute('''
+                            UPDATE fornecedores 
+                            SET nome = %s, telefone = %s, endereco = %s, cidade = %s, estado = %s, cep = %s
+                            WHERE id = %s
+                        ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id))
+                    else:
+                        # Criar novo fornecedor
+                        cursor.execute('''
+                            INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id
+                        ''', (nome_fornecedor, cnpj_fornecedor, telefone, endereco_completo, cidade, estado, cep, 
+                              f"Importado de NF-e. Nome Fantasia: {nome_fantasia}" if nome_fantasia else "Importado de NF-e"))
+                        fornecedor_id = cursor.fetchone()[0]
+                    
+                    conn.commit()
+                    conn.close()
+                    
+            except Exception as e:
+                erros.append(f"Erro ao processar fornecedor: {str(e)}")
+        
+        # ===== BUSCAR PRODUTOS DO XML =====
         # Buscar todos os produtos (det)
         produtos_xml = root.findall('.//nfe:det', ns)
         
@@ -2687,28 +2777,28 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                         produtos_atualizados += 1
                         continue
                     elif acao_existente == 'substituir_dados':
-                        # Substituir todos os dados
+                        # Substituir todos os dados (incluindo fornecedor)
                         produto_id = produto_existente[0]
                         cursor.execute('''
                             UPDATE produtos 
                             SET nome = %s, codigo_fornecedor = %s, codigo_barras = %s, categoria = %s, 
                                 preco_custo = %s, preco = %s, estoque = %s, estoque_minimo = %s,
-                                unidade = %s, ncm = %s
+                                unidade = %s, ncm = %s, fornecedor_id = %s
                             WHERE id = %s
                         ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
                              preco_custo, preco_venda, quantidade, estoque_minimo, 
-                             unidade, ncm, produto_id))
+                             unidade, ncm, fornecedor_id, produto_id))
                         produtos_atualizados += 1
                         continue
                 
-                # Inserir novo produto
+                # Inserir novo produto (vinculando ao fornecedor)
                 cursor.execute('''
                     INSERT INTO produtos (nome, codigo_fornecedor, codigo_barras, categoria, descricao,
-                                        preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                        preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo, fornecedor_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
                      "Importado via NFe XML", preco_custo, preco_venda, 
-                     quantidade, estoque_minimo, unidade, ncm, True))
+                     quantidade, estoque_minimo, unidade, ncm, True, fornecedor_id))
                 
                 produtos_importados += 1
                 

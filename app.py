@@ -840,6 +840,41 @@ def adicionar_fornecedor_route():
     
     return redirect(url_for('fornecedores'))
 
+@app.route('/fornecedores/adicionar-ajax', methods=['POST'])
+@login_required
+def adicionar_fornecedor_ajax():
+    """Adiciona um fornecedor via AJAX e retorna JSON"""
+    try:
+        nome = request.form['nome']
+        cnpj = request.form.get('cnpj', '').strip() or None
+        telefone = request.form.get('telefone', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        endereco = request.form.get('endereco', '').strip() or None
+        cidade = request.form.get('cidade', '').strip() or None
+        estado = request.form.get('estado', '').strip() or None
+        cep = request.form.get('cep', '').strip() or None
+        contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
+        observacoes = request.form.get('observacoes', '').strip() or None
+        
+        fornecedor_id = adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        
+        if fornecedor_id:
+            return jsonify({
+                'sucesso': True,
+                'fornecedor_id': fornecedor_id,
+                'fornecedor_nome': nome
+            })
+        else:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Erro ao cadastrar fornecedor'
+            })
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e)
+        })
+
 @app.route('/fornecedores/editar/<int:id>', methods=['POST'], endpoint='atualizar_fornecedor')
 @login_required
 def editar_fornecedor_route(id):
@@ -1028,6 +1063,7 @@ def adicionar_produto_route():
         descricao = request.form.get('descricao', '').strip()
         categoria = request.form.get('categoria', '').strip()
         marca = request.form.get('marca', '').strip()
+        fornecedor_id = safe_int(request.form.get('fornecedor_id', 0)) or None
         
         # Campos numéricos
         estoque = safe_int(request.form.get('estoque', 0))
@@ -1067,7 +1103,8 @@ def adicionar_produto_route():
             preco_custo=preco_custo,
             margem_lucro=margem_lucro,
             foto_url=foto_url,
-            marca=marca if marca else None
+            marca=marca if marca else None,
+            fornecedor_id=fornecedor_id
         )
         
         flash('Produto adicionado com sucesso!', 'success')
@@ -1115,6 +1152,7 @@ def editar_produto_route(id):
         descricao = request.form.get('descricao', '').strip()
         categoria = request.form.get('categoria', '').strip()
         marca = request.form.get('marca', '').strip()
+        fornecedor_id = safe_int(request.form.get('fornecedor_id', 0)) or None
         
         # Campos numéricos
         estoque = safe_int(request.form.get('estoque', 0))
@@ -1168,7 +1206,8 @@ def editar_produto_route(id):
             preco_custo=preco_custo,
             margem_lucro=margem_lucro,
             foto_url=foto_url,
-            marca=marca if marca else None
+            marca=marca if marca else None,
+            fornecedor_id=fornecedor_id
         )
         
         flash('Produto editado com sucesso!', 'success')
