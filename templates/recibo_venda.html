@@ -263,13 +263,23 @@
     <div class="recibo-container">
         <!-- Cabeçalho da empresa -->
         <div class="recibo-header">
+            <!-- Tenta carregar logo da configuração da empresa -->
             {% if empresa.logo_path %}
             <img src="{{ url_for('static', filename='images/empresa/' + empresa.logo_path) }}" 
                  alt="{{ empresa.nome_empresa }}" 
                  class="empresa-logo-img"
-                 onerror="this.style.display='none'; document.getElementById('logo-icon').style.display='block';">
+                 id="logo-empresa"
+                 onerror="tentarLogoAlternativa()">
+            {% else %}
+            <!-- Se não tem logo configurada, tenta logo padrão -->
+            <img src="{{ url_for('static', filename='logo.jpg') }}" 
+                 alt="{{ empresa.nome_empresa }}" 
+                 class="empresa-logo-img"
+                 id="logo-empresa"
+                 onerror="mostrarIconePadrao()">
             {% endif %}
-            <div class="empresa-logo" id="logo-icon" style="{% if empresa.logo_path %}display: none;{% endif %}">
+            
+            <div class="empresa-logo" id="logo-icon" style="display: none;">
                 <i class="fas fa-car"></i>
             </div>
             
@@ -442,24 +452,37 @@
     </div>
     
     <script>
-        // Tratamento de erro para logo
-        function handleLogoError() {
-            const logoImg = document.querySelector('.empresa-logo-img');
-            const iconDiv = document.querySelector('.empresa-logo');
-            
-            if (logoImg && iconDiv) {
-                logoImg.style.display = 'none';
-                iconDiv.style.display = 'block';
-            }
+        // Função para tentar logo alternativa se a configurada falhar
+        function tentarLogoAlternativa() {
+            const logoImg = document.getElementById('logo-empresa');
+            // Tenta logo padrão em static/logo.jpg
+            logoImg.src = "{{ url_for('static', filename='logo.jpg') }}";
+            logoImg.onerror = mostrarIconePadrao; // Se também falhar, mostra ícone
         }
         
-        // Verificar se a logo carregou corretamente
-        window.onload = function() {
-            const logoImg = document.querySelector('.empresa-logo-img');
-            if (logoImg && logoImg.complete && logoImg.naturalHeight === 0) {
-                handleLogoError();
-            }
+        // Função para mostrar ícone padrão quando não há logo
+        function mostrarIconePadrao() {
+            const logoImg = document.getElementById('logo-empresa');
+            const iconDiv = document.getElementById('logo-icon');
+            
+            if (logoImg) logoImg.style.display = 'none';
+            if (iconDiv) iconDiv.style.display = 'block';
         }
+        
+        // Verificar se a logo carregou corretamente ao carregar a página
+        window.addEventListener('load', function() {
+            const logoImg = document.getElementById('logo-empresa');
+            if (logoImg) {
+                // Se a imagem existe mas não carregou (altura natural = 0)
+                if (logoImg.complete && logoImg.naturalHeight === 0) {
+                    {% if empresa.logo_path %}
+                    tentarLogoAlternativa();
+                    {% else %}
+                    mostrarIconePadrao();
+                    {% endif %}
+                }
+            }
+        });
         
         // Auto-impressão opcional (descomente para ativar)
         // window.onload = function() {
