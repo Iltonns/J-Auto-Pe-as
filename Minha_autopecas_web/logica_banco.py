@@ -581,21 +581,69 @@ def buscar_usuario_por_email(email):
         }
     return None
 
-def atualizar_senha_usuario(user_id, nova_senha):
-    """Atualiza a senha de um usuário"""
+def validar_senha_segura(senha):
+    """
+    Valida se a senha atende aos requisitos de segurança:
+    - Pelo menos 6 caracteres
+    - Pelo menos uma letra maiúscula
+    - Pelo menos um caractere especial
+    """
+    import re
+    
+    if len(senha) < 6:
+        return False, "A senha deve ter no mínimo 6 caracteres"
+    
+    if not re.search(r'[A-Z]', senha):
+        return False, "A senha deve conter pelo menos uma letra maiúscula"
+    
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;`~]', senha):
+        return False, "A senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>_-+=[]\\\/;`~)"
+    
+    return True, "Senha válida"
+
+def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None):
+    """
+    Atualiza a senha de um usuário
+    Se senha_atual for fornecida, valida antes de atualizar
+    """
+    # Validar requisitos de segurança da nova senha
+    valida, mensagem = validar_senha_segura(nova_senha)
+    if not valida:
+        return False, mensagem
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    password_hash = generate_password_hash(nova_senha)
-    cursor.execute('''
-        UPDATE usuarios SET password_hash = %s WHERE id = %s
-    ''', (password_hash, user_id))
-    
-    conn.commit()
-    success = cursor.rowcount > 0
-    conn.close()
-    
-    return success
+    try:
+        # Se senha_atual foi fornecida, validar
+        if senha_atual is not None:
+            cursor.execute('SELECT password_hash FROM usuarios WHERE id = %s', (user_id,))
+            result = cursor.fetchone()
+            if not result:
+                return False, "Usuário não encontrado"
+            
+            if not check_password_hash(result[0], senha_atual):
+                return False, "Senha atual incorreta"
+        
+        # Atualizar senha
+        password_hash = generate_password_hash(nova_senha)
+        cursor.execute('''
+            UPDATE usuarios SET password_hash = %s WHERE id = %s
+        ''', (password_hash, user_id))
+        
+        conn.commit()
+        success = cursor.rowcount > 0
+        
+        if success:
+            return True, "Senha atualizada com sucesso"
+        else:
+            return False, "Erro ao atualizar senha"
+            
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao atualizar senha: {str(e)}"
+    finally:
+        conn.close()
 
 def criar_usuario(username, password, nome_completo, email, permissoes=None, created_by=None):
     """Cria um novo usuário com permissões específicas"""
@@ -611,6 +659,11 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
             'contas_pagar': False,
             'contas_receber': False
         }
+    
+    # Validar requisitos de segurança da senha
+    valida, mensagem = validar_senha_segura(password)
+    if not valida:
+        return False, mensagem
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -654,6 +707,7 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
         return True, "Usuário criado com sucesso"
         
     except Exception as e:
+        conn.rollback()
         return False, f"Erro ao criar usuário: {str(e)}"
     finally:
         conn.close()

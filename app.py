@@ -22,7 +22,7 @@ load_dotenv()
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
     init_db, criar_usuario_admin, verificar_usuario, buscar_usuario_por_id,
-    buscar_usuario_por_email, atualizar_senha_usuario,
+    buscar_usuario_por_email, atualizar_senha_usuario, validar_senha_segura,
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
@@ -360,6 +360,46 @@ def deletar_usuario_route(user_id):
         flash(f'Erro ao desativar usuário: {str(e)}', 'error')
     
     return redirect(url_for('usuarios'))
+
+@app.route('/usuarios/trocar-senha/<int:user_id>', methods=['POST'])
+@login_required
+def trocar_senha_usuario_route(user_id):
+    """Rota para trocar senha de um usuário"""
+    try:
+        # Apenas admins podem trocar senha de outros usuários
+        # Usuários podem trocar sua própria senha
+        if user_id != current_user.id and not verificar_permissao(current_user.id, 'admin'):
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        
+        nova_senha = request.form.get('nova_senha')
+        confirmar_senha = request.form.get('confirmar_senha')
+        senha_atual = request.form.get('senha_atual')
+        
+        # Validações
+        if not nova_senha or not confirmar_senha:
+            return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos'}), 400
+        
+        if nova_senha != confirmar_senha:
+            return jsonify({'success': False, 'message': 'As senhas não coincidem'}), 400
+        
+        # Se o usuário está trocando sua própria senha, exigir senha atual
+        # Admins podem trocar senha de outros sem senha atual
+        if user_id == current_user.id:
+            if not senha_atual:
+                return jsonify({'success': False, 'message': 'Senha atual é obrigatória'}), 400
+            success, message = atualizar_senha_usuario(user_id, nova_senha, senha_atual)
+        else:
+            # Admin trocando senha de outro usuário
+            success, message = atualizar_senha_usuario(user_id, nova_senha)
+        
+        if success:
+            flash(message, 'success')
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'message': message}), 400
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao trocar senha: {str(e)}'}), 500
 
 # CONFIGURAÇÕES DA EMPRESA
 @app.route('/configuracoes-empresa')

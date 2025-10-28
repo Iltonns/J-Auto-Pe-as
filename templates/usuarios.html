@@ -122,6 +122,10 @@
                                                 onclick="editarUsuario({{ usuario.id }})" title="Editar">
                                             <i class="fas fa-edit"></i>
                                         </button>
+                                        <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                onclick="trocarSenhaUsuario({{ usuario.id }}, '{{ usuario.nome_completo or usuario.username }}')" title="Trocar Senha">
+                                            <i class="fas fa-key"></i>
+                                        </button>
                                         {% if usuario.id != current_user.id %}
                                         <button type="button" class="btn btn-sm btn-outline-danger" 
                                                 onclick="confirmarDesativar({{ usuario.id }}, '{{ usuario.nome_completo or usuario.username }}')" title="Desativar">
@@ -184,7 +188,14 @@
                                 <i class="fas fa-lock me-2"></i>Senha *
                             </label>
                             <input type="password" class="form-control" id="password_modal" name="password" required minlength="6">
-                            <div class="form-text">Mínimo de 6 caracteres</div>
+                            <div class="form-text">
+                                <small>
+                                    <strong>Requisitos:</strong><br>
+                                    • Mínimo de 6 caracteres<br>
+                                    • Pelo menos uma letra maiúscula<br>
+                                    • Pelo menos um caractere especial (!@#$%^&*...)
+                                </small>
+                            </div>
                         </div>
                     </div>
                     
@@ -374,6 +385,62 @@
     </div>
 </div>
 
+<!-- Modal para Trocar Senha -->
+<div class="modal fade" id="trocarSenhaModal" tabindex="-1" aria-labelledby="trocarSenhaModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
+                <h5 class="modal-title" id="trocarSenhaModalLabel">
+                    <i class="fas fa-key me-2"></i>Trocar Senha - <span id="nomeUsuarioSenha"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formTrocarSenha">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Requisitos de Segurança:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Mínimo de 6 caracteres</li>
+                            <li>Pelo menos uma letra maiúscula</li>
+                            <li>Pelo menos um caractere especial (!@#$%^&*...)</li>
+                        </ul>
+                    </div>
+                    
+                    <div id="senhaAtualContainer" class="mb-3">
+                        <label for="senha_atual" class="form-label">
+                            <i class="fas fa-lock me-2"></i>Senha Atual *
+                        </label>
+                        <input type="password" class="form-control" id="senha_atual" name="senha_atual" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="nova_senha" class="form-label">
+                            <i class="fas fa-key me-2"></i>Nova Senha *
+                        </label>
+                        <input type="password" class="form-control" id="nova_senha" name="nova_senha" required minlength="6">
+                        <div id="senhaFeedback" class="form-text"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirmar_senha" class="form-label">
+                            <i class="fas fa-check-circle me-2"></i>Confirmar Nova Senha *
+                        </label>
+                        <input type="password" class="form-control" id="confirmar_senha" name="confirmar_senha" required minlength="6">
+                        <div id="confirmacaoFeedback" class="form-text"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-key me-1"></i>Alterar Senha
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal de Confirmação para Desativar -->
 <div class="modal fade" id="confirmarDesativarModal" tabindex="-1">
     <div class="modal-dialog">
@@ -413,6 +480,163 @@
 </style>
 
 <script>
+// Variável global para armazenar o ID do usuário que terá a senha trocada
+let userIdTrocarSenha = null;
+
+function validarSenhaSegura(senha) {
+    const requisitos = {
+        tamanho: senha.length >= 6,
+        maiuscula: /[A-Z]/.test(senha),
+        especial: /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;`~]/.test(senha)
+    };
+    
+    const mensagens = [];
+    if (!requisitos.tamanho) mensagens.push('Mínimo de 6 caracteres');
+    if (!requisitos.maiuscula) mensagens.push('Pelo menos uma letra maiúscula');
+    if (!requisitos.especial) mensagens.push('Pelo menos um caractere especial');
+    
+    const valida = requisitos.tamanho && requisitos.maiuscula && requisitos.especial;
+    return { valida, mensagens, requisitos };
+}
+
+function trocarSenhaUsuario(userId, nomeUsuario) {
+    userIdTrocarSenha = userId;
+    document.getElementById('nomeUsuarioSenha').textContent = nomeUsuario;
+    
+    // Limpar campos
+    document.getElementById('senha_atual').value = '';
+    document.getElementById('nova_senha').value = '';
+    document.getElementById('confirmar_senha').value = '';
+    document.getElementById('senhaFeedback').innerHTML = '';
+    document.getElementById('confirmacaoFeedback').innerHTML = '';
+    
+    // Verificar se é o próprio usuário ou admin trocando senha de outro
+    const usuarios = {{ usuarios | tojson }};
+    const currentUserId = {{ current_user.id }};
+    
+    if (userId === currentUserId) {
+        // Usuário trocando sua própria senha - exigir senha atual
+        document.getElementById('senhaAtualContainer').style.display = 'block';
+        document.getElementById('senha_atual').required = true;
+    } else {
+        // Admin trocando senha de outro usuário - não exigir senha atual
+        document.getElementById('senhaAtualContainer').style.display = 'none';
+        document.getElementById('senha_atual').required = false;
+    }
+    
+    new bootstrap.Modal(document.getElementById('trocarSenhaModal')).show();
+}
+
+// Validação em tempo real da nova senha
+document.addEventListener('DOMContentLoaded', function() {
+    const novaSenhaInput = document.getElementById('nova_senha');
+    const confirmarSenhaInput = document.getElementById('confirmar_senha');
+    const senhaFeedback = document.getElementById('senhaFeedback');
+    const confirmacaoFeedback = document.getElementById('confirmacaoFeedback');
+    
+    if (novaSenhaInput) {
+        novaSenhaInput.addEventListener('input', function() {
+            const senha = this.value;
+            const validacao = validarSenhaSegura(senha);
+            
+            if (senha.length === 0) {
+                senhaFeedback.innerHTML = '';
+                novaSenhaInput.classList.remove('is-valid', 'is-invalid');
+            } else if (validacao.valida) {
+                senhaFeedback.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Senha forte!</span>';
+                novaSenhaInput.classList.remove('is-invalid');
+                novaSenhaInput.classList.add('is-valid');
+            } else {
+                senhaFeedback.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> Falta: ' + validacao.mensagens.join(', ') + '</span>';
+                novaSenhaInput.classList.remove('is-valid');
+                novaSenhaInput.classList.add('is-invalid');
+            }
+            
+            // Validar confirmação se já tiver valor
+            if (confirmarSenhaInput.value) {
+                validarConfirmacao();
+            }
+        });
+    }
+    
+    if (confirmarSenhaInput) {
+        confirmarSenhaInput.addEventListener('input', validarConfirmacao);
+    }
+    
+    function validarConfirmacao() {
+        const senha = novaSenhaInput.value;
+        const confirmacao = confirmarSenhaInput.value;
+        
+        if (confirmacao.length === 0) {
+            confirmacaoFeedback.innerHTML = '';
+            confirmarSenhaInput.classList.remove('is-valid', 'is-invalid');
+        } else if (senha === confirmacao) {
+            confirmacaoFeedback.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Senhas coincidem</span>';
+            confirmarSenhaInput.classList.remove('is-invalid');
+            confirmarSenhaInput.classList.add('is-valid');
+        } else {
+            confirmacaoFeedback.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle"></i> Senhas não coincidem</span>';
+            confirmarSenhaInput.classList.remove('is-valid');
+            confirmarSenhaInput.classList.add('is-invalid');
+        }
+    }
+});
+
+// Envio do formulário de troca de senha
+document.getElementById('formTrocarSenha').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const novaSenha = document.getElementById('nova_senha').value;
+    const confirmarSenha = document.getElementById('confirmar_senha').value;
+    const senhaAtual = document.getElementById('senha_atual').value;
+    
+    // Validar senha forte
+    const validacao = validarSenhaSegura(novaSenha);
+    if (!validacao.valida) {
+        alert('A senha não atende aos requisitos de segurança:\n• ' + validacao.mensagens.join('\n• '));
+        return;
+    }
+    
+    // Validar confirmação
+    if (novaSenha !== confirmarSenha) {
+        alert('As senhas não coincidem!');
+        return;
+    }
+    
+    // Preparar dados
+    const formData = new FormData();
+    formData.append('nova_senha', novaSenha);
+    formData.append('confirmar_senha', confirmarSenha);
+    if (document.getElementById('senhaAtualContainer').style.display !== 'none') {
+        formData.append('senha_atual', senhaAtual);
+    }
+    
+    // Enviar requisição
+    fetch(`/usuarios/trocar-senha/${userIdTrocarSenha}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fechar modal
+            bootstrap.Modal.getInstance(document.getElementById('trocarSenhaModal')).hide();
+            
+            // Mostrar mensagem de sucesso
+            alert(data.message);
+            
+            // Recarregar página para mostrar flash message
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao trocar senha. Por favor, tente novamente.');
+    });
+});
+
 function editarUsuario(userId) {
     // Buscar dados do usuário na tabela
     const row = document.querySelector(`tr[data-user-id="${userId}"]`) || 
