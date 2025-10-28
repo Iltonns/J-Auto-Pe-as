@@ -7,6 +7,24 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>{% block title %}Sistema de Auto Peças{% endblock %}</title>
     
+    <!-- Favicon - Múltiplos Tamanhos para Compatibilidade -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    
+    <!-- Apple Touch Icon para iOS -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon.png') }}">
+    
+    <!-- Ícones para Android e PWA -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon-512.png') }}">
+    
+    <!-- Cor do tema para navegadores móveis -->
+    <meta name="theme-color" content="#1a237e">
+    <meta name="msapplication-TileColor" content="#1a237e">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -836,6 +854,10 @@
     <!-- Export Utilities Script -->
     <script src="{{ url_for('static', filename='js/export-utils.js') }}"></script>
     
+    <!-- Autocomplete Marcas e Categorias -->
+    <script src="{{ url_for('static', filename='js/autocomplete-marcas-categorias.js') }}"></script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>
+

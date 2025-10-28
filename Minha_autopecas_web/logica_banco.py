@@ -1645,6 +1645,7 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     """Edita uma movimentação pendente"""
     print(f"[DEBUG] Iniciando edição da movimentação ID: {movimentacao_id}")
     print(f"[DEBUG] Dados recebidos: nome={nome}, preco_venda={preco_venda}, preco_custo={preco_custo}, quantidade={quantidade}")
+    print(f"[DEBUG] Foto URL recebida: {foto_url}")
     
     # Converter para float para evitar problemas com Decimal
     preco_venda = float(preco_venda) if preco_venda else 0
@@ -1662,7 +1663,7 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     cursor = conn.cursor()
     
     # Verificar se a movimentação está pendente
-    cursor.execute('SELECT status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+    cursor.execute('SELECT status, foto_url FROM movimentacoes WHERE id = %s', (movimentacao_id,))
     result = cursor.fetchone()
     
     if not result:
@@ -1672,6 +1673,13 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     if result[0] != 'pendente':
         conn.close()
         raise ValueError("Apenas movimentações pendentes podem ser editadas")
+    
+    # Se não foi enviada nova foto, manter a existente
+    if foto_url is None:
+        foto_url = result[1]
+        print(f"[DEBUG] Mantendo foto existente: {foto_url}")
+    else:
+        print(f"[DEBUG] Atualizando para nova foto: {foto_url}")
     
     print(f"[DEBUG] Executando UPDATE na movimentação {movimentacao_id}")
     
@@ -1690,7 +1698,7 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     conn.commit()
     conn.close()
     
-    print(f"[DEBUG] Edição concluída com sucesso! Margem final: {margem_lucro:.2f}%")
+    print(f"[DEBUG] Edição concluída com sucesso! Foto final: {foto_url}, Margem final: {margem_lucro:.2f}%")
     return True
 
 def aprovar_movimentacao(movimentacao_id, usuario_id):
@@ -1728,6 +1736,9 @@ def aprovar_movimentacao(movimentacao_id, usuario_id):
         fornecedor_id = mov[17]  # fornecedor_id
         foto_url = mov[19]  # foto_url
         
+        print(f"[DEBUG APROVAÇÃO] Movimentação ID {movimentacao_id}: {nome}")
+        print(f"[DEBUG APROVAÇÃO] Foto URL da movimentação: {foto_url}")
+        
         # Verificar se produto já existe (por código de barras ou código do fornecedor)
         produto_id = None
         if codigo_barras:
@@ -1746,17 +1757,34 @@ def aprovar_movimentacao(movimentacao_id, usuario_id):
         
         if produto_id:
             # Produto existe - atualizar estoque e informações
-            cursor.execute('''
-                UPDATE produtos 
-                SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
-                    margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
-                    fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s,
-                    foto_url = COALESCE(%s, foto_url)
-                WHERE id = %s
-            ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
-                  categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, foto_url, produto_id))
+            # Se houver foto na movimentação, atualizar. Caso contrário, manter a foto atual do produto.
+            print(f"[DEBUG APROVAÇÃO] Produto {produto_id} já existe. Atualizando...")
+            if foto_url:
+                # Há uma nova foto - atualizar tudo incluindo a foto
+                print(f"[DEBUG APROVAÇÃO] Atualizando produto COM NOVA FOTO: {foto_url}")
+                cursor.execute('''
+                    UPDATE produtos 
+                    SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
+                        margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
+                        fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s,
+                        foto_url = %s
+                    WHERE id = %s
+                ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
+                      categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, foto_url, produto_id))
+            else:
+                # Não há foto na movimentação - atualizar sem modificar a foto do produto
+                print(f"[DEBUG APROVAÇÃO] Atualizando produto SEM ALTERAR FOTO (foto_url é None/vazio)")
+                cursor.execute('''
+                    UPDATE produtos 
+                    SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
+                        margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
+                        fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s
+                    WHERE id = %s
+                ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
+                      categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, produto_id))
         else:
             # Produto não existe - criar novo
+            print(f"[DEBUG APROVAÇÃO] Criando NOVO produto com foto: {foto_url}")
             cursor.execute('''
                 INSERT INTO produtos (
                     nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
@@ -1769,6 +1797,7 @@ def aprovar_movimentacao(movimentacao_id, usuario_id):
                   codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
                   ncm, unidade))
             produto_id = cursor.fetchone()[0]
+            print(f"[DEBUG APROVAÇÃO] Produto criado com ID: {produto_id}")
         
         # Atualizar status da movimentação
         cursor.execute('''
@@ -4987,6 +5016,76 @@ def deletar_todas_vendas(restaurar_estoque=True):
         }
     finally:
         conn.close()
+
+def obter_marcas_cadastradas():
+    """Retorna lista de todas as marcas únicas cadastradas no sistema"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar marcas únicas de produtos
+        cursor.execute('''
+            SELECT DISTINCT marca
+            FROM produtos
+            WHERE marca IS NOT NULL AND marca != ''
+            ORDER BY marca
+        ''')
+        marcas_produtos = [row[0] for row in cursor.fetchall()]
+        
+        # Buscar marcas únicas de movimentações
+        cursor.execute('''
+            SELECT DISTINCT marca
+            FROM movimentacoes
+            WHERE marca IS NOT NULL AND marca != ''
+            ORDER BY marca
+        ''')
+        marcas_movimentacoes = [row[0] for row in cursor.fetchall()]
+        
+        # Combinar e eliminar duplicatas
+        marcas = sorted(list(set(marcas_produtos + marcas_movimentacoes)))
+        
+        conn.close()
+        return marcas
+        
+    except Exception as e:
+        print(f"Erro ao obter marcas: {e}")
+        conn.close()
+        return []
+
+def obter_categorias_cadastradas():
+    """Retorna lista de todas as categorias únicas cadastradas no sistema"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar categorias únicas de produtos
+        cursor.execute('''
+            SELECT DISTINCT categoria
+            FROM produtos
+            WHERE categoria IS NOT NULL AND categoria != ''
+            ORDER BY categoria
+        ''')
+        categorias_produtos = [row[0] for row in cursor.fetchall()]
+        
+        # Buscar categorias únicas de movimentações
+        cursor.execute('''
+            SELECT DISTINCT categoria
+            FROM movimentacoes
+            WHERE categoria IS NOT NULL AND categoria != ''
+            ORDER BY categoria
+        ''')
+        categorias_movimentacoes = [row[0] for row in cursor.fetchall()]
+        
+        # Combinar e eliminar duplicatas
+        categorias = sorted(list(set(categorias_produtos + categorias_movimentacoes)))
+        
+        conn.close()
+        return categorias
+        
+    except Exception as e:
+        print(f"Erro ao obter categorias: {e}")
+        conn.close()
+        return []
 
 if __name__ == "__main__":
     init_db()

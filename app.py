@@ -58,7 +58,9 @@ from Minha_autopecas_web.logica_banco import (
     adicionar_movimentacao, listar_movimentacoes, obter_movimentacao_por_id,
     editar_movimentacao, aprovar_movimentacao, rejeitar_movimentacao, cancelar_movimentacao,
     deletar_movimentacao, contar_movimentacoes_pendentes, importar_xml_para_movimentacoes,
-    listar_nfes_agrupadas, listar_produtos_por_nfe, aprovar_nfe_completa, rejeitar_nfe_completa, cancelar_nfe_completa
+    listar_nfes_agrupadas, listar_produtos_por_nfe, aprovar_nfe_completa, rejeitar_nfe_completa, cancelar_nfe_completa,
+    # Funções para autocomplete de marcas e categorias
+    obter_marcas_cadastradas, obter_categorias_cadastradas
 )
 
 app = Flask(__name__)
@@ -3291,6 +3293,27 @@ def exportar_financeiro_pdf():
     response.headers['Content-Disposition'] = 'attachment; filename=relatorio_financeiro.pdf'
     
     return response
+
+# API ENDPOINTS PARA AUTOCOMPLETE
+@app.route('/api/marcas')
+@login_required
+def api_marcas():
+    """Retorna todas as marcas cadastradas no sistema"""
+    try:
+        marcas = obter_marcas_cadastradas()
+        return jsonify(marcas)
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+@app.route('/api/categorias')
+@login_required
+def api_categorias():
+    """Retorna todas as categorias cadastradas no sistema"""
+    try:
+        categorias = obter_categorias_cadastradas()
+        return jsonify(categorias)
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
 
 # TRATAMENTO DE ERROS
 @app.errorhandler(404)

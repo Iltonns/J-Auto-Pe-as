@@ -729,24 +729,26 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Categoria</label>
-                                        <select class="form-select" name="categoria">
-                                            <option value="">Selecione...</option>
-                                            <option value="Motor">Motor</option>
-                                            <option value="Freios">Freios</option>
-                                            <option value="Suspensão">Suspensão</option>
-                                            <option value="Elétrica">Elétrica</option>
-                                            <option value="Transmissão">Transmissão</option>
-                                            <option value="Carroceria">Carroceria</option>
-                                            <option value="Filtros">Filtros</option>
-                                            <option value="Óleos">Óleos</option>
-                                        </select>
+                                        <label class="form-label"><i class="fas fa-layer-group me-1"></i> Categoria</label>
+                                        <input type="text" class="form-control" name="categoria" list="categorias-list-produtos" placeholder="Digite ou selecione...">
+                                        <datalist id="categorias-list-produtos">
+                                            <!-- Preenchido dinamicamente via JavaScript -->
+                                        </datalist>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Digite para buscar ou cadastrar nova categoria
+                                        </small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Marca</label>
-                                        <input type="text" class="form-control" name="marca">
+                                        <label class="form-label"><i class="fas fa-tag me-1"></i> Marca</label>
+                                        <input type="text" class="form-control" name="marca" list="marcas-list-produtos" placeholder="Digite ou selecione...">
+                                        <datalist id="marcas-list-produtos">
+                                            <!-- Preenchido dinamicamente via JavaScript -->
+                                        </datalist>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Digite para buscar ou cadastrar nova marca
+                                        </small>
                                     </div>
                                 </div>
                             </div>
@@ -911,24 +913,20 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Categoria</label>
-                                        <select class="form-select" name="categoria" id="edit_categoria">
-                                            <option value="">Selecione...</option>
-                                            <option value="Motor">Motor</option>
-                                            <option value="Freios">Freios</option>
-                                            <option value="Suspensão">Suspensão</option>
-                                            <option value="Elétrica">Elétrica</option>
-                                            <option value="Transmissão">Transmissão</option>
-                                            <option value="Carroceria">Carroceria</option>
-                                            <option value="Filtros">Filtros</option>
-                                            <option value="Óleos">Óleos</option>
-                                        </select>
+                                        <label class="form-label"><i class="fas fa-layer-group me-1"></i> Categoria</label>
+                                        <input type="text" class="form-control" name="categoria" id="edit_categoria" list="categorias-list-produtos" placeholder="Digite ou selecione...">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Digite para buscar ou cadastrar nova categoria
+                                        </small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Marca</label>
-                                        <input type="text" class="form-control" name="marca" id="edit_marca">
+                                        <label class="form-label"><i class="fas fa-tag me-1"></i> Marca</label>
+                                        <input type="text" class="form-control" name="marca" id="edit_marca" list="marcas-list-produtos" placeholder="Digite ou selecione...">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Digite para buscar ou cadastrar nova marca
+                                        </small>
                                     </div>
                                 </div>
                             </div>

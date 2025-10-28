@@ -1,0 +1,24 @@
+{
+  "name": "Sistema de Auto Peças",
+  "short_name": "Auto Peças",
+  "description": "Sistema completo para gestão de autopeças",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a237e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
