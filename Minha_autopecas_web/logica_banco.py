@@ -336,6 +336,60 @@ def init_db():
             VALUES (%s, %s, %s, %s)
         ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
     
+    # Tabela de movimentações de produtos (para aprovação antes de ir ao estoque)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS movimentacoes (
+            id SERIAL PRIMARY KEY,
+            tipo_movimentacao TEXT NOT NULL DEFAULT 'entrada', -- 'entrada', 'saida', 'ajuste'
+            origem TEXT NOT NULL DEFAULT 'manual', -- 'manual', 'xml_nfe', 'xml_nfce'
+            status TEXT NOT NULL DEFAULT 'pendente', -- 'pendente', 'aprovada', 'cancelada'
+            
+            -- Dados do produto
+            nome TEXT NOT NULL,
+            codigo_barras TEXT,
+            codigo_fornecedor TEXT,
+            descricao TEXT,
+            categoria TEXT,
+            marca TEXT,
+            ncm TEXT,
+            unidade TEXT DEFAULT 'UN',
+            
+            -- Dados financeiros
+            quantidade INTEGER NOT NULL DEFAULT 0,
+            preco_custo DECIMAL(10,2) DEFAULT 0,
+            margem_lucro DECIMAL(10,2) DEFAULT 0,
+            preco_venda DECIMAL(10,2) NOT NULL,
+            
+            -- Estoque
+            estoque_minimo INTEGER DEFAULT 5,
+            
+            -- Relacionamentos
+            fornecedor_id INTEGER,
+            produto_id INTEGER, -- Referência ao produto caso já exista
+            foto_url TEXT,
+            
+            -- Dados do XML (quando aplicável)
+            xml_nfe_chave TEXT,
+            xml_nfe_numero TEXT,
+            xml_nfe_data DATE,
+            xml_produto_codigo TEXT,
+            xml_conteudo TEXT, -- Armazenar XML completo se necessário
+            
+            -- Auditoria
+            usuario_criacao INTEGER NOT NULL,
+            usuario_aprovacao INTEGER,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            data_aprovacao TIMESTAMP,
+            observacoes TEXT,
+            motivo_rejeicao TEXT,
+            
+            FOREIGN KEY (fornecedor_id) REFERENCES fornecedores (id),
+            FOREIGN KEY (produto_id) REFERENCES produtos (id),
+            FOREIGN KEY (usuario_criacao) REFERENCES usuarios (id),
+            FOREIGN KEY (usuario_aprovacao) REFERENCES usuarios (id)
+        )
+    ''')
+    
     # Adicionar colunas para sincronização financeira se não existirem
     add_column_if_not_exists(cursor, conn, 'contas_pagar', "fornecedor_id INTEGER")
     add_column_if_not_exists(cursor, conn, 'contas_pagar', "lancamento_financeiro_id INTEGER")
@@ -1492,6 +1546,494 @@ def atualizar_estoque(produto_id, quantidade):
     
     conn.commit()
     conn.close()
+
+# FUNÇÕES DE MOVIMENTAÇÕES DE PRODUTOS
+def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='entrada', origem='manual',
+                          estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
+                          codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None,
+                          marca=None, fornecedor_id=None, ncm=None, unidade='UN',
+                          xml_nfe_chave=None, xml_nfe_numero=None, xml_nfe_data=None,
+                          xml_produto_codigo=None, xml_conteudo=None, usuario_id=None, observacoes=None):
+    """Adiciona uma nova movimentação pendente de aprovação"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Calcula a margem de lucro automaticamente com base no preço de venda e custo
+    if preco_custo and preco_custo > 0 and preco_venda > preco_custo:
+        margem_lucro = ((preco_venda - preco_custo) / preco_custo) * 100
+        print(f"[MARGEM ADD] Calculada: Custo={preco_custo}, Venda={preco_venda}, Margem={margem_lucro:.2f}%")
+    else:
+        margem_lucro = 0
+        print(f"[MARGEM ADD] Zerada: Custo={preco_custo}, Venda={preco_venda}")
+    
+    cursor.execute('''
+        INSERT INTO movimentacoes (
+            tipo_movimentacao, origem, status, nome, codigo_barras, codigo_fornecedor,
+            descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
+            margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
+            xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
+            usuario_criacao, observacoes
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    ''', (tipo_movimentacao, origem, 'pendente', nome, codigo_barras, codigo_fornecedor,
+          descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
+          margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
+          xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
+          usuario_id, observacoes))
+    
+    movimentacao_id = cursor.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return movimentacao_id
+
+def listar_movimentacoes(status=None, tipo_movimentacao=None):
+    """Lista todas as movimentações, opcionalmente filtrando por status e tipo"""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    query = '''
+        SELECT m.*, 
+               f.nome as fornecedor_nome,
+               u.nome_completo as usuario_nome,
+               ua.nome_completo as usuario_aprovacao_nome
+        FROM movimentacoes m
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
+        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id
+        WHERE 1=1
+    '''
+    params = []
+    
+    if status:
+        query += " AND m.status = %s"
+        params.append(status)
+    
+    if tipo_movimentacao:
+        query += " AND m.tipo_movimentacao = %s"
+        params.append(tipo_movimentacao)
+    
+    query += " ORDER BY m.data_criacao DESC"
+    
+    cursor.execute(query, params)
+    movimentacoes = cursor.fetchall()
+    conn.close()
+    return movimentacoes
+
+def obter_movimentacao_por_id(movimentacao_id):
+    """Busca uma movimentação específica por ID"""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    cursor.execute('''
+        SELECT m.*, 
+               f.nome as fornecedor_nome,
+               u.nome_completo as usuario_nome
+        FROM movimentacoes m
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
+        WHERE m.id = %s
+    ''', (movimentacao_id,))
+    
+    movimentacao = cursor.fetchone()
+    conn.close()
+    return movimentacao
+
+def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_minimo=5,
+                       codigo_barras=None, descricao=None, categoria=None, codigo_fornecedor=None,
+                       preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
+    """Edita uma movimentação pendente"""
+    print(f"[DEBUG] Iniciando edição da movimentação ID: {movimentacao_id}")
+    print(f"[DEBUG] Dados recebidos: nome={nome}, preco_venda={preco_venda}, preco_custo={preco_custo}, quantidade={quantidade}")
+    
+    # Converter para float para evitar problemas com Decimal
+    preco_venda = float(preco_venda) if preco_venda else 0
+    preco_custo = float(preco_custo) if preco_custo else 0
+    
+    # Calcular margem de lucro com base no preço de venda e custo
+    if preco_custo and preco_custo > 0 and preco_venda > preco_custo:
+        margem_lucro = ((preco_venda - preco_custo) / preco_custo) * 100
+        print(f"[DEBUG] Margem calculada automaticamente: {margem_lucro:.2f}%")
+    else:
+        margem_lucro = 0
+        print(f"[DEBUG] Margem definida como 0 (custo inválido ou venda <= custo)")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se a movimentação está pendente
+    cursor.execute('SELECT status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        conn.close()
+        raise ValueError("Movimentação não encontrada")
+    
+    if result[0] != 'pendente':
+        conn.close()
+        raise ValueError("Apenas movimentações pendentes podem ser editadas")
+    
+    print(f"[DEBUG] Executando UPDATE na movimentação {movimentacao_id}")
+    
+    cursor.execute('''
+        UPDATE movimentacoes 
+        SET nome = %s, preco_venda = %s, quantidade = %s, estoque_minimo = %s,
+            codigo_barras = %s, descricao = %s, categoria = %s, codigo_fornecedor = %s,
+            preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s, fornecedor_id = %s
+        WHERE id = %s AND status = 'pendente'
+    ''', (nome, preco_venda, quantidade, estoque_minimo, codigo_barras, descricao, categoria,
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, movimentacao_id))
+    
+    linhas_afetadas = cursor.rowcount
+    print(f"[DEBUG] Linhas afetadas pelo UPDATE: {linhas_afetadas}")
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"[DEBUG] Edição concluída com sucesso! Margem final: {margem_lucro:.2f}%")
+    return True
+
+def aprovar_movimentacao(movimentacao_id, usuario_id):
+    """Aprova uma movimentação e cria/atualiza o produto no estoque"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da movimentação
+        cursor.execute('SELECT * FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+        mov = cursor.fetchone()
+        
+        if not mov:
+            raise ValueError("Movimentação não encontrada")
+        
+        # Ordem das colunas: id, tipo_movimentacao, origem, status, nome...
+        if mov[3] != 'pendente':  # status está no índice 3
+            raise ValueError("Apenas movimentações pendentes podem ser aprovadas")
+        
+        # Extrair dados da movimentação
+        # Índices baseados na ordem das colunas da tabela
+        nome = mov[4]  # nome
+        codigo_barras = mov[5]  # codigo_barras
+        codigo_fornecedor = mov[6]  # codigo_fornecedor
+        descricao = mov[7]  # descricao
+        categoria = mov[8]  # categoria
+        marca = mov[9]  # marca
+        ncm = mov[10]  # ncm
+        unidade = mov[11]  # unidade
+        quantidade = mov[12]  # quantidade
+        preco_custo = mov[13]  # preco_custo
+        margem_lucro = mov[14]  # margem_lucro
+        preco_venda = mov[15]  # preco_venda
+        estoque_minimo = mov[16]  # estoque_minimo
+        fornecedor_id = mov[17]  # fornecedor_id
+        foto_url = mov[19]  # foto_url
+        
+        # Verificar se produto já existe (por código de barras ou código do fornecedor)
+        produto_id = None
+        if codigo_barras:
+            cursor.execute('SELECT id, estoque FROM produtos WHERE codigo_barras = %s', (codigo_barras,))
+            result = cursor.fetchone()
+            if result:
+                produto_id = result[0]
+                estoque_atual = result[1]
+        
+        if not produto_id and codigo_fornecedor:
+            cursor.execute('SELECT id, estoque FROM produtos WHERE codigo_fornecedor = %s', (codigo_fornecedor,))
+            result = cursor.fetchone()
+            if result:
+                produto_id = result[0]
+                estoque_atual = result[1]
+        
+        if produto_id:
+            # Produto existe - atualizar estoque e informações
+            cursor.execute('''
+                UPDATE produtos 
+                SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
+                    margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
+                    fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s,
+                    foto_url = COALESCE(%s, foto_url)
+                WHERE id = %s
+            ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
+                  categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, foto_url, produto_id))
+        else:
+            # Produto não existe - criar novo
+            cursor.execute('''
+                INSERT INTO produtos (
+                    nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                    codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
+                    ncm, unidade, ativo
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                RETURNING id
+            ''', (nome, preco_venda, quantidade, estoque_minimo, codigo_barras, descricao, categoria,
+                  codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
+                  ncm, unidade))
+            produto_id = cursor.fetchone()[0]
+        
+        # Atualizar status da movimentação
+        cursor.execute('''
+            UPDATE movimentacoes 
+            SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP,
+                produto_id = %s
+            WHERE id = %s
+        ''', (usuario_id, produto_id, movimentacao_id))
+        
+        conn.commit()
+        conn.close()
+        return produto_id
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise e
+
+def cancelar_movimentacao(movimentacao_id, usuario_id, motivo_cancelamento):
+    """Cancela uma movimentação (permite deletar depois)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE movimentacoes 
+        SET status = 'cancelada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP,
+            motivo_rejeicao = %s
+        WHERE id = %s AND status = 'pendente'
+    ''', (usuario_id, motivo_cancelamento, movimentacao_id))
+    
+    conn.commit()
+    conn.close()
+    return True
+
+# Mantém compatibilidade com código antigo
+def rejeitar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao):
+    """DEPRECATED: Use cancelar_movimentacao()"""
+    return cancelar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao)
+
+def deletar_movimentacao(movimentacao_id):
+    """Deleta uma movimentação pendente ou cancelada"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se está pendente ou cancelada antes de deletar
+    cursor.execute('SELECT status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        conn.close()
+        raise ValueError("Movimentação não encontrada")
+    
+    if result[0] not in ['pendente', 'cancelada']:
+        conn.close()
+        raise ValueError("Apenas movimentações pendentes ou canceladas podem ser deletadas")
+    
+    cursor.execute('DELETE FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def contar_movimentacoes_pendentes():
+    """Conta o número de movimentações pendentes"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT COUNT(*) FROM movimentacoes WHERE status = 'pendente'")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def listar_nfes_agrupadas(status=None):
+    """
+    Lista as NFes com movimentações agrupadas
+    Retorna informações resumidas de cada NFe com contagem de produtos
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    query = '''
+        SELECT 
+            COALESCE(m.xml_nfe_numero, 'MANUAL-' || m.id) as nfe_identificador,
+            m.xml_nfe_numero,
+            m.xml_nfe_chave,
+            m.xml_nfe_data,
+            m.origem,
+            m.status,
+            MIN(m.data_criacao) as data_criacao,
+            MAX(m.data_aprovacao) as data_aprovacao,
+            f.nome as fornecedor_nome,
+            m.fornecedor_id,
+            u.nome_completo as usuario_nome,
+            COUNT(*) as total_produtos,
+            SUM(m.quantidade) as total_quantidade,
+            SUM(m.preco_custo * m.quantidade) as total_custo,
+            SUM(m.preco_venda * m.quantidade) as total_venda,
+            -- Status consolidado da NFe
+            CASE 
+                WHEN COUNT(*) FILTER (WHERE m.status = 'pendente') > 0 THEN 'pendente'
+                WHEN COUNT(*) FILTER (WHERE m.status = 'cancelada') = COUNT(*) THEN 'cancelada'
+                WHEN COUNT(*) FILTER (WHERE m.status = 'aprovada') = COUNT(*) THEN 'aprovada'
+                ELSE 'parcial'
+            END as status_nfe
+        FROM movimentacoes m
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
+        WHERE 1=1
+    '''
+    
+    params = []
+    
+    if status:
+        # Filtrar pelo status dos itens
+        query += " AND m.status = %s"
+        params.append(status)
+    
+    query += '''
+        GROUP BY 
+            COALESCE(m.xml_nfe_numero, 'MANUAL-' || m.id),
+            m.xml_nfe_numero, m.xml_nfe_chave, m.xml_nfe_data,
+            m.origem, m.status, f.nome, m.fornecedor_id, u.nome_completo
+        ORDER BY MIN(m.data_criacao) DESC
+    '''
+    
+    cursor.execute(query, params)
+    nfes = cursor.fetchall()
+    conn.close()
+    return nfes
+
+def listar_produtos_por_nfe(nfe_numero=None, nfe_identificador=None):
+    """
+    Lista todos os produtos/movimentações de uma NFe específica
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    query = '''
+        SELECT m.*, 
+               f.nome as fornecedor_nome,
+               u.nome_completo as usuario_nome,
+               ua.nome_completo as usuario_aprovacao_nome
+        FROM movimentacoes m
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
+        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id
+        WHERE 1=1
+    '''
+    
+    params = []
+    
+    if nfe_numero:
+        query += " AND m.xml_nfe_numero = %s"
+        params.append(nfe_numero)
+    elif nfe_identificador and nfe_identificador.startswith('MANUAL-'):
+        # Para movimentações manuais
+        id_manual = nfe_identificador.replace('MANUAL-', '')
+        query += " AND m.id = %s AND m.origem = 'manual'"
+        params.append(int(id_manual))
+    
+    query += " ORDER BY m.id"
+    
+    cursor.execute(query, params)
+    produtos = cursor.fetchall()
+    conn.close()
+    return produtos
+
+def aprovar_nfe_completa(nfe_numero, usuario_id):
+    """
+    Aprova todos os produtos pendentes de uma NFe de uma vez
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar todas as movimentações pendentes da NFe
+        # Suporta tanto NFe importadas quanto movimentações manuais
+        if nfe_numero.startswith('MANUAL-'):
+            # Movimentação manual
+            id_manual = nfe_numero.replace('MANUAL-', '')
+            cursor.execute('''
+                SELECT id FROM movimentacoes 
+                WHERE id = %s AND status = 'pendente' AND origem = 'manual'
+            ''', (int(id_manual),))
+        else:
+            # NFe importada
+            cursor.execute('''
+                SELECT id FROM movimentacoes 
+                WHERE xml_nfe_numero = %s AND status = 'pendente'
+            ''', (nfe_numero,))
+        
+        movimentacoes_pendentes = cursor.fetchall()
+        produtos_aprovados = []
+        
+        for mov in movimentacoes_pendentes:
+            try:
+                produto_id = aprovar_movimentacao(mov[0], usuario_id)
+                produtos_aprovados.append(produto_id)
+            except Exception as e:
+                # Se falhar em uma movimentação específica, continua com as outras
+                print(f"[AVISO] Erro ao aprovar movimentação {mov[0]}: {str(e)}")
+                continue
+        
+        return {
+            'sucesso': True,
+            'total_aprovados': len(produtos_aprovados),
+            'produtos_ids': produtos_aprovados
+        }
+        
+    except Exception as e:
+        return {
+            'sucesso': False,
+            'erro': str(e)
+        }
+
+def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento):
+    """
+    Cancela todos os produtos pendentes de uma NFe de uma vez (permite deletar depois)
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Suporta tanto NFe importadas quanto movimentações manuais
+        if nfe_numero.startswith('MANUAL-'):
+            # Movimentação manual
+            id_manual = nfe_numero.replace('MANUAL-', '')
+            cursor.execute('''
+                UPDATE movimentacoes 
+                SET status = 'cancelada', 
+                    usuario_aprovacao = %s, 
+                    data_aprovacao = CURRENT_TIMESTAMP,
+                    motivo_rejeicao = %s
+                WHERE id = %s AND status = 'pendente' AND origem = 'manual'
+            ''', (usuario_id, motivo_cancelamento, int(id_manual)))
+        else:
+            # NFe importada
+            cursor.execute('''
+                UPDATE movimentacoes 
+                SET status = 'cancelada', 
+                    usuario_aprovacao = %s, 
+                    data_aprovacao = CURRENT_TIMESTAMP,
+                    motivo_rejeicao = %s
+                WHERE xml_nfe_numero = %s AND status = 'pendente'
+            ''', (usuario_id, motivo_cancelamento, nfe_numero))
+        
+        total_cancelados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        return {
+            'sucesso': True,
+            'total_cancelados': total_cancelados
+        }
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return {
+            'sucesso': False,
+            'erro': str(e)
+        }
+
+# Mantém compatibilidade com código antigo
+def rejeitar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao):
+    """DEPRECATED: Use cancelar_nfe_completa()"""
+    return cancelar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao)
 
 # FUNÇÕES DE VENDAS
 def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None):
@@ -3046,6 +3588,239 @@ def importar_produtos_de_xml(conteudo_xml):
             'erro': f'Erro geral: {str(e)}',
             'produtos_importados': [],
             'produtos_atualizados': [],
+            'erros': [str(e)]
+        }
+
+def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=5, usuario_id=None):
+    """
+    Importa produtos de um arquivo XML de NFe criando movimentações pendentes de aprovação
+    ao invés de adicionar diretamente ao estoque
+    
+    Args:
+        conteudo_xml: Conteúdo do arquivo XML como string
+        margem_padrao: Margem de lucro padrão (%)
+        estoque_minimo: Estoque mínimo padrão
+        usuario_id: ID do usuário que está importando
+    
+    Returns:
+        Dict com informações sobre a importação
+    """
+    import xml.etree.ElementTree as ET
+    
+    movimentacoes_criadas = 0
+    erros = []
+    fornecedor_id = None
+    
+    try:
+        # Parse do XML
+        root = ET.fromstring(conteudo_xml)
+        
+        # Namespace da NFe
+        ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        
+        # Extrair dados da NFe (chave, número, data)
+        inf_nfe = root.find('.//nfe:infNFe', ns)
+        nfe_chave = inf_nfe.get('Id').replace('NFe', '') if inf_nfe is not None and inf_nfe.get('Id') else None
+        
+        ide = root.find('.//nfe:ide', ns)
+        nfe_numero = ide.find('nfe:nNF', ns).text if ide is not None and ide.find('nfe:nNF', ns) is not None else None
+        
+        dhEmi = ide.find('nfe:dhEmi', ns) if ide is not None else None
+        nfe_data = None
+        if dhEmi is not None and dhEmi.text:
+            try:
+                from datetime import datetime
+                nfe_data = datetime.fromisoformat(dhEmi.text.replace('Z', '+00:00')).date()
+            except:
+                nfe_data = None
+        
+        # ===== EXTRAIR E CADASTRAR/ATUALIZAR FORNECEDOR =====
+        emit = root.find('.//nfe:emit', ns)
+        if emit is not None:
+            try:
+                # Extrair dados do emitente (fornecedor)
+                cnpj_fornecedor = emit.find('nfe:CNPJ', ns)
+                cnpj_fornecedor = cnpj_fornecedor.text if cnpj_fornecedor is not None else None
+                
+                nome_fornecedor = emit.find('nfe:xNome', ns)
+                nome_fornecedor = nome_fornecedor.text if nome_fornecedor is not None else None
+                
+                nome_fantasia = emit.find('nfe:xFant', ns)
+                nome_fantasia = nome_fantasia.text if nome_fantasia is not None else None
+                
+                # Dados de endereço
+                enderEmit = emit.find('nfe:enderEmit', ns)
+                endereco_completo = None
+                cidade = None
+                estado = None
+                cep = None
+                telefone = None
+                
+                if enderEmit is not None:
+                    xLgr = enderEmit.find('nfe:xLgr', ns)
+                    nro = enderEmit.find('nfe:nro', ns)
+                    xBairro = enderEmit.find('nfe:xBairro', ns)
+                    xCpl = enderEmit.find('nfe:xCpl', ns)
+                    
+                    cidade_elem = enderEmit.find('nfe:xMun', ns)
+                    cidade = cidade_elem.text if cidade_elem is not None else None
+                    
+                    estado_elem = enderEmit.find('nfe:UF', ns)
+                    estado = estado_elem.text if estado_elem is not None else None
+                    
+                    cep_elem = enderEmit.find('nfe:CEP', ns)
+                    cep = cep_elem.text if cep_elem is not None else None
+                    
+                    fone_elem = enderEmit.find('nfe:fone', ns)
+                    telefone = fone_elem.text if fone_elem is not None else None
+                    
+                    # Montar endereço completo
+                    partes_endereco = []
+                    if xLgr is not None:
+                        partes_endereco.append(xLgr.text)
+                    if nro is not None:
+                        partes_endereco.append(f"nº {nro.text}")
+                    if xCpl is not None and xCpl.text:
+                        partes_endereco.append(xCpl.text)
+                    if xBairro is not None:
+                        partes_endereco.append(xBairro.text)
+                    
+                    endereco_completo = ', '.join(partes_endereco) if partes_endereco else None
+                
+                # Buscar ou criar fornecedor
+                if cnpj_fornecedor and nome_fornecedor:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    
+                    # Verificar se fornecedor já existe pelo CNPJ
+                    cursor.execute('SELECT id FROM fornecedores WHERE cnpj = %s', (cnpj_fornecedor,))
+                    fornecedor_existente = cursor.fetchone()
+                    
+                    if fornecedor_existente:
+                        # Atualizar fornecedor existente
+                        fornecedor_id = fornecedor_existente[0]
+                        cursor.execute('''
+                            UPDATE fornecedores 
+                            SET nome = %s, telefone = %s, endereco = %s, cidade = %s, estado = %s, cep = %s
+                            WHERE id = %s
+                        ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id))
+                    else:
+                        # Criar novo fornecedor
+                        cursor.execute('''
+                            INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id
+                        ''', (nome_fornecedor, cnpj_fornecedor, telefone, endereco_completo, cidade, estado, cep, 
+                              f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}"))
+                        fornecedor_id = cursor.fetchone()[0]
+                    
+                    conn.commit()
+                    conn.close()
+                    
+            except Exception as e:
+                erros.append(f"Erro ao processar fornecedor: {str(e)}")
+        
+        # ===== BUSCAR PRODUTOS DO XML E CRIAR MOVIMENTAÇÕES =====
+        produtos_xml = root.findall('.//nfe:det', ns)
+        
+        if not produtos_xml:
+            raise ValueError("Nenhum produto encontrado no XML")
+        
+        for det in produtos_xml:
+            try:
+                # Extrair dados do produto
+                prod = det.find('nfe:prod', ns)
+                if prod is None:
+                    continue
+                
+                # Dados básicos do produto
+                codigo_produto = prod.find('nfe:cProd', ns)
+                codigo_produto = codigo_produto.text if codigo_produto is not None else ''
+                
+                codigo_ean = prod.find('nfe:cEAN', ns)
+                codigo_ean = codigo_ean.text if codigo_ean is not None else None
+                if codigo_ean in ['SEM GTIN', '', None]:
+                    codigo_ean = None
+                
+                nome_produto = prod.find('nfe:xProd', ns)
+                nome_produto = nome_produto.text if nome_produto is not None else ''
+                
+                valor_unitario = prod.find('nfe:vUnCom', ns)
+                valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
+                
+                quantidade = prod.find('nfe:qCom', ns)
+                quantidade = int(float(quantidade.text)) if quantidade is not None else 0
+                
+                ncm = prod.find('nfe:NCM', ns)
+                ncm = ncm.text if ncm is not None else ''
+                
+                unidade = prod.find('nfe:uCom', ns)
+                unidade = unidade.text if unidade is not None else 'UN'
+                
+                if not nome_produto:
+                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+                    continue
+                
+                # Calcular preços
+                preco_custo = valor_unitario
+                preco_venda = preco_custo + (preco_custo * margem_padrao / 100) if preco_custo > 0 else 0.0
+                
+                # Determinar categoria baseada no NCM
+                categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else "Geral"
+                
+                # Criar movimentação pendente (margem será calculada automaticamente)
+                adicionar_movimentacao(
+                    nome=nome_produto,
+                    preco_venda=preco_venda,
+                    quantidade=quantidade,
+                    tipo_movimentacao='entrada',
+                    origem='xml_nfe',
+                    estoque_minimo=estoque_minimo,
+                    codigo_barras=codigo_ean,
+                    descricao=f"Importado da NFe {nfe_numero}",
+                    categoria=categoria,
+                    codigo_fornecedor=codigo_produto,
+                    preco_custo=preco_custo,
+                    margem_lucro=0,  # Será calculado automaticamente pela função
+                    marca=None,
+                    fornecedor_id=fornecedor_id,
+                    ncm=ncm,
+                    unidade=unidade,
+                    xml_nfe_chave=nfe_chave,
+                    xml_nfe_numero=nfe_numero,
+                    xml_nfe_data=nfe_data,
+                    xml_produto_codigo=codigo_produto,
+                    usuario_id=usuario_id,
+                    observacoes=f"Importado automaticamente de NFe {nfe_numero}"
+                )
+                
+                movimentacoes_criadas += 1
+                
+            except Exception as e:
+                erros.append(f"Erro ao criar movimentação para produto {codigo_produto}: {str(e)}")
+                continue
+        
+        return {
+            'sucesso': True,
+            'movimentacoes_criadas': movimentacoes_criadas,
+            'fornecedor_id': fornecedor_id,
+            'nfe_numero': nfe_numero,
+            'erros': erros,
+            'total_produtos_xml': len(produtos_xml)
+        }
+        
+    except ET.ParseError as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro ao analisar XML: {str(e)}',
+            'movimentacoes_criadas': 0,
+            'erros': [f'XML inválido: {str(e)}']
+        }
+    except Exception as e:
+        return {
+            'sucesso': False,
+            'erro': f'Erro geral: {str(e)}',
+            'movimentacoes_criadas': 0,
             'erros': [str(e)]
         }
 

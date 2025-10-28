@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos da NFe - Minha Autopecas Web{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <!-- Cabeçalho com Informações da NFe -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header text-white" style="background-color: #1a237e;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-file-invoice me-2"></i>
+                            {% if nfe_info.xml_nfe_numero %}
+                                Nota Fiscal Nº {{ nfe_info.xml_nfe_numero }}
+                            {% else %}
+                                Movimentação Manual
+                            {% endif %}
+                        </h4>
+                        <a href="{{ url_for('movimentacoes') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i> Voltar
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong><i class="fas fa-calendar-alt text-primary me-2"></i>Data:</strong>
+                            <p>{{ nfe_info.data_criacao.strftime('%d/%m/%Y %H:%M') if nfe_info.data_criacao else '-' }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="fas fa-truck text-primary me-2"></i>Fornecedor:</strong>
+                            <p>{{ nfe_info.fornecedor_nome or 'Não informado' }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="fas fa-boxes text-primary me-2"></i>Total de Produtos:</strong>
+                            <p>{{ produtos|length }} produto(s)</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="fas fa-info-circle text-primary me-2"></i>Status:</strong>
+                            <p>
+                                {% if nfe_info.status == 'pendente' %}
+                                    <strong style="color: #ff9800;">PENDENTE</strong>
+                                {% elif nfe_info.status == 'aprovada' %}
+                                    <strong style="color: #28a745;">APROVADA</strong>
+                                {% elif nfe_info.status == 'cancelada' %}
+                                    <strong style="color: #dc3545;">CANCELADO</strong>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {% if nfe_info.xml_nfe_chave %}
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <small class="text-muted">
+                                <strong>Chave NFe:</strong> {{ nfe_info.xml_nfe_chave }}
+                            </small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Ações em Massa -->
+                    {% if nfe_info.status == 'pendente' %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="btn-group">
+                                <button class="btn btn-success" onclick="aprovarNfeCompleta('{{ nfe_info.xml_nfe_numero or nfe_identificador }}')">
+                                    <i class="fas fa-check-double me-2"></i>Aprovar Todos os Produtos
+                                </button>
+                                <button class="btn btn-secondary" onclick="cancelarNfeCompleta('{{ nfe_info.xml_nfe_numero or nfe_identificador }}')">
+                                    <i class="fas fa-ban me-2"></i>Cancelar Todos os Produtos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Produtos -->
+    <div class="card">
+        <div class="card-header text-white" style="background-color: #1a237e;">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>Lista de Produtos
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-header-professional">
+                        <tr>
+                            <th width="60"><i class="fas fa-hashtag me-1"></i> ID</th>
+                            <th><i class="fas fa-box me-1"></i> PRODUTO</th>
+                            <th><i class="fas fa-barcode me-1"></i> CÓDIGOS</th>
+                            <th width="100"><i class="fas fa-sort-amount-up me-1"></i> QTD</th>
+                            <th width="120"><i class="fas fa-dollar-sign me-1"></i> CUSTO</th>
+                            <th width="120"><i class="fas fa-dollar-sign me-1"></i> VENDA</th>
+                            <th width="80"><i class="fas fa-percentage me-1"></i> MARGEM</th>
+                            <th width="100"><i class="fas fa-info-circle me-1"></i> STATUS</th>
+                            <th width="200"><i class="fas fa-cog me-1"></i> AÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for produto in produtos %}
+                        <tr data-id="{{ produto.id }}">
+                            <td><strong>#{{ produto.id }}</strong></td>
+                            <td>
+                                <div>
+                                    <strong>{{ produto.nome }}</strong>
+                                    {% if produto.descricao %}
+                                        <br><small class="text-muted">{{ produto.descricao[:80] }}{{ '...' if produto.descricao|length > 80 else '' }}</small>
+                                    {% endif %}
+                                    {% if produto.localizacao %}
+                                        <br><small class="text-info"><i class="fas fa-map-marker-alt"></i> {{ produto.localizacao }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if produto.codigo_barras %}
+                                    <small><strong>EAN:</strong> {{ produto.codigo_barras }}</small><br>
+                                {% endif %}
+                                {% if produto.codigo_fornecedor %}
+                                    <small><strong>Cód Forn:</strong> {{ produto.codigo_fornecedor }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <strong>{{ produto.quantidade }}</strong> {{ produto.unidade }}
+                            </td>
+                            <td>
+                                <strong>R$ {{ "%.2f"|format(produto.preco_custo) if produto.preco_custo else '0.00' }}</strong>
+                            </td>
+                            <td class="text-success">
+                                <strong>R$ {{ "%.2f"|format(produto.preco_venda) }}</strong>
+                            </td>
+                            <td class="text-center">
+                                {% if produto.margem_lucro %}
+                                    <strong>{{ "%.1f"|format(produto.margem_lucro) }}%</strong>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if produto.status == 'pendente' %}
+                                    <strong style="color: #ff9800; font-size: 0.9rem;">PENDENTE</strong>
+                                {% elif produto.status == 'aprovada' %}
+                                    <strong style="color: #28a745; font-size: 0.9rem;">APROVADA</strong>
+                                {% elif produto.status == 'cancelada' %}
+                                    <strong style="color: #6c757d; font-size: 0.9rem;">CANCELADA</strong>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    {% if produto.status == 'pendente' %}
+                                        <button class="btn btn-warning" 
+                                                onclick="editarProduto({{ produto.id }})" 
+                                                title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-success" 
+                                                onclick="aprovarMovimentacao({{ produto.id }})" 
+                                                title="Aprovar">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-secondary" 
+                                                onclick="cancelarMovimentacao({{ produto.id }})" 
+                                                title="Cancelar">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                        <button class="btn btn-danger" 
+                                                onclick="deletarMovimentacao({{ produto.id }})" 
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% elif produto.status == 'aprovada' %}
+                                        <span class="badge bg-success">Produto no Estoque</span>
+                                    {% elif produto.status == 'cancelada' %}
+                                        <button class="btn btn-danger" 
+                                                onclick="deletarMovimentacao({{ produto.id }})" 
+                                                title="Excluir Definitivamente">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-secondary">
+                            <td colspan="3" class="text-end"><strong>TOTAIS:</strong></td>
+                            <td class="text-center">
+                                <strong>{{ produtos|sum(attribute='quantidade') }}</strong> unid.
+                            </td>
+                            <td>
+                                <strong>R$ {{ "%.2f"|format(produtos|sum(attribute='preco_custo')) }}</strong>
+                            </td>
+                            <td class="text-success">
+                                <strong>R$ {{ "%.2f"|format(produtos|sum(attribute='preco_venda')) }}</strong>
+                            </td>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Produto -->
+<div class="modal fade" id="modalEditarProduto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Editar Produto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarProduto" method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-tag me-1"></i> Nome do Produto *</label>
+                                <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-sort-amount-up me-1"></i> Quantidade *</label>
+                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" step="0.01" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-barcode me-1"></i> Código de Barras</label>
+                                <input type="text" class="form-control" id="edit_codigo_barras" name="codigo_barras">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-code me-1"></i> Código Fornecedor</label>
+                                <input type="text" class="form-control" id="edit_codigo_fornecedor" name="codigo_fornecedor">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-tag me-1"></i> Marca</label>
+                                <input type="text" class="form-control" id="edit_marca" name="marca" placeholder="Ex: Bosch, NGK, Mann Filter">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-layer-group me-1"></i> Categoria</label>
+                                <input type="text" class="form-control" id="edit_categoria" name="categoria" placeholder="Ex: Filtros, Pastilhas">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-dollar-sign me-1"></i> Preço Custo</label>
+                                <input type="number" class="form-control" id="edit_preco_custo" name="preco_custo" 
+                                       step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-percentage me-1"></i> Margem Lucro (%)</label>
+                                <input type="number" class="form-control" id="edit_margem_lucro" name="margem_lucro" 
+                                       step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-dollar-sign me-1"></i> Preço Venda *</label>
+                                <input type="number" class="form-control" id="edit_preco_venda" name="preco_venda" 
+                                       step="0.01" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botão para calcular preço baseado na margem (opcional) -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="aplicarMargem('edit')">
+                                <i class="fas fa-calculator me-1"></i> Calcular Preço de Venda com Base na Margem
+                            </button>
+                            <small class="text-muted ms-2">
+                                <i class="fas fa-info-circle"></i> Você pode calcular automaticamente ou digitar o preço de venda diretamente
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-align-left me-1"></i> Descrição</label>
+                        <textarea class="form-control" id="edit_descricao" name="descricao" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-image me-1"></i> Foto do Produto</label>
+                        <input type="file" class="form-control" id="edit_foto" name="foto" 
+                               accept="image/*" onchange="previewImage(this, 'previewEdit')">
+                        <img id="previewEdit" class="mt-2" style="max-width: 150px; display: none;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.table-header-professional {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table-header-professional th {
+    padding: 12px 8px;
+    border: none;
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.card-header {
+    font-weight: 600;
+}
+</style>
+
+<script>
+// Calculadora de preços (opcional - apenas se usuário quiser usar)
+function calcularPreco(tipo) {
+    const custo = parseFloat(document.getElementById(`${tipo}_preco_custo`).value) || 0;
+    const margem = parseFloat(document.getElementById(`${tipo}_margem_lucro`).value) || 0;
+    
+    if (custo > 0 && margem >= 0) {
+        const precoVenda = custo + (custo * margem / 100);
+        document.getElementById(`${tipo}_preco_venda`).value = precoVenda.toFixed(2);
+    }
+}
+
+// Aplicar margem (botão opcional)
+function aplicarMargem(tipo) {
+    const custo = parseFloat(document.getElementById(`${tipo}_preco_custo`).value) || 0;
+    const margem = parseFloat(document.getElementById(`${tipo}_margem_lucro`).value) || 0;
+    
+    if (custo > 0 && margem >= 0) {
+        const precoVenda = custo + (custo * margem / 100);
+        document.getElementById(`${tipo}_preco_venda`).value = precoVenda.toFixed(2);
+    } else {
+        alert('Preencha o Preço de Custo e a Margem de Lucro');
+    }
+}
+
+// Editar produto
+function editarProduto(id) {
+    console.log('[DEBUG] Editando produto ID:', id);
+    
+    // Buscar dados do produto via AJAX
+    const url = `/movimentacoes/editar/${id}/dados`;
+    console.log('[DEBUG] URL da requisição:', url);
+    
+    fetch(url)
+        .then(response => {
+            console.log('[DEBUG] Status da resposta:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('[DEBUG] Dados recebidos:', data);
+            
+            // Verificar se há erro na resposta
+            if (data.erro) {
+                throw new Error(data.erro);
+            }
+            
+            // Preencher todos os campos do formulário
+            document.getElementById('edit_nome').value = data.nome || '';
+            document.getElementById('edit_quantidade').value = data.quantidade || '';
+            document.getElementById('edit_codigo_barras').value = data.codigo_barras || '';
+            document.getElementById('edit_codigo_fornecedor').value = data.codigo_fornecedor || '';
+            document.getElementById('edit_marca').value = data.marca || '';
+            document.getElementById('edit_categoria').value = data.categoria || '';
+            document.getElementById('edit_preco_custo').value = data.preco_custo || '';
+            document.getElementById('edit_margem_lucro').value = data.margem_lucro || '';
+            document.getElementById('edit_preco_venda').value = data.preco_venda || '';
+            document.getElementById('edit_descricao').value = data.descricao || '';
+            
+            console.log('[DEBUG] Formulário preenchido com sucesso');
+            
+            // Limpar preview de imagem
+            const preview = document.getElementById('previewEdit');
+            if (preview) {
+                preview.style.display = 'none';
+                preview.src = '';
+            }
+            
+            // Definir ação do formulário
+            const form = document.getElementById('formEditarProduto');
+            form.action = `/movimentacoes/editar/${id}`;
+            
+            console.log('[DEBUG] Abrindo modal');
+            
+            // Abrir modal
+            const modal = new bootstrap.Modal(document.getElementById('modalEditarProduto'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('[ERRO] Erro ao buscar dados do produto:', error);
+            alert(`Erro ao carregar dados do produto:\n\n${error.message}\n\nAbra o console (F12) para mais detalhes.`);
+        });
+}
+
+// Aprovar movimentação
+function aprovarMovimentacao(id) {
+    if (confirm('Deseja aprovar este produto e adicioná-lo ao estoque?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/movimentacoes/aprovar/${id}`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Cancelar movimentação
+function cancelarMovimentacao(id) {
+    const motivo = prompt('Motivo do cancelamento (opcional):');
+    if (motivo !== null) { // Permite cancelar mesmo sem motivo
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/movimentacoes/cancelar/${id}`;
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'motivo_cancelamento';
+        input.value = motivo || 'Sem motivo especificado';
+        form.appendChild(input);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Compatibilidade com código antigo
+function rejeitarMovimentacao(id) {
+    return cancelarMovimentacao(id);
+}
+
+// Deletar movimentação
+function deletarMovimentacao(id) {
+    if (confirm('Deseja excluir este produto?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/movimentacoes/deletar/${id}`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Aprovar NFe completa
+function aprovarNfeCompleta(nfeNumero) {
+    if (confirm(`Deseja aprovar TODOS os produtos pendentes desta NFe e adicioná-los ao estoque?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/movimentacoes/nfe/${encodeURIComponent(nfeNumero)}/aprovar-tudo`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Cancelar NFe completa
+function cancelarNfeCompleta(nfeNumero) {
+    const motivo = prompt(`Motivo para cancelar TODOS os produtos pendentes desta NFe (opcional):`);
+    if (motivo !== null) { // Permite cancelar mesmo sem motivo
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/movimentacoes/nfe/${encodeURIComponent(nfeNumero)}/cancelar-tudo`;
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'motivo_cancelamento';
+        input.value = motivo || 'Sem motivo especificado';
+        form.appendChild(input);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Compatibilidade com código antigo
+function rejeitarNfeCompleta(nfeNumero) {
+    return cancelarNfeCompleta(nfeNumero);
+}
+
+// Preview de imagem
+function previewImage(input, previewId) {
+    const preview = document.getElementById(previewId);
+    
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        preview.style.display = 'none';
+        preview.src = '';
+    }
+}
+</script>
+{% endblock %}

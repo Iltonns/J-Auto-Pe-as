@@ -467,15 +467,21 @@
                         Catálogo de Produtos
                     </h2>
                     <p>Gerenciamento de Estoque de Auto Peças</p>
+                    <div class="alert alert-info py-2 px-3 mt-2" style="font-size: 0.9rem;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Novo Sistema:</strong> Para adicionar produtos ao estoque, utilize a seção 
+                        <a href="{{ url_for('movimentacoes') }}" class="alert-link"><strong>Movimentações</strong></a> 
+                        onde você pode importar NFe ou adicionar manualmente e aprovar antes de adicionar ao estoque.
+                    </div>
                 </div>
                 <div class="col-md-4 text-end">
-                    <div class="btn-group" role="group">
-                        <button class="btn btn-success btn-add-product" data-bs-toggle="modal" data-bs-target="#modalAdicionarProduto">
-                            <i class="fas fa-plus me-2"></i>Adicionar Produto
-                        </button>
-                        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
-                            <i class="fas fa-file-import me-2"></i>Importar XML
-                        </button>
+                    <div class="btn-group-vertical w-100" role="group">
+                        <a href="{{ url_for('movimentacoes') }}" class="btn btn-success mb-2">
+                            <i class="fas fa-plus me-2"></i>Adicionar Produtos (via Movimentações)
+                        </a>
+                        <small class="text-muted mb-2">
+                            <i class="fas fa-arrow-right me-1"></i>Esta página é apenas para consulta e edição
+                        </small>
                     </div>
                 </div>
             </div>

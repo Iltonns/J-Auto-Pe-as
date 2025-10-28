@@ -53,7 +53,12 @@ from Minha_autopecas_web.logica_banco import (
     # Nova função para vendas por período
     listar_vendas_por_periodo,
     # Função para limpar sincronizações incorretas
-    limpar_sincronizacoes_incorretas
+    limpar_sincronizacoes_incorretas,
+    # Funções de movimentações de produtos
+    adicionar_movimentacao, listar_movimentacoes, obter_movimentacao_por_id,
+    editar_movimentacao, aprovar_movimentacao, rejeitar_movimentacao, cancelar_movimentacao,
+    deletar_movimentacao, contar_movimentacoes_pendentes, importar_xml_para_movimentacoes,
+    listar_nfes_agrupadas, listar_produtos_por_nfe, aprovar_nfe_completa, rejeitar_nfe_completa, cancelar_nfe_completa
 )
 
 app = Flask(__name__)
@@ -1393,6 +1398,485 @@ def importar_produtos_xml_route():
         flash(f'Erro ao processar arquivo XML: {str(e)}', 'error')
     
     return redirect(url_for('produtos'))
+
+# MOVIMENTAÇÕES DE PRODUTOS
+@app.route('/movimentacoes')
+@login_required
+def movimentacoes():
+    """Tela de gerenciamento de movimentações de produtos - Agrupadas por NFe"""
+    # Listar NFes agrupadas
+    todas_nfes = listar_nfes_agrupadas()
+    pendentes = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'pendente']
+    aprovadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'aprovada']
+    rejeitadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] in ['cancelada', 'rejeitada']]  # Compatibilidade
+    
+    # Listar fornecedores para o formulário
+    fornecedores_lista = listar_fornecedores()
+    
+    return render_template('movimentacoes.html',
+                         nfes=todas_nfes,
+                         pendentes=pendentes,
+                         aprovadas=aprovadas,
+                         rejeitadas=rejeitadas,
+                         fornecedores=fornecedores_lista)
+
+@app.route('/movimentacoes/nfe/<nfe_numero>')
+@login_required
+def visualizar_nfe(nfe_numero):
+    """Visualiza os produtos de uma NFe específica"""
+    produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero)
+    fornecedores_lista = listar_fornecedores()
+    
+    # Pegar informações da primeira movimentação para exibir dados da NFe
+    nfe_info = produtos[0] if produtos else None
+    
+    # Identificador da NFe (pode ser número ou identificador manual)
+    nfe_identificador = nfe_numero
+    
+    return render_template('produtos_nfe.html',
+                         nfe_numero=nfe_numero,
+                         nfe_identificador=nfe_identificador,
+                         nfe_info=nfe_info,
+                         produtos=produtos,
+                         fornecedores=fornecedores_lista)
+
+@app.route('/movimentacoes/nfe/<nfe_numero>/aprovar-tudo', methods=['POST'])
+@login_required
+def aprovar_nfe_route(nfe_numero):
+    """Aprova todos os produtos de uma NFe"""
+    try:
+        resultado = aprovar_nfe_completa(nfe_numero, current_user.id)
+        if resultado['sucesso']:
+            flash(f"NFe aprovada com sucesso! {resultado['total_aprovados']} produtos adicionados ao estoque.", 'success')
+        else:
+            flash(f"Erro ao aprovar NFe: {resultado['erro']}", 'error')
+    except Exception as e:
+        flash(f'Erro ao aprovar NFe: {str(e)}', 'error')
+    
+    return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/nfe/<nfe_numero>/cancelar-tudo', methods=['POST'])
+@login_required
+def cancelar_nfe_route(nfe_numero):
+    """Cancela todos os produtos de uma NFe (permite deletar depois)"""
+    try:
+        motivo = request.form.get('motivo_cancelamento', 'Não especificado')
+        resultado = cancelar_nfe_completa(nfe_numero, current_user.id, motivo)
+        if resultado['sucesso']:
+            flash(f"NFe cancelada com sucesso! {resultado['total_cancelados']} produtos cancelados. Você pode deletá-los agora.", 'warning')
+        else:
+            flash(f"Erro ao cancelar NFe: {resultado['erro']}", 'error')
+    except Exception as e:
+        flash(f'Erro ao cancelar NFe: {str(e)}', 'error')
+    
+    return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/nfe/<nfe_numero>/deletar-tudo', methods=['POST'])
+@login_required
+def deletar_nfe_route(nfe_numero):
+    """Deleta todos os produtos cancelados de uma NFe"""
+    try:
+        from Minha_autopecas_web.logica_banco import listar_produtos_por_nfe, deletar_movimentacao
+        
+        # Buscar produtos da NFe
+        produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero if not nfe_numero.startswith('MANUAL-') else None,
+                                          nfe_identificador=nfe_numero if nfe_numero.startswith('MANUAL-') else None)
+        
+        total_deletados = 0
+        erros = 0
+        
+        for produto in produtos:
+            if produto['status'] == 'cancelada':
+                try:
+                    deletar_movimentacao(produto['id'])
+                    total_deletados += 1
+                except Exception as e:
+                    print(f"[ERRO] Falha ao deletar movimentação {produto['id']}: {str(e)}")
+                    erros += 1
+        
+        if total_deletados > 0:
+            flash(f"NFe deletada com sucesso! {total_deletados} produto(s) cancelado(s) removido(s).", 'success')
+        elif erros > 0:
+            flash(f"Erro ao deletar NFe. {erros} erro(s) encontrado(s).", 'error')
+        else:
+            flash("Nenhum produto cancelado encontrado para deletar.", 'info')
+            
+    except Exception as e:
+        flash(f'Erro ao deletar NFe: {str(e)}', 'error')
+    
+    return redirect(url_for('movimentacoes'))
+
+# Mantém rota antiga para compatibilidade (redireciona para cancelar)
+@app.route('/movimentacoes/nfe/<nfe_numero>/rejeitar-tudo', methods=['POST'])
+@login_required
+def rejeitar_nfe_route(nfe_numero):
+    """DEPRECATED: Use /movimentacoes/nfe/<nfe_numero>/cancelar-tudo"""
+    return cancelar_nfe_route(nfe_numero)
+
+@app.route('/movimentacoes/adicionar', methods=['POST'])
+@login_required
+def adicionar_movimentacao_route():
+    """Adiciona uma nova movimentação manual"""
+    try:
+        # Função auxiliar para conversão segura
+        def safe_float(value, default=0.0):
+            try:
+                return float(value) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        def safe_int(value, default=0):
+            try:
+                return int(float(value)) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        # Coletar dados do formulário
+        nome = request.form.get('nome', '').strip()
+        if not nome:
+            flash('Nome do produto é obrigatório!', 'error')
+            return redirect(url_for('movimentacoes'))
+
+        codigo_barras = request.form.get('codigo_barras', '').strip()
+        codigo_fornecedor = request.form.get('codigo_fornecedor', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        categoria = request.form.get('categoria', '').strip()
+        marca = request.form.get('marca', '').strip()
+        fornecedor_id = safe_int(request.form.get('fornecedor_id', 0)) or None
+        
+        # Campos numéricos
+        quantidade = safe_int(request.form.get('quantidade', 0))
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        preco_custo = safe_float(request.form.get('preco_custo', 0))
+        preco_venda = safe_float(request.form.get('preco_venda', 0))
+        
+        # Se o usuário usou o botão "Aplicar Margem", pegue o preço calculado
+        # Mas sempre priorizamos o preço de venda final digitado pelo usuário
+        if preco_venda <= 0:
+            margem_digitada = safe_float(request.form.get('margem_lucro', 0))
+            if preco_custo > 0 and margem_digitada > 0:
+                preco_venda = preco_custo + (preco_custo * margem_digitada / 100)
+        
+        if preco_venda <= 0:
+            flash('Preço de venda deve ser maior que zero!', 'error')
+            return redirect(url_for('movimentacoes'))
+
+        # Processar upload de foto
+        foto_url = None
+        if 'foto_produto' in request.files:
+            file = request.files['foto_produto']
+            if file.filename:
+                foto_url = salvar_foto_produto(file)
+                if not foto_url:
+                    flash('Erro ao fazer upload da foto. Verifique o formato e tamanho.', 'warning')
+
+        # Adicionar movimentação (margem será calculada automaticamente pela função)
+        movimentacao_id = adicionar_movimentacao(
+            nome=nome,
+            preco_venda=preco_venda,
+            quantidade=quantidade,
+            tipo_movimentacao='entrada',
+            origem='manual',
+            estoque_minimo=estoque_minimo,
+            codigo_barras=codigo_barras if codigo_barras else None,
+            descricao=descricao if descricao else None,
+            categoria=categoria if categoria else None,
+            codigo_fornecedor=codigo_fornecedor if codigo_fornecedor else None,
+            preco_custo=preco_custo,
+            margem_lucro=0,  # Será calculado automaticamente pela função
+            foto_url=foto_url,
+            marca=marca if marca else None,
+            fornecedor_id=fornecedor_id,
+            usuario_id=current_user.id,
+            observacoes=request.form.get('observacoes', '')
+        )
+        
+        flash('Movimentação criada com sucesso! Aguardando aprovação.', 'success')
+        return redirect(url_for('movimentacoes'))
+        
+    except Exception as e:
+        if 'foto_url' in locals() and foto_url:
+            remover_foto_produto(foto_url)
+        flash(f'Erro ao adicionar movimentação: {str(e)}', 'error')
+        return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/editar/<int:id>/dados')
+@login_required
+def obter_dados_movimentacao(id):
+    """Retorna os dados de uma movimentação em formato JSON para edição via AJAX"""
+    try:
+        print(f"[DEBUG] Buscando movimentação ID: {id}")  # Log de debug
+        movimentacao = obter_movimentacao_por_id(id)
+        
+        if not movimentacao:
+            print(f"[DEBUG] Movimentação {id} não encontrada")
+            return jsonify({'erro': 'Movimentação não encontrada'}), 404
+        
+        print(f"[DEBUG] Movimentação encontrada: {movimentacao.get('nome', 'SEM NOME')}")
+        
+        # Converter para dicionário serializável
+        dados = {
+            'id': movimentacao.get('id'),
+            'nome': movimentacao.get('nome', ''),
+            'quantidade': movimentacao.get('quantidade', 0),
+            'codigo_barras': movimentacao.get('codigo_barras', ''),
+            'codigo_fornecedor': movimentacao.get('codigo_fornecedor', ''),
+            'marca': movimentacao.get('marca', ''),
+            'categoria': movimentacao.get('categoria', ''),
+            'preco_custo': float(movimentacao['preco_custo']) if movimentacao.get('preco_custo') else 0,
+            'margem_lucro': float(movimentacao['margem_lucro']) if movimentacao.get('margem_lucro') else 0,
+            'preco_venda': float(movimentacao['preco_venda']) if movimentacao.get('preco_venda') else 0,
+            'descricao': movimentacao.get('descricao', '')
+        }
+        
+        print(f"[DEBUG] Dados preparados para envio: {dados}")
+        return jsonify(dados)
+        
+    except Exception as e:
+        print(f"[ERRO] Erro ao buscar movimentação {id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+@app.route('/movimentacoes/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_movimentacao_route(id):
+    """Edita uma movimentação pendente"""
+    try:
+        def safe_float(value, default=0.0):
+            try:
+                return float(value) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        def safe_int(value, default=0):
+            try:
+                return int(float(value)) if value and str(value).strip() else default
+            except (ValueError, TypeError):
+                return default
+
+        # Verificar se movimentação existe
+        movimentacao_atual = obter_movimentacao_por_id(id)
+        if not movimentacao_atual:
+            flash('Movimentação não encontrada!', 'error')
+            return redirect(url_for('movimentacoes'))
+        
+        if movimentacao_atual['status'] != 'pendente':
+            flash('Apenas movimentações pendentes podem ser editadas!', 'error')
+            return redirect(url_for('movimentacoes'))
+
+        # Coletar dados do formulário
+        nome = request.form.get('nome', '').strip()
+        if not nome:
+            flash('Nome do produto é obrigatório!', 'error')
+            return redirect(url_for('movimentacoes'))
+
+        codigo_barras = request.form.get('codigo_barras', '').strip()
+        codigo_fornecedor = request.form.get('codigo_fornecedor', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        categoria = request.form.get('categoria', '').strip()
+        marca = request.form.get('marca', '').strip()
+        fornecedor_id = safe_int(request.form.get('fornecedor_id', 0)) or None
+        
+        quantidade = safe_int(request.form.get('quantidade', 0))
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        preco_custo = safe_float(request.form.get('preco_custo', 0))
+        margem_lucro = safe_float(request.form.get('margem_lucro', 0))
+        
+        # Usar o preço de venda informado pelo usuário (controle total)
+        preco_venda = safe_float(request.form.get('preco_venda', 0))
+        
+        if preco_venda <= 0:
+            flash('Preço de venda deve ser maior que zero!', 'error')
+            # Redirecionar de volta para a NFe
+            nfe_numero = movimentacao_atual.get('xml_nfe_numero') or f"MANUAL-{movimentacao_atual.get('id')}"
+            return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+
+        # Processar foto
+        foto_url = movimentacao_atual.get('foto_url')
+        if 'foto_produto' in request.files:
+            file = request.files['foto_produto']
+            if file.filename:
+                nova_foto = salvar_foto_produto(file)
+                if nova_foto:
+                    if foto_url:
+                        remover_foto_produto(foto_url)
+                    foto_url = nova_foto
+
+        # Editar movimentação
+        sucesso = editar_movimentacao(
+            movimentacao_id=id,
+            nome=nome,
+            preco_venda=preco_venda,
+            quantidade=quantidade,
+            estoque_minimo=estoque_minimo,
+            codigo_barras=codigo_barras if codigo_barras else None,
+            descricao=descricao if descricao else None,
+            categoria=categoria if categoria else None,
+            codigo_fornecedor=codigo_fornecedor if codigo_fornecedor else None,
+            preco_custo=preco_custo,
+            margem_lucro=margem_lucro,
+            foto_url=foto_url,
+            marca=marca if marca else None,
+            fornecedor_id=fornecedor_id
+        )
+        
+        if sucesso:
+            flash('Produto editado com sucesso!', 'success')
+        
+        # Obter o número da NFe para redirecionar de volta para a página de produtos da NFe
+        nfe_numero = movimentacao_atual.get('xml_nfe_numero') or f"MANUAL-{movimentacao_atual.get('id')}"
+        return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+        
+    except Exception as e:
+        flash(f'Erro ao editar produto: {str(e)}', 'error')
+        print(f"[ERRO] Erro ao editar movimentação {id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Tentar redirecionar de volta para a NFe mesmo em caso de erro
+        try:
+            movimentacao_atual = obter_movimentacao_por_id(id)
+            if movimentacao_atual:
+                nfe_numero = movimentacao_atual.get('xml_nfe_numero') or f"MANUAL-{movimentacao_atual.get('id')}"
+                return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+        except:
+            pass
+        
+        return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/aprovar/<int:id>', methods=['POST'])
+@login_required
+def aprovar_movimentacao_route(id):
+    """Aprova uma movimentação e adiciona ao estoque"""
+    try:
+        # Obter dados da movimentação antes de aprovar (para pegar o número da NFe)
+        movimentacao = obter_movimentacao_por_id(id)
+        nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
+        
+        produto_id = aprovar_movimentacao(id, current_user.id)
+        flash(f'Produto aprovado com sucesso! Adicionado ao estoque (ID: #{produto_id}).', 'success')
+        
+        # Redirecionar de volta para a página da NFe
+        if nfe_numero:
+            return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+    except Exception as e:
+        flash(f'Erro ao aprovar produto: {str(e)}', 'error')
+        print(f"[ERRO] Erro ao aprovar movimentação {id}: {str(e)}")
+    
+    return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/cancelar/<int:id>', methods=['POST'])
+@login_required
+def cancelar_movimentacao_route(id):
+    """Cancela uma movimentação (permite deletar depois)"""
+    try:
+        # Obter dados da movimentação antes de cancelar (para pegar o número da NFe)
+        movimentacao = obter_movimentacao_por_id(id)
+        nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
+        
+        motivo = request.form.get('motivo_cancelamento', 'Não especificado')
+        cancelar_movimentacao(id, current_user.id, motivo)
+        flash('Produto cancelado com sucesso! Você pode deletá-lo agora se desejar.', 'warning')
+        
+        # Redirecionar de volta para a página da NFe
+        if nfe_numero:
+            return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+    except Exception as e:
+        flash(f'Erro ao cancelar produto: {str(e)}', 'error')
+        print(f"[ERRO] Erro ao cancelar movimentação {id}: {str(e)}")
+    
+    return redirect(url_for('movimentacoes'))
+
+# Mantém rota antiga para compatibilidade (redireciona para cancelar)
+@app.route('/movimentacoes/rejeitar/<int:id>', methods=['POST'])
+@login_required
+def rejeitar_movimentacao_route(id):
+    """DEPRECATED: Use /movimentacoes/cancelar/<id>"""
+    return cancelar_movimentacao_route(id)
+
+@app.route('/movimentacoes/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_movimentacao_route(id):
+    """Deleta uma movimentação pendente"""
+    try:
+        # Obter dados da movimentação antes de deletar (para pegar o número da NFe)
+        movimentacao = obter_movimentacao_por_id(id)
+        nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
+        
+        deletar_movimentacao(id)
+        flash('Produto deletado com sucesso!', 'success')
+        
+        # Redirecionar de volta para a página da NFe
+        if nfe_numero:
+            return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
+    except Exception as e:
+        flash(f'Erro ao deletar produto: {str(e)}', 'error')
+        print(f"[ERRO] Erro ao deletar movimentação {id}: {str(e)}")
+    
+    return redirect(url_for('movimentacoes'))
+
+@app.route('/movimentacoes/importar-xml', methods=['POST'])
+@login_required
+def importar_xml_movimentacoes_route():
+    """Importa produtos de XML criando movimentações pendentes"""
+    try:
+        # Verificar se arquivo foi enviado
+        if 'arquivo_xml' not in request.files:
+            flash('Nenhum arquivo foi selecionado!', 'error')
+            return redirect(url_for('movimentacoes'))
+        
+        arquivo = request.files['arquivo_xml']
+        
+        if arquivo.filename == '':
+            flash('Nenhum arquivo foi selecionado!', 'error')
+            return redirect(url_for('movimentacoes'))
+        
+        if arquivo and arquivo.filename.lower().endswith('.xml'):
+            try:
+                # Obter configurações do formulário
+                margem_padrao = float(request.form.get('margem_padrao', 100))
+                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 5))
+                
+                # Ler conteúdo do arquivo
+                conteudo_xml = arquivo.read().decode('utf-8')
+                
+                # Processar XML criando movimentações
+                resultado = importar_xml_para_movimentacoes(
+                    conteudo_xml=conteudo_xml,
+                    margem_padrao=margem_padrao,
+                    estoque_minimo=estoque_minimo_padrao,
+                    usuario_id=current_user.id
+                )
+                
+                if resultado['sucesso']:
+                    if resultado['movimentacoes_criadas'] > 0:
+                        flash(f"Importação concluída! {resultado['movimentacoes_criadas']} movimentação(ões) criada(s) da NFe {resultado.get('nfe_numero', '')}.", 'success')
+                        flash('As movimentações estão pendentes de aprovação. Revise e aprove cada uma.', 'info')
+                    else:
+                        flash('Nenhuma movimentação foi criada.', 'warning')
+                    
+                    # Mostrar erros se houver
+                    if resultado['erros']:
+                        for erro in resultado['erros'][:5]:
+                            flash(f"Aviso: {erro}", 'warning')
+                        
+                        if len(resultado['erros']) > 5:
+                            flash(f"... e mais {len(resultado['erros']) - 5} erro(s)", 'warning')
+                else:
+                    flash(f"Erro ao processar XML: {resultado.get('erro', 'Erro desconhecido')}", 'error')
+                    
+            except UnicodeDecodeError:
+                flash('Erro: Arquivo XML com codificação inválida.', 'error')
+            except Exception as e:
+                flash(f'Erro ao processar arquivo XML: {str(e)}', 'error')
+        else:
+            flash('Arquivo deve ser um XML válido!', 'error')
+            
+    except Exception as e:
+        flash(f'Erro ao processar arquivo XML: {str(e)}', 'error')
+    
+    return redirect(url_for('movimentacoes'))
 
 # VENDAS
 @app.route('/vendas')
