@@ -18,16 +18,25 @@
     }
     
     .table-header-professional {
-        background: #1a237e !important;
-        border-bottom: 2px solid #1a237e;
+        background: linear-gradient(135deg, #1a237e 0%, #283593 100%) !important;
+        border-bottom: 3px solid #0d47a1 !important;
     }
     
     .table-header-professional th {
         color: white !important;
-        font-weight: 600;
-        font-size: 0.85rem;
-        padding: 15px 12px;
+        font-weight: 700 !important;
+        font-size: 0.85rem !important;
+        padding: 15px 12px !important;
         border: none !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        vertical-align: middle !important;
+        white-space: nowrap;
+    }
+    
+    .table-header-professional th i {
+        color: #ffc107 !important;
+        margin-right: 5px;
     }
     
     .stats-card {
@@ -86,6 +95,26 @@
         object-fit: cover;
         border-radius: 4px;
         border: 1px solid #dee2e6;
+    }
+    
+    /* Garantir visibilidade do cabeçalho da tabela */
+    #tabelaMovimentacoes thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    #tabelaMovimentacoes {
+        margin-bottom: 0;
+    }
+    
+    #tabelaMovimentacoes tbody tr {
+        transition: all 0.2s ease;
+    }
+    
+    #tabelaMovimentacoes tbody tr:hover {
+        background-color: #f8f9fa !important;
+        transform: scale(1.01);
     }
 </style>
 {% endblock %}
@@ -184,18 +213,18 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover" id="tabelaMovimentacoes">
+                <table class="table table-hover table-striped table-bordered align-middle" id="tabelaMovimentacoes">
                     <thead class="table-header-professional">
                         <tr>
-                            <th><i class="fas fa-hashtag me-1"></i> NF NÚMERO</th>
-                            <th><i class="fas fa-calendar-alt me-1"></i> DATA IMPORTAÇÃO</th>
-                            <th><i class="fas fa-truck me-1"></i> FORNECEDOR</th>
-                            <th><i class="fas fa-boxes me-1"></i> QTD PRODUTOS</th>
-                            <th><i class="fas fa-sort-amount-up me-1"></i> QTD TOTAL</th>
-                            <th><i class="fas fa-dollar-sign me-1"></i> VALOR TOTAL</th>
-                            <th><i class="fas fa-tag me-1"></i> ORIGEM</th>
-                            <th><i class="fas fa-info-circle me-1"></i> STATUS</th>
-                            <th width="200"><i class="fas fa-cog me-1"></i> AÇÕES</th>
+                            <th><i class="fas fa-hashtag me-1"></i>NF NÚMERO</th>
+                            <th><i class="fas fa-calendar-alt me-1"></i>DATA IMPORTAÇÃO</th>
+                            <th><i class="fas fa-truck me-1"></i>FORNECEDOR</th>
+                            <th><i class="fas fa-boxes me-1"></i>QTD PRODUTOS</th>
+                            <th><i class="fas fa-sort-amount-up me-1"></i>QTD TOTAL</th>
+                            <th><i class="fas fa-dollar-sign me-1"></i>VALOR TOTAL</th>
+                            <th><i class="fas fa-tag me-1"></i>ORIGEM</th>
+                            <th><i class="fas fa-info-circle me-1"></i>STATUS</th>
+                            <th width="200"><i class="fas fa-cog me-1"></i>AÇÕES</th>
                         </tr>
                     </thead>
                     <tbody>

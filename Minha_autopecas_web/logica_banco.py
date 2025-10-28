@@ -650,8 +650,8 @@ def validar_senha_segura(senha):
     if not re.search(r'[A-Z]', senha):
         return False, "A senha deve conter pelo menos uma letra maiúscula"
     
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;`~]', senha):
-        return False, "A senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>_-+=[]\\\/;`~)"
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\\/;`~]', senha):
+        return False, r"A senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>_-+=[]\\\/;`~)"
     
     return True, "Senha válida"
 
@@ -2757,21 +2757,27 @@ def obter_estatisticas_dashboard():
     ''')
     valor_atraso_pagar = cursor.fetchone()[0] or 0
     
-    # Movimentações pendentes
-    cursor.execute('''
-        SELECT COUNT(*) 
-        FROM movimentacoes_produtos 
-        WHERE status = 'pendente'
-    ''')
-    movimentacoes_pendentes = cursor.fetchone()[0] or 0
+    # Movimentações pendentes (verificar se a tabela existe)
+    try:
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM movimentacoes_produtos 
+            WHERE status = 'pendente'
+        ''')
+        movimentacoes_pendentes = cursor.fetchone()[0] or 0
+    except:
+        movimentacoes_pendentes = 0
     
-    # Orçamentos pendentes
-    cursor.execute('''
-        SELECT COUNT(*) 
-        FROM orcamentos 
-        WHERE status = 'pendente'
-    ''')
-    orcamentos_pendentes = cursor.fetchone()[0] or 0
+    # Orçamentos pendentes (verificar se a tabela existe)
+    try:
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM orcamentos 
+            WHERE status = 'pendente'
+        ''')
+        orcamentos_pendentes = cursor.fetchone()[0] or 0
+    except:
+        orcamentos_pendentes = 0
     
     conn.close()
     

@@ -219,6 +219,21 @@
     margin-bottom: 10px;
 }
 
+.action-btn .badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
 .action-btn.primary { background: var(--gradient-primary); }
 .action-btn.success { background: linear-gradient(135deg, #2e7d32, #4caf50); }
 .action-btn.info { background: linear-gradient(135deg, #1976d2, #2196f3); }
@@ -503,25 +518,6 @@
     </div>
     {% endif %}
 
-    <!-- Card 6: Movimentações Pendentes -->
-    {% if has_permission('estoque') %}
-    <div class="stat-card warning">
-        <div class="stat-header">
-            <div class="stat-content">
-                <h3>{{ estatisticas.movimentacoes_pendentes or 0 }}</h3>
-                <p>Movimentações Pendentes</p>
-            </div>
-            <div class="stat-icon warning">
-                <i class="fas fa-exchange-alt"></i>
-            </div>
-        </div>
-        <div class="stat-footer">
-            <i class="fas fa-clock"></i>
-            Aguardando Aprovação
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Card 7: Vendas do Mês -->
     {% if has_permission('vendas') %}
     <div class="stat-card primary">
@@ -657,6 +653,16 @@
         <a href="{{ url_for('fornecedores') }}" class="action-btn orange">
             <i class="fas fa-truck"></i>
             <span>Fornecedores</span>
+        </a>
+        {% endif %}
+        
+        {% if has_permission('estoque') %}
+        <a href="{{ url_for('movimentacoes') }}" class="action-btn warning" style="position: relative;">
+            <i class="fas fa-exchange-alt"></i>
+            <span>Movimentações</span>
+            {% if estatisticas.movimentacoes_pendentes > 0 %}
+            <span class="badge bg-danger position-absolute top-0 end-0 m-2" style="font-size: 0.75rem;">{{ estatisticas.movimentacoes_pendentes }}</span>
+            {% endif %}
         </a>
         {% endif %}
         
