@@ -2757,6 +2757,22 @@ def obter_estatisticas_dashboard():
     ''')
     valor_atraso_pagar = cursor.fetchone()[0] or 0
     
+    # Movimentações pendentes
+    cursor.execute('''
+        SELECT COUNT(*) 
+        FROM movimentacoes_produtos 
+        WHERE status = 'pendente'
+    ''')
+    movimentacoes_pendentes = cursor.fetchone()[0] or 0
+    
+    # Orçamentos pendentes
+    cursor.execute('''
+        SELECT COUNT(*) 
+        FROM orcamentos 
+        WHERE status = 'pendente'
+    ''')
+    orcamentos_pendentes = cursor.fetchone()[0] or 0
+    
     conn.close()
     
     return {
@@ -2771,7 +2787,9 @@ def obter_estatisticas_dashboard():
         'vendas_dia_quantidade': vendas_dia[0] or 0,
         'vendas_dia_valor': vendas_dia[1] or 0,
         'valor_atraso_receber': valor_atraso_receber,
-        'valor_atraso_pagar': valor_atraso_pagar
+        'valor_atraso_pagar': valor_atraso_pagar,
+        'movimentacoes_pendentes': movimentacoes_pendentes,
+        'orcamentos_pendentes': orcamentos_pendentes
     }
 
 def produtos_estoque_baixo():

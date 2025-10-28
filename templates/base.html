@@ -582,9 +582,11 @@
                     <a class="nav-link" href="{{ url_for('fornecedores') }}">
                         <i class="fas fa-truck"></i> Fornecedores
                     </a>
+                    {% if has_permission('estoque') %}
                     <a class="nav-link" href="{{ url_for('movimentacoes') }}">
                         <i class="fas fa-exchange-alt"></i> Movimentações
                     </a>
+                    {% endif %}
                     <a class="nav-link" href="{{ url_for('produtos') }}">
                         <i class="fas fa-car-battery"></i> Peças & Produtos
                     </a>

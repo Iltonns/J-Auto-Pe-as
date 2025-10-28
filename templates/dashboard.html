@@ -503,7 +503,26 @@
     </div>
     {% endif %}
 
-    <!-- Card 6: Vendas do Mês -->
+    <!-- Card 6: Movimentações Pendentes -->
+    {% if has_permission('estoque') %}
+    <div class="stat-card warning">
+        <div class="stat-header">
+            <div class="stat-content">
+                <h3>{{ estatisticas.movimentacoes_pendentes or 0 }}</h3>
+                <p>Movimentações Pendentes</p>
+            </div>
+            <div class="stat-icon warning">
+                <i class="fas fa-exchange-alt"></i>
+            </div>
+        </div>
+        <div class="stat-footer">
+            <i class="fas fa-clock"></i>
+            Aguardando Aprovação
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Card 7: Vendas do Mês -->
     {% if has_permission('vendas') %}
     <div class="stat-card primary">
         <div class="stat-header">
@@ -522,7 +541,7 @@
     </div>
     {% endif %}
 
-    <!-- Card 7: Sem Estoque -->
+    <!-- Card 8: Sem Estoque -->
     {% if has_permission('estoque') %}
     <div class="stat-card danger">
         <div class="stat-header">
@@ -541,7 +560,7 @@
     </div>
     {% endif %}
 
-    <!-- Card 8: Orçamentos Pendentes -->
+    <!-- Card 9: Orçamentos Pendentes -->
     {% if has_permission('vendas') %}
     <div class="stat-card warning">
         <div class="stat-header">

@@ -1402,6 +1402,7 @@ def importar_produtos_xml_route():
 # MOVIMENTAÇÕES DE PRODUTOS
 @app.route('/movimentacoes')
 @login_required
+@required_permission('estoque')
 def movimentacoes():
     """Tela de gerenciamento de movimentações de produtos - Agrupadas por NFe"""
     # Listar NFes agrupadas
@@ -1422,6 +1423,7 @@ def movimentacoes():
 
 @app.route('/movimentacoes/nfe/<nfe_numero>')
 @login_required
+@required_permission('estoque')
 def visualizar_nfe(nfe_numero):
     """Visualiza os produtos de uma NFe específica"""
     produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero)
@@ -1442,6 +1444,7 @@ def visualizar_nfe(nfe_numero):
 
 @app.route('/movimentacoes/nfe/<nfe_numero>/aprovar-tudo', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def aprovar_nfe_route(nfe_numero):
     """Aprova todos os produtos de uma NFe"""
     try:
@@ -1457,6 +1460,7 @@ def aprovar_nfe_route(nfe_numero):
 
 @app.route('/movimentacoes/nfe/<nfe_numero>/cancelar-tudo', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def cancelar_nfe_route(nfe_numero):
     """Cancela todos os produtos de uma NFe (permite deletar depois)"""
     try:
@@ -1473,6 +1477,7 @@ def cancelar_nfe_route(nfe_numero):
 
 @app.route('/movimentacoes/nfe/<nfe_numero>/deletar-tudo', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def deletar_nfe_route(nfe_numero):
     """Deleta todos os produtos cancelados de uma NFe"""
     try:
@@ -1509,12 +1514,14 @@ def deletar_nfe_route(nfe_numero):
 # Mantém rota antiga para compatibilidade (redireciona para cancelar)
 @app.route('/movimentacoes/nfe/<nfe_numero>/rejeitar-tudo', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def rejeitar_nfe_route(nfe_numero):
     """DEPRECATED: Use /movimentacoes/nfe/<nfe_numero>/cancelar-tudo"""
     return cancelar_nfe_route(nfe_numero)
 
 @app.route('/movimentacoes/adicionar', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def adicionar_movimentacao_route():
     """Adiciona uma nova movimentação manual"""
     try:
@@ -1602,6 +1609,7 @@ def adicionar_movimentacao_route():
 
 @app.route('/movimentacoes/editar/<int:id>/dados')
 @login_required
+@required_permission('estoque')
 def obter_dados_movimentacao(id):
     """Retorna os dados de uma movimentação em formato JSON para edição via AJAX"""
     try:
@@ -1640,6 +1648,7 @@ def obter_dados_movimentacao(id):
 
 @app.route('/movimentacoes/editar/<int:id>', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def editar_movimentacao_route(id):
     """Edita uma movimentação pendente"""
     try:
@@ -1747,6 +1756,7 @@ def editar_movimentacao_route(id):
 
 @app.route('/movimentacoes/aprovar/<int:id>', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def aprovar_movimentacao_route(id):
     """Aprova uma movimentação e adiciona ao estoque"""
     try:
@@ -1768,6 +1778,7 @@ def aprovar_movimentacao_route(id):
 
 @app.route('/movimentacoes/cancelar/<int:id>', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def cancelar_movimentacao_route(id):
     """Cancela uma movimentação (permite deletar depois)"""
     try:
@@ -1791,12 +1802,14 @@ def cancelar_movimentacao_route(id):
 # Mantém rota antiga para compatibilidade (redireciona para cancelar)
 @app.route('/movimentacoes/rejeitar/<int:id>', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def rejeitar_movimentacao_route(id):
     """DEPRECATED: Use /movimentacoes/cancelar/<id>"""
     return cancelar_movimentacao_route(id)
 
 @app.route('/movimentacoes/deletar/<int:id>', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def deletar_movimentacao_route(id):
     """Deleta uma movimentação pendente"""
     try:
@@ -1818,6 +1831,7 @@ def deletar_movimentacao_route(id):
 
 @app.route('/movimentacoes/importar-xml', methods=['POST'])
 @login_required
+@required_permission('estoque')
 def importar_xml_movimentacoes_route():
     """Importa produtos de XML criando movimentações pendentes"""
     try:
