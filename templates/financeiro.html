@@ -5,29 +5,58 @@
 {% block content %}
 <div class="main-content">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0">
-            <i class="fas fa-chart-line text-success me-2"></i>
-            Módulo Financeiro
-        </h1>
         <div>
-            <form method="POST" action="{{ url_for('sincronizar_lancamentos_com_contas_route') }}" style="display: inline;">
-                <button type="submit" class="btn me-2" title="Cria automaticamente contas a pagar/receber a partir dos lançamentos financeiros históricos" style="background-color: #17a2b8; color: white; border: none;">
-                    <i class="fas fa-magic me-2"></i>Auto-Criar Contas
-                </button>
-            </form>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-chart-line text-success me-2"></i>
+                Lançamentos Financeiros
+            </h1>
+            <p class="text-muted mb-0 small">Histórico de movimentações e lançamentos imediatos</p>
+        </div>
+        <div>
+            <a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-outline-danger me-2">
+                <i class="fas fa-credit-card me-2"></i>Contas a Pagar
+            </a>
+            <a href="{{ url_for('contas_a_receber_hoje') }}" class="btn btn-outline-success me-2">
+                <i class="fas fa-coins me-2"></i>Contas a Receber
+            </a>
             <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal" style="background-color: #1a237e; color: white; border: none;">
                 <i class="fas fa-plus me-2"></i>Novo Lançamento
             </button>
         </div>
     </div>
 
-    <!-- Alerta Informativo -->
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <i class="fas fa-info-circle me-2"></i>
-        <strong>Nova Funcionalidade!</strong> Agora quando você criar um lançamento financeiro com data de vencimento, 
-        o sistema automaticamente criará a conta a pagar/receber correspondente. 
-        Use o botão <strong>"Auto-Criar Contas"</strong> para processar lançamentos históricos sem contas associadas.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <!-- Informação sobre Módulos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center py-3">
+                            <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                            <h5>Lançamentos Financeiros</h5>
+                            <p class="text-muted small mb-0">Registro de movimentações realizadas, histórico e análise</p>
+                            <span class="badge bg-primary mt-2">Você está aqui</span>
+                        </div>
+                        <div class="col-md-4 text-center py-3 border-start border-end">
+                            <i class="fas fa-credit-card fa-3x text-danger mb-3"></i>
+                            <h5>Contas a Pagar</h5>
+                            <p class="text-muted small mb-0">Gestão de obrigações, vencimentos e pagamentos futuros</p>
+                            <a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-sm btn-outline-danger mt-2">
+                                <i class="fas fa-arrow-right me-1"></i>Acessar
+                            </a>
+                        </div>
+                        <div class="col-md-4 text-center py-3">
+                            <i class="fas fa-coins fa-3x text-success mb-3"></i>
+                            <h5>Contas a Receber</h5>
+                            <p class="text-muted small mb-0">Controle de recebimentos, cobranças e valores a receber</p>
+                            <a href="{{ url_for('contas_a_receber_hoje') }}" class="btn btn-sm btn-outline-success mt-2">
+                                <i class="fas fa-arrow-right me-1"></i>Acessar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Cards de Resumo -->
