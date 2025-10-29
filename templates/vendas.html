@@ -1108,31 +1108,37 @@ function buscarProdutoDetalhado() {
 
 // Mostrar resultados da busca
 function mostrarResultadosBusca(produtos) {
-    console.log('Mostrando resultados da busca:', produtos.length, 'produtos');
+    console.log('=== INÍCIO: Mostrando resultados da busca ===');
+    console.log('Total de produtos recebidos:', produtos ? produtos.length : 0);
     
     const tbody = $('#tabelaBuscaProdutos tbody');
-    console.log('Tabela tbody encontrada:', tbody.length > 0);
+    console.log('Elemento tbody encontrado:', tbody.length > 0);
     
     if (tbody.length === 0) {
-        console.error('Tabela tbody não encontrada!');
+        console.error('❌ ERRO: Tabela tbody não encontrada!');
         alert('Erro: Tabela de resultados não encontrada na página');
         return;
     }
     
     try {
+        console.log('Limpando tbody anterior...');
         tbody.empty();
         
         if (!produtos || produtos.length === 0) {
+            console.log('Nenhum produto encontrado, mostrando mensagem');
             tbody.append(`
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-3">
+                    <td colspan="7" class="text-center text-muted py-3">
                         <i class="fas fa-search"></i> Nenhum produto encontrado
                     </td>
                 </tr>
             `);
             $('#resultadoBusca').show();
+            console.log('Div resultadoBusca exibida (vazia)');
             return;
         }
+        
+        console.log(`Processando ${produtos.length} produtos...`);
         
         produtos.forEach((produto, index) => {
             console.log(`Adicionando produto ${index + 1}:`, produto.nome);
@@ -1145,59 +1151,121 @@ function mostrarResultadosBusca(produtos) {
             const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
                                produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
             
-            const nomeEscapado = (produto.nome || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+            // Criar elementos DOM ao invés de string HTML para evitar problemas com aspas
+            const row = $('<tr>').addClass('produto-resultado');
             
-            const row = $(`
-                <tr class="produto-resultado">
-                    <td>${produto.id}</td>
-                    <td>
-                        <strong>${produto.nome}</strong>
-                        ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
-                    </td>
-                    <td>
-                        ${produto.codigo_fornecedor ? `<span class="badge bg-info">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
-                    </td>
-                    <td>
-                        ${produto.categoria ? `<span class="badge bg-secondary">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
-                    </td>
-                    <td>
-                        <span class="badge bg-${estoqueBadge}">${produto.estoque || 0}</span>
-                    </td>
-                    <td><strong>R$ ${(produto.preco || 0).toFixed(2).replace('.', ',')}</strong></td>
-                    <td>
-                        <button class="btn btn-sm btn-success" 
-                                onclick="adicionarProdutoVenda(${produto.id}, '${nomeEscapado}', ${produto.preco || 0}, ${produto.estoque || 0})" 
-                                ${(produto.estoque || 0) <= 0 ? 'disabled title="Sem estoque"' : 'title="Adicionar à venda"'}>
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </td>
-                </tr>
-            `);
+            // Coluna ID
+            row.append($('<td>').text(produto.id));
+            
+            // Coluna Nome
+            const tdNome = $('<td>');
+            tdNome.append($('<strong>').text(produto.nome));
+            if (produto.codigo_barras) {
+                tdNome.append('<br>').append(
+                    $('<small>').addClass('text-muted').html(`<i class="fas fa-barcode"></i> ${produto.codigo_barras}`)
+                );
+            }
+            row.append(tdNome);
+            
+            // Coluna Código Fornecedor
+            const tdCodFornecedor = $('<td>');
+            if (produto.codigo_fornecedor) {
+                tdCodFornecedor.append(
+                    $('<span>').addClass('badge bg-info').text(produto.codigo_fornecedor)
+                );
+            } else {
+                tdCodFornecedor.append($('<small>').addClass('text-muted').text('-'));
+            }
+            row.append(tdCodFornecedor);
+            
+            // Coluna Categoria
+            const tdCategoria = $('<td>');
+            if (produto.categoria) {
+                tdCategoria.append(
+                    $('<span>').addClass('badge bg-secondary').text(produto.categoria)
+                );
+            } else {
+                tdCategoria.append($('<small>').addClass('text-muted').text('-'));
+            }
+            row.append(tdCategoria);
+            
+            // Coluna Estoque
+            row.append(
+                $('<td>').append(
+                    $('<span>').addClass(`badge bg-${estoqueBadge}`).text(produto.estoque || 0)
+                )
+            );
+            
+            // Coluna Preço
+            row.append(
+                $('<td>').append(
+                    $('<strong>').text(`R$ ${(produto.preco || 0).toFixed(2).replace('.', ',')}`)
+                )
+            );
+            
+            // Coluna Ação (botão)
+            const tdAcao = $('<td>');
+            const btnAdicionar = $('<button>')
+                .addClass('btn btn-sm btn-success')
+                .html('<i class="fas fa-plus"></i>');
+            
+            if ((produto.estoque || 0) <= 0) {
+                btnAdicionar.prop('disabled', true).attr('title', 'Sem estoque');
+            } else {
+                btnAdicionar.attr('title', 'Adicionar à venda');
+                btnAdicionar.on('click', function() {
+                    adicionarProdutoVenda(produto.id, produto.nome, produto.preco || 0, produto.estoque || 0);
+                });
+            }
+            
+            tdAcao.append(btnAdicionar);
+            row.append(tdAcao);
+            
             tbody.append(row);
         });
         
-        console.log('Exibindo div de resultados');
-        $('#resultadoBusca').show();
+        console.log('✅ Todos os produtos foram adicionados ao tbody');
+        console.log('Total de linhas na tabela:', tbody.find('tr').length);
+        
+        // Exibir div de resultados
+        console.log('Exibindo div #resultadoBusca...');
+        const divResultado = $('#resultadoBusca');
+        divResultado.show();
+        console.log('Div #resultadoBusca display:', divResultado.css('display'));
+        console.log('Div #resultadoBusca visível:', divResultado.is(':visible'));
         
         // Reset scroll para o topo
-        $('.tabela-busca')[0].scrollTop = 0;
+        const tabelaBusca = $('.tabela-busca');
+        if (tabelaBusca.length > 0) {
+            tabelaBusca[0].scrollTop = 0;
+            console.log('Scroll da tabela resetado para o topo');
+        }
         
-        // Garantir que a tabela tenha altura suficiente para mostrar todos os itens
+        // Verificar visibilidade após renderização
         setTimeout(() => {
-            const tabelaBusca = $('.tabela-busca');
-            const ultimaLinha = tbody.find('tr:last-child');
+            const linhasVisiveis = tbody.find('tr:visible').length;
+            console.log('Linhas visíveis na tabela:', linhasVisiveis);
             
-            // Adicionar um pequeno espaçamento extra se necessário
+            const ultimaLinha = tbody.find('tr:last-child');
             if (ultimaLinha.length > 0) {
                 const posicaoUltimaLinha = ultimaLinha.position().top + ultimaLinha.outerHeight();
                 const alturaVisivel = tabelaBusca.height();
                 
                 console.log('Posição última linha:', posicaoUltimaLinha, 'Altura visível:', alturaVisivel);
+                console.log('Última linha está visível:', posicaoUltimaLinha <= alturaVisivel);
             }
+            
+            // Verificar se os botões estão funcionando
+            const botoes = tbody.find('button');
+            console.log('Total de botões criados:', botoes.length);
+            console.log('Botões habilitados:', botoes.filter(':not(:disabled)').length);
         }, 100);
         
+        console.log('=== FIM: Resultados da busca exibidos com sucesso ===');
+        
     } catch (error) {
-        console.error('Erro ao mostrar resultados:', error);
+        console.error('❌ ERRO ao mostrar resultados:', error);
+        console.error('Stack trace:', error.stack);
         alert('Erro ao exibir resultados da busca: ' + error.message);
     }
 }
@@ -1205,21 +1273,26 @@ function mostrarResultadosBusca(produtos) {
 // Adicionar produto da busca à venda
 function adicionarProdutoVenda(id, nome, preco, estoque, quantidadeForçada = null) {
     try {
-        console.log('Adicionando produto à venda:', {id, nome, preco, estoque});
+        console.log('=== INÍCIO: Adicionando produto à venda ===');
+        console.log('Parâmetros recebidos:', {id, nome, preco, estoque, quantidadeForçada});
         
         const quantidade = quantidadeForçada || parseInt($('#quantidade_produto').val()) || 1;
+        console.log('Quantidade final:', quantidade);
         
         if (!id || !nome || preco === undefined) {
+            console.error('Dados inválidos do produto!');
             alert('Dados do produto inválidos');
             return;
         }
         
         if (quantidade <= 0) {
+            console.warn('Quantidade inválida:', quantidade);
             alert('Quantidade deve ser maior que zero');
             return;
         }
         
         if (estoque < quantidade) {
+            console.warn('Estoque insuficiente:', {estoque, quantidade});
             alert(`Estoque insuficiente! Disponível: ${estoque}`);
             return;
         }
@@ -1227,38 +1300,58 @@ function adicionarProdutoVenda(id, nome, preco, estoque, quantidadeForçada = nu
         const itemExistente = itensVenda.find(item => item.id === id);
         
         if (itemExistente) {
+            console.log('Item já existe na venda, atualizando quantidade');
             const novaQuantidade = itemExistente.quantidade + quantidade;
             if (novaQuantidade > estoque) {
+                console.warn('Nova quantidade excede estoque:', {novaQuantidade, estoque});
                 alert(`Estoque insuficiente! Disponível: ${estoque}, já adicionado: ${itemExistente.quantidade}`);
                 return;
             }
             itemExistente.quantidade = novaQuantidade;
             itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco;
+            console.log('Item atualizado:', itemExistente);
         } else {
-            itensVenda.push({
+            console.log('Adicionando novo item à venda');
+            const novoItem = {
                 id: id,
                 nome: nome,
                 preco: preco,
                 quantidade: quantidade,
                 subtotal: preco * quantidade
-            });
+            };
+            itensVenda.push(novoItem);
+            console.log('Novo item adicionado:', novoItem);
         }
         
+        console.log('Atualizando tabela de vendas...');
         atualizarTabelaVenda();
-        $('#busca_produto').val('').focus();
+        
+        console.log('Limpando campos de busca...');
+        $('#busca_produto').val('');
         $('#quantidade_produto').val(1);
         $('#resultadoBusca').hide();
         
+        // Fechar modal se existir
         const modalElement = document.getElementById('modalProdutoEncontrado');
-        const modalInstance = bootstrap.Modal.getInstance(modalElement);
-        if (modalInstance) {
-             modalInstance.hide();
+        if (modalElement) {
+            const modalInstance = bootstrap.Modal.getInstance(modalElement);
+            if (modalInstance) {
+                console.log('Fechando modal...');
+                modalInstance.hide();
+            }
         }
         
-        console.log('Produto adicionado com sucesso');
+        console.log('✅ Produto adicionado com sucesso!');
+        console.log('Total de itens na venda:', itensVenda.length);
+        
+        // Focar no campo de busca para nova busca
+        setTimeout(() => {
+            $('#busca_produto').focus();
+        }, 100);
         
     } catch (error) {
-        console.error('Erro ao adicionar produto:', error);
+        console.error('❌ ERRO ao adicionar produto:', error);
+        console.error('Stack trace:', error.stack);
         alert('Erro ao adicionar produto: ' + error.message);
     }
 }
