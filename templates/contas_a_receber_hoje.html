@@ -4,6 +4,7 @@
 {% block page_title %}Gestão de Contas a Receber{% endblock %}
 
 {% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 .status-indicator {
     width: 12px;
@@ -43,13 +44,148 @@
     font-size: 0.8rem;
     padding: 0.4rem 0.8rem;
 }
+
+/* Estilos de Impressão */
+@media print {
+    .no-print,
+    nav,
+    .sidebar,
+    .top-navbar,
+    .btn,
+    button,
+    .filter-pills,
+    .card-stats,
+    .d-flex.justify-content-between,
+    .nav-link,
+    hr.section-divider {
+        display: none !important;
+    }
+    
+    .container-fluid {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    .print-header {
+        display: block !important;
+        margin-bottom: 30px;
+        padding: 20px;
+        border-bottom: 3px solid #28a745;
+    }
+    
+    .print-logo {
+        max-width: 150px;
+        max-height: 80px;
+    }
+    
+    .table {
+        font-size: 11px !important;
+        page-break-inside: auto;
+    }
+    
+    .table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+    
+    .table thead {
+        display: table-header-group;
+        background-color: #f8f9fa !important;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: transparent !important;
+    }
+    
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+        page-break-inside: avoid;
+    }
+    
+    .row {
+        margin: 0 !important;
+    }
+    
+    .col-12 {
+        padding: 0 !important;
+    }
+    
+    .print-title {
+        display: block !important;
+        font-size: 20px;
+        font-weight: bold;
+        color: #28a745;
+        margin-bottom: 10px;
+    }
+    
+    .print-footer {
+        display: block !important;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 9px;
+        color: #666;
+        padding: 10px 0;
+        border-top: 1px solid #dee2e6;
+    }
+}
+
+#contentToPrint {
+    background: white;
+}
+
+.print-header {
+    display: none;
+}
+
+.print-footer {
+    display: none;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid" id="contentToPrint">
+    <!-- Cabeçalho para Impressão/PDF -->
+    <div class="print-header">
+        <div class="row align-items-center">
+            <div class="col-3">
+                {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="print-logo">
+                {% else %}
+                    <div style="width: 150px; height: 80px; background: #28a745; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <i class="fas fa-building fa-3x"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="col-6 text-center">
+                <h2 class="mb-1" style="color: #28a745;">
+                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}
+                </h2>
+                {% if configuracoes_empresa %}
+                    <p class="mb-0"><small>{{ configuracoes_empresa.endereco }}</small></p>
+                    <p class="mb-0"><small>Tel: {{ configuracoes_empresa.telefone }} | Email: {{ configuracoes_empresa.email }}</small></p>
+                    {% if configuracoes_empresa.cnpj %}
+                        <p class="mb-0"><small>CNPJ: {{ configuracoes_empresa.cnpj }}</small></p>
+                    {% endif %}
+                {% endif %}
+            </div>
+            <div class="col-3 text-end">
+                <p class="mb-0"><strong>Data:</strong> {{ hoje.strftime('%d/%m/%Y') }}</p>
+                <p class="mb-0"><strong>Relatório:</strong> Contas a Receber</p>
+                <p class="mb-0"><small>Status: {{ 'Recebidas' if status_atual == 'recebido' else 'Pendentes' }}</small></p>
+            </div>
+        </div>
+        <hr style="margin-top: 15px; border-top: 2px solid #28a745;">
+        <h3 class="print-title text-center">RELATÓRIO DE CONTAS A RECEBER</h3>
+    </div>
+    
     <!-- Header Section -->
-    <div class="row mb-4">
+    <div class="row mb-4 no-print">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -59,11 +195,14 @@
                     </h1>
                     <p class="text-muted mb-0">Gestão completa dos seus recebíveis</p>
                 </div>
-                <div>
+                <div class="no-print">
                     <button class="btn me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #1a237e; color: white; border: none;">
                         <i class="fas fa-plus me-2"></i>Nova Conta
                     </button>
-                    <button class="btn btn-outline-secondary" onclick="window.print()">
+                    <button class="btn btn-success me-2" onclick="exportarPDF()">
+                        <i class="fas fa-file-pdf me-2"></i>Exportar PDF
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="imprimirRelatorio()">
                         <i class="fas fa-print me-2"></i>Imprimir
                     </button>
                 </div>
@@ -72,7 +211,7 @@
     </div>
 
     <!-- Filtros -->
-    <div class="row mb-4">
+    <div class="row mb-4 no-print">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
@@ -158,7 +297,7 @@
     </div>
 
     <!-- Cards de Estatísticas -->
-    <div class="row mb-4">
+    <div class="row mb-4 no-print">
         <div class="col-lg-3 col-md-6 mb-3">
             <div class="card border-0 shadow-sm card-stats h-100">
                 <div class="card-body text-center">
@@ -638,5 +777,61 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('data_vencimento').value = today;
 });
+
+// Função para imprimir relatório
+function imprimirRelatorio() {
+    window.print();
+}
+
+// Função para exportar PDF
+function exportarPDF() {
+    const element = document.getElementById('contentToPrint');
+    const clone = element.cloneNode(true);
+    
+    const noPrintElements = clone.querySelectorAll('.no-print');
+    noPrintElements.forEach(el => el.remove());
+    
+    const actionButtons = clone.querySelectorAll('.btn-group');
+    actionButtons.forEach(el => el.remove());
+    
+    const opt = {
+        margin: [10, 10, 15, 10],
+        filename: 'contas_a_receber_' + new Date().toISOString().split('T')[0] + '.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+            scale: 2,
+            useCORS: true,
+            logging: false
+        },
+        jsPDF: { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: 'portrait'
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    
+    const footer = document.createElement('div');
+    footer.className = 'print-footer';
+    footer.style.cssText = 'margin-top: 20px; padding-top: 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 10px;';
+    footer.innerHTML = `
+        <p style="margin: 0;">Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
+        <p style="margin: 0;">Sistema de Autopeças - Gestão Financeira</p>
+    `;
+    clone.appendChild(footer);
+    
+    html2pdf().set(opt).from(clone).save().then(() => {
+        console.log('PDF gerado com sucesso!');
+    }).catch(error => {
+        console.error('Erro ao gerar PDF:', error);
+        alert('Erro ao gerar PDF. Por favor, tente novamente.');
+    });
+}
 </script>
+
+<!-- Rodapé para Impressão -->
+<div class="print-footer">
+    <p>Relatório gerado em {{ hoje.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p>Sistema de Autopeças - Gestão Financeira</p>
+</div>
 {% endblock %}

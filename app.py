@@ -2249,13 +2249,17 @@ def contas_a_pagar_hoje():
         'futuras': futuras
     }
     
+    # Buscar configurações da empresa
+    configuracoes_empresa = obter_configuracoes_empresa()
+    
     return render_template('contas_a_pagar_hoje.html', 
                          contas=contas, 
                          fornecedores=fornecedores, 
                          hoje=hoje,
                          filtro_atual=filtro,
                          status_atual=status,
-                         estatisticas=estatisticas)
+                         estatisticas=estatisticas,
+                         configuracoes_empresa=configuracoes_empresa)
 
 @app.route('/contas-pagar/adicionar', methods=['POST'])
 @required_permission('financeiro')
@@ -2393,13 +2397,17 @@ def contas_a_receber_hoje():
         'futuras': futuras
     }
     
+    # Buscar configurações da empresa
+    configuracoes_empresa = obter_configuracoes_empresa()
+    
     return render_template('contas_a_receber_hoje.html', 
                          contas=contas, 
                          clientes=clientes, 
                          hoje=hoje,
                          filtro_atual=filtro,
                          status_atual=status,
-                         estatisticas=estatisticas)
+                         estatisticas=estatisticas,
+                         configuracoes_empresa=configuracoes_empresa)
 
 @app.route('/contas-receber/receber/<int:id>', methods=['POST'])
 @required_permission('financeiro')
