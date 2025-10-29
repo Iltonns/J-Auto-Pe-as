@@ -329,30 +329,117 @@
     position: relative;
 }
 
+#resultadoBusca {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-top: 1rem;
+}
+
 .resultado-header {
     background: var(--gradient-accent);
     color: white;
-    padding: 1rem;
+    padding: 1rem 1.5rem;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.resultado-header i {
+    font-size: 1.2rem;
 }
 
 .tabela-busca {
-    max-height: 350px;
+    max-height: 450px;
     overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    padding: 0 10px 30px 0;
+    margin-bottom: 0;
+}
+
+/* Estilização da barra de rolagem */
+.tabela-busca::-webkit-scrollbar {
+    width: 10px;
+}
+
+.tabela-busca::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 5px;
+}
+
+.tabela-busca::-webkit-scrollbar-thumb {
+    background: var(--primary-blue);
+    border-radius: 5px;
+    border: 2px solid #f1f1f1;
+}
+
+.tabela-busca::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* Tabela com header fixo */
+.tabela-busca table {
+    margin-bottom: 0;
+    width: 100%;
+}
+
+.tabela-busca thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-bottom: 2px solid var(--primary-blue);
+}
+
+/* Espaçamento melhorado para última linha */
+.tabela-busca tbody tr:last-child td {
+    padding-bottom: 1.5rem !important;
+}
+
+/* Espaçamento adicional no tbody */
+.tabela-busca tbody {
+    display: table-row-group;
+}
+
+.tabela-busca tbody::after {
+    content: '';
+    display: block;
+    height: 20px;
 }
 
 .produto-resultado {
     transition: all 0.2s ease;
     cursor: pointer;
+    position: relative;
+}
+
+.produto-resultado td {
+    vertical-align: middle !important;
+    padding: 0.75rem !important;
 }
 
 .produto-resultado:hover {
-    background-color: #f8f9fa !important;
-    transform: scale(1.002);
+    background-color: rgba(26, 35, 126, 0.05) !important;
+    transform: translateX(2px);
+    box-shadow: inset 3px 0 0 var(--primary-blue);
+}
+
+.produto-resultado button {
+    transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .produto-resultado button:hover {
-    transform: scale(1.1);
+    transform: scale(1.05);
+}
+
+/* Garantir que a última linha seja completamente visível */
+.produto-resultado:last-child {
+    margin-bottom: 15px;
 }
 
 /* Histórico de vendas aprimorado */

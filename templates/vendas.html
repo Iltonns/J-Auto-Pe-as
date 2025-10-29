@@ -1179,7 +1179,22 @@ function mostrarResultadosBusca(produtos) {
         console.log('Exibindo div de resultados');
         $('#resultadoBusca').show();
         
-        $('#resultadoBusca')[0].scrollTop = 0;
+        // Reset scroll para o topo
+        $('.tabela-busca')[0].scrollTop = 0;
+        
+        // Garantir que a tabela tenha altura suficiente para mostrar todos os itens
+        setTimeout(() => {
+            const tabelaBusca = $('.tabela-busca');
+            const ultimaLinha = tbody.find('tr:last-child');
+            
+            // Adicionar um pequeno espaçamento extra se necessário
+            if (ultimaLinha.length > 0) {
+                const posicaoUltimaLinha = ultimaLinha.position().top + ultimaLinha.outerHeight();
+                const alturaVisivel = tabelaBusca.height();
+                
+                console.log('Posição última linha:', posicaoUltimaLinha, 'Altura visível:', alturaVisivel);
+            }
+        }, 100);
         
     } catch (error) {
         console.error('Erro ao mostrar resultados:', error);
