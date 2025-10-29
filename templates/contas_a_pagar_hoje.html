@@ -54,7 +54,6 @@
     .btn,
     button,
     .filter-pills,
-    .card-stats,
     .d-flex.justify-content-between,
     .nav-link,
     hr.section-divider {
@@ -102,11 +101,60 @@
         background-color: transparent !important;
     }
     
+    /* Cards de estatísticas visíveis no PDF */
+    .card-stats {
+        display: block !important;
+        page-break-inside: avoid;
+        margin-bottom: 10px !important;
+    }
+    
+    .card-stats .card-body {
+        padding: 10px !important;
+    }
+    
+    .card-stats h3 {
+        font-size: 16px !important;
+    }
+    
+    .card-stats p {
+        font-size: 11px !important;
+    }
+    
     /* Cards */
     .card {
         box-shadow: none !important;
         border: 1px solid #dee2e6 !important;
         page-break-inside: avoid;
+    }
+    
+    /* Resumo de totais para PDF */
+    .print-summary {
+        display: block !important;
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border: 2px solid #1a237e;
+        border-radius: 8px;
+    }
+    
+    .print-summary h4 {
+        color: #1a237e;
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+    
+    .print-summary .summary-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .print-summary .summary-item:last-child {
+        border-bottom: none;
+        font-weight: bold;
+        font-size: 14px;
+        color: #d32f2f;
     }
     
     /* Remover padding excessivo */
@@ -190,6 +238,27 @@
         </div>
         <hr style="margin-top: 15px; border-top: 2px solid #1a237e;">
         <h3 class="print-title text-center">RELATÓRIO DE CONTAS A PAGAR</h3>
+    </div>
+    
+    <!-- Resumo de Totais para PDF -->
+    <div class="print-summary" style="display: none;">
+        <h4><i class="fas fa-chart-bar"></i> Resumo Financeiro</h4>
+        <div class="summary-item">
+            <span>Total de Contas:</span>
+            <span><strong>{{ estatisticas.total_contas }}</strong></span>
+        </div>
+        <div class="summary-item">
+            <span>Contas Atrasadas:</span>
+            <span class="text-warning"><strong>{{ estatisticas.atrasadas }}</strong></span>
+        </div>
+        <div class="summary-item">
+            <span>Valor Médio:</span>
+            <span><strong>R$ {{ "%.2f"|format(estatisticas.valor_medio) }}</strong></span>
+        </div>
+        <div class="summary-item">
+            <span>TOTAL A PAGAR:</span>
+            <span><strong>R$ {{ "%.2f"|format(estatisticas.total_valor) }}</strong></span>
+        </div>
     </div>
     
     <!-- Header Section -->
