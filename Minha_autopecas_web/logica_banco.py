@@ -2637,6 +2637,71 @@ def pagar_conta(conta_id, data_pagamento=None):
     conn.commit()
     conn.close()
 
+def duplicar_conta_pagar(conta_id):
+    """Duplica uma conta a pagar existente"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da conta original
+        cursor.execute('''
+            SELECT descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id
+            FROM contas_pagar
+            WHERE id = %s
+        ''', (conta_id,))
+        
+        conta = cursor.fetchone()
+        if not conta:
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id = conta
+        
+        # Adicionar " - Cópia" na descrição
+        descricao = f"{descricao} - Cópia"
+        
+        # Inserir nova conta
+        cursor.execute('''
+            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pendente')
+            RETURNING id
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
+        
+        nova_conta_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+        
+        return True, f"Conta duplicada com sucesso (Nova ID: {nova_conta_id})"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao duplicar conta: {str(e)}"
+
+def excluir_conta_pagar(conta_id):
+    """Exclui uma conta a pagar"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se a conta existe
+        cursor.execute('SELECT id FROM contas_pagar WHERE id = %s', (conta_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        # Excluir a conta
+        cursor.execute('DELETE FROM contas_pagar WHERE id = %s', (conta_id,))
+        conn.commit()
+        conn.close()
+        
+        return True, "Conta excluída com sucesso"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao excluir conta: {str(e)}"
+
 # FUNÇÕES DE CONTAS A RECEBER
 def listar_contas_receber_hoje():
     """Lista contas a receber com vencimento hoje"""
@@ -2775,6 +2840,71 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
         conn.rollback()
         conn.close()
         return False, f"Erro ao criar conta: {str(e)}"
+
+def duplicar_conta_receber(conta_id):
+    """Duplica uma conta a receber existente"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar dados da conta original
+        cursor.execute('''
+            SELECT descricao, valor, data_vencimento, cliente_id, observacoes
+            FROM contas_receber
+            WHERE id = %s
+        ''', (conta_id,))
+        
+        conta = cursor.fetchone()
+        if not conta:
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        descricao, valor, data_vencimento, cliente_id, observacoes = conta
+        
+        # Adicionar " - Cópia" na descrição
+        descricao = f"{descricao} - Cópia"
+        
+        # Inserir nova conta
+        cursor.execute('''
+            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, status)
+            VALUES (%s, %s, %s, %s, %s, 'pendente')
+            RETURNING id
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+        
+        nova_conta_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+        
+        return True, f"Conta duplicada com sucesso (Nova ID: {nova_conta_id})"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao duplicar conta: {str(e)}"
+
+def excluir_conta_receber(conta_id):
+    """Exclui uma conta a receber"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se a conta existe
+        cursor.execute('SELECT id FROM contas_receber WHERE id = %s', (conta_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        # Excluir a conta
+        cursor.execute('DELETE FROM contas_receber WHERE id = %s', (conta_id,))
+        conn.commit()
+        conn.close()
+        
+        return True, "Conta excluída com sucesso"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao excluir conta: {str(e)}"
 
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():

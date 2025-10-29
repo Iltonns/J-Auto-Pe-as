@@ -29,8 +29,8 @@ from Minha_autopecas_web.logica_banco import (
     deletar_todos_os_produtos, limpar_completamente_produtos,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id, deletar_venda,
     obter_configuracoes_empresa, atualizar_configuracoes_empresa,
-    listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta,
-    listar_contas_receber_hoje, receber_conta, adicionar_conta_receber,
+    listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta, duplicar_conta_pagar, excluir_conta_pagar,
+    listar_contas_receber_hoje, receber_conta, adicionar_conta_receber, duplicar_conta_receber, excluir_conta_receber,
     listar_contas_pagar_por_periodo, listar_contas_receber_por_periodo,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
@@ -2295,6 +2295,34 @@ def pagar_conta_route(id):
     
     return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
 
+@app.route('/contas-pagar/duplicar/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def duplicar_conta_pagar_route(id):
+    try:
+        sucesso, mensagem = duplicar_conta_pagar(id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao duplicar conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
+
+@app.route('/contas-pagar/excluir/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def excluir_conta_pagar_route(id):
+    try:
+        sucesso, mensagem = excluir_conta_pagar(id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao excluir conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
+
 # CONTAS A RECEBER
 @app.route('/contas-a-receber-hoje')
 @required_permission('financeiro')
@@ -2363,6 +2391,34 @@ def adicionar_conta_receber_route():
             flash(mensagem, 'warning')
     except Exception as e:
         flash(f'Erro ao adicionar conta a receber: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
+
+@app.route('/contas-receber/duplicar/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def duplicar_conta_receber_route(id):
+    try:
+        sucesso, mensagem = duplicar_conta_receber(id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao duplicar conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
+
+@app.route('/contas-receber/excluir/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def excluir_conta_receber_route(id):
+    try:
+        sucesso, mensagem = excluir_conta_receber(id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao excluir conta: {str(e)}', 'error')
     
     return redirect(request.referrer or url_for('contas_a_receber_hoje'))
 

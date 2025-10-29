@@ -303,6 +303,16 @@
                                                     title="Ver Detalhes">
                                                 <i class="fas fa-eye"></i>
                                             </button>
+                                            <button class="btn btn-outline-secondary" 
+                                                    onclick="duplicarConta({{ conta.id }})"
+                                                    title="Duplicar Conta">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" 
+                                                    onclick="excluirConta({{ conta.id }})"
+                                                    title="Excluir Conta">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -430,6 +440,26 @@ function editarConta(contaId) {
 function verDetalhes(contaId) {
     // Implementar modal de detalhes
     alert('Funcionalidade de detalhes em desenvolvimento');
+}
+
+function duplicarConta(contaId) {
+    if (confirm('Deseja duplicar esta conta?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/contas-receber/duplicar/${contaId}`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function excluirConta(contaId) {
+    if (confirm('Tem certeza que deseja excluir esta conta? Esta ação não pode ser desfeita.')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/contas-receber/excluir/${contaId}`;
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 
 // Definir data de hoje como padrão
