@@ -29,8 +29,8 @@ from Minha_autopecas_web.logica_banco import (
     deletar_todos_os_produtos, limpar_completamente_produtos,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id, deletar_venda,
     obter_configuracoes_empresa, atualizar_configuracoes_empresa,
-    listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta, duplicar_conta_pagar, excluir_conta_pagar,
-    listar_contas_receber_hoje, receber_conta, adicionar_conta_receber, duplicar_conta_receber, excluir_conta_receber,
+    listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta, duplicar_conta_pagar, excluir_conta_pagar, obter_conta_pagar, editar_conta_pagar,
+    listar_contas_receber_hoje, receber_conta, adicionar_conta_receber, duplicar_conta_receber, excluir_conta_receber, obter_conta_receber, editar_conta_receber,
     listar_contas_pagar_por_periodo, listar_contas_receber_por_periodo,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
@@ -2323,6 +2323,44 @@ def excluir_conta_pagar_route(id):
     
     return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
 
+@app.route('/contas-pagar/obter/<int:id>', methods=['GET'])
+@required_permission('financeiro')
+def obter_conta_pagar_route(id):
+    try:
+        sucesso, resultado = obter_conta_pagar(id)
+        if sucesso:
+            return jsonify({'success': True, 'conta': resultado})
+        else:
+            return jsonify({'success': False, 'message': resultado})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/contas-pagar/editar/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def editar_conta_pagar_route(id):
+    try:
+        descricao = request.form.get('descricao')
+        valor = float(request.form.get('valor'))
+        data_vencimento = request.form.get('data_vencimento')
+        categoria = request.form.get('categoria')
+        observacoes = request.form.get('observacoes')
+        fornecedor_id = request.form.get('fornecedor_id')
+        
+        if fornecedor_id and fornecedor_id.strip():
+            fornecedor_id = int(fornecedor_id)
+        else:
+            fornecedor_id = None
+        
+        sucesso, mensagem = editar_conta_pagar(id, descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao editar conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_pagar_hoje'))
+
 # CONTAS A RECEBER
 @app.route('/contas-a-receber-hoje')
 @required_permission('financeiro')
@@ -2419,6 +2457,43 @@ def excluir_conta_receber_route(id):
             flash(mensagem, 'warning')
     except Exception as e:
         flash(f'Erro ao excluir conta: {str(e)}', 'error')
+    
+    return redirect(request.referrer or url_for('contas_a_receber_hoje'))
+
+@app.route('/contas-receber/obter/<int:id>', methods=['GET'])
+@required_permission('financeiro')
+def obter_conta_receber_route(id):
+    try:
+        sucesso, resultado = obter_conta_receber(id)
+        if sucesso:
+            return jsonify({'success': True, 'conta': resultado})
+        else:
+            return jsonify({'success': False, 'message': resultado})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/contas-receber/editar/<int:id>', methods=['POST'])
+@required_permission('financeiro')
+def editar_conta_receber_route(id):
+    try:
+        descricao = request.form.get('descricao')
+        valor = float(request.form.get('valor'))
+        data_vencimento = request.form.get('data_vencimento')
+        cliente_id = request.form.get('cliente_id')
+        observacoes = request.form.get('observacoes')
+        
+        if cliente_id and cliente_id.strip():
+            cliente_id = int(cliente_id)
+        else:
+            cliente_id = None
+        
+        sucesso, mensagem = editar_conta_receber(id, descricao, valor, data_vencimento, cliente_id, observacoes)
+        if sucesso:
+            flash(mensagem, 'success')
+        else:
+            flash(mensagem, 'warning')
+    except Exception as e:
+        flash(f'Erro ao editar conta: {str(e)}', 'error')
     
     return redirect(request.referrer or url_for('contas_a_receber_hoje'))
 

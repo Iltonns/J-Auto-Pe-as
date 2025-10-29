@@ -2702,6 +2702,76 @@ def excluir_conta_pagar(conta_id):
         conn.close()
         return False, f"Erro ao excluir conta: {str(e)}"
 
+def obter_conta_pagar(conta_id):
+    """Obtém os dados de uma conta a pagar"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.categoria, 
+                   cp.observacoes, cp.fornecedor_id, cp.status, cp.data_pagamento,
+                   f.nome as fornecedor_nome
+            FROM contas_pagar cp
+            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+            WHERE cp.id = %s
+        ''', (conta_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return False, "Conta não encontrada"
+        
+        conta = {
+            'id': row[0],
+            'descricao': row[1],
+            'valor': float(row[2]),
+            'data_vencimento': row[3].strftime('%Y-%m-%d') if row[3] else None,
+            'categoria': row[4],
+            'observacoes': row[5],
+            'fornecedor_id': row[6],
+            'status': row[7],
+            'data_pagamento': row[8].strftime('%Y-%m-%d') if row[8] else None,
+            'fornecedor_nome': row[9]
+        }
+        
+        return True, conta
+    
+    except Exception as e:
+        conn.close()
+        return False, f"Erro ao obter conta: {str(e)}"
+
+def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None):
+    """Edita uma conta a pagar existente"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se a conta existe
+        cursor.execute('SELECT id FROM contas_pagar WHERE id = %s', (conta_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        # Atualizar a conta
+        cursor.execute('''
+            UPDATE contas_pagar
+            SET descricao = %s, valor = %s, data_vencimento = %s, 
+                categoria = %s, observacoes = %s, fornecedor_id = %s
+            WHERE id = %s
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, conta_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return True, "Conta atualizada com sucesso"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao editar conta: {str(e)}"
+
 # FUNÇÕES DE CONTAS A RECEBER
 def listar_contas_receber_hoje():
     """Lista contas a receber com vencimento hoje"""
@@ -2905,6 +2975,75 @@ def excluir_conta_receber(conta_id):
         conn.rollback()
         conn.close()
         return False, f"Erro ao excluir conta: {str(e)}"
+
+def obter_conta_receber(conta_id):
+    """Obtém os dados de uma conta a receber"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, 
+                   cr.observacoes, cr.cliente_id, cr.status, cr.data_recebimento,
+                   c.nome as cliente_nome
+            FROM contas_receber cr
+            LEFT JOIN clientes c ON cr.cliente_id = c.id
+            WHERE cr.id = %s
+        ''', (conta_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return False, "Conta não encontrada"
+        
+        conta = {
+            'id': row[0],
+            'descricao': row[1],
+            'valor': float(row[2]),
+            'data_vencimento': row[3].strftime('%Y-%m-%d') if row[3] else None,
+            'observacoes': row[4],
+            'cliente_id': row[5],
+            'status': row[6],
+            'data_recebimento': row[7].strftime('%Y-%m-%d') if row[7] else None,
+            'cliente_nome': row[8]
+        }
+        
+        return True, conta
+    
+    except Exception as e:
+        conn.close()
+        return False, f"Erro ao obter conta: {str(e)}"
+
+def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id=None, observacoes=None):
+    """Edita uma conta a receber existente"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar se a conta existe
+        cursor.execute('SELECT id FROM contas_receber WHERE id = %s', (conta_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False, "Conta não encontrada"
+        
+        # Atualizar a conta
+        cursor.execute('''
+            UPDATE contas_receber
+            SET descricao = %s, valor = %s, data_vencimento = %s, 
+                cliente_id = %s, observacoes = %s
+            WHERE id = %s
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes, conta_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return True, "Conta atualizada com sucesso"
+    
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Erro ao editar conta: {str(e)}"
 
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():

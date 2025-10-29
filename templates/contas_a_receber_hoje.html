@@ -410,6 +410,128 @@
     </div>
 </div>
 
+<!-- Modal Editar Conta -->
+<div class="modal fade" id="modalEditarConta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="formEditarConta">
+                <div class="modal-header text-white" style="background-color: #1a237e;">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit me-2"></i>Editar Conta a Receber
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit_conta_id" name="conta_id">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_descricao" class="form-label">Descrição *</label>
+                                <input type="text" class="form-control" id="edit_descricao" name="descricao" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_valor" class="form-label">Valor *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="number" class="form-control" id="edit_valor" name="valor" step="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_data_vencimento" class="form-label">Data de Vencimento *</label>
+                                <input type="date" class="form-control" id="edit_data_vencimento" name="data_vencimento" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_cliente_id" class="form-label">Cliente</label>
+                                <select class="form-select" id="edit_cliente_id" name="cliente_id">
+                                    <option value="">Selecione um cliente</option>
+                                    {% for cliente in clientes %}
+                                    <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn" style="background-color: #1a237e; color: white; border: none;">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ver Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #1a237e;">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>Detalhes da Conta a Receber
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Descrição</h6>
+                        <p class="fw-bold" id="detail_descricao">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Valor</h6>
+                        <p class="fw-bold text-success" id="detail_valor">-</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Data de Vencimento</h6>
+                        <p class="fw-bold" id="detail_data_vencimento">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Status</h6>
+                        <p class="fw-bold" id="detail_status">-</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Cliente</h6>
+                        <p class="fw-bold" id="detail_cliente">-</p>
+                    </div>
+                </div>
+                <div class="row mb-3" id="detail_data_recebimento_row" style="display: none;">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Data de Recebimento</h6>
+                        <p class="fw-bold text-success" id="detail_data_recebimento">-</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <h6 class="text-muted">Observações</h6>
+                        <p id="detail_observacoes">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function aplicarFiltroPersonalizado() {
     const dataInicio = document.getElementById('data_inicio').value;
@@ -433,13 +555,62 @@ function confirmarRecebimento(contaId) {
 }
 
 function editarConta(contaId) {
-    // Implementar modal de edição
-    alert('Funcionalidade de edição em desenvolvimento');
+    fetch(`/contas-receber/obter/${contaId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('edit_conta_id').value = data.conta.id;
+                document.getElementById('edit_descricao').value = data.conta.descricao;
+                document.getElementById('edit_valor').value = data.conta.valor;
+                document.getElementById('edit_data_vencimento').value = data.conta.data_vencimento;
+                document.getElementById('edit_cliente_id').value = data.conta.cliente_id || '';
+                document.getElementById('edit_observacoes').value = data.conta.observacoes || '';
+                
+                document.getElementById('formEditarConta').action = `/contas-receber/editar/${contaId}`;
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarConta'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar dados da conta: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao carregar dados da conta');
+            console.error(error);
+        });
 }
 
 function verDetalhes(contaId) {
-    // Implementar modal de detalhes
-    alert('Funcionalidade de detalhes em desenvolvimento');
+    fetch(`/contas-receber/obter/${contaId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const conta = data.conta;
+                document.getElementById('detail_descricao').textContent = conta.descricao;
+                document.getElementById('detail_valor').textContent = 'R$ ' + parseFloat(conta.valor).toFixed(2);
+                document.getElementById('detail_data_vencimento').textContent = conta.data_vencimento;
+                document.getElementById('detail_status').textContent = conta.status === 'recebido' ? 'Recebido' : 'Pendente';
+                document.getElementById('detail_status').className = conta.status === 'recebido' ? 'fw-bold text-success' : 'fw-bold text-warning';
+                document.getElementById('detail_cliente').textContent = conta.cliente_nome || 'Não informado';
+                document.getElementById('detail_observacoes').textContent = conta.observacoes || 'Sem observações';
+                
+                if (conta.data_recebimento) {
+                    document.getElementById('detail_data_recebimento').textContent = conta.data_recebimento;
+                    document.getElementById('detail_data_recebimento_row').style.display = '';
+                } else {
+                    document.getElementById('detail_data_recebimento_row').style.display = 'none';
+                }
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar detalhes da conta: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao carregar detalhes da conta');
+            console.error(error);
+        });
 }
 
 function duplicarConta(contaId) {
