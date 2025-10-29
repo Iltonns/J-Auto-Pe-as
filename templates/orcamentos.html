@@ -107,7 +107,7 @@
                             <label class="form-label">Buscar:</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="campoBusca" 
-                                       placeholder="Nome / Marca / Código Fornecedor / Código de Barras / Categoria">
+                                       placeholder="Ex: PIVO%GOL ou AMORTECEDOR DIANTEIRO">
                                 <button class="btn btn-success" type="button" id="btnBuscar">
                                     <span class="loading-spinner" id="loadingSpinner"></span>
                                     <span id="btnBuscarTexto">Busca Avançada</span>
@@ -115,7 +115,7 @@
                             </div>
                             <small class="text-muted">
                                 <i class="fas fa-info-circle"></i> 
-                                Busque por nome, marca, código do fornecedor, código de barras ou categoria
+                                Use % ou espaço para buscar múltiplos termos (ex: PIVO%GOL)
                             </small>
                         </div>
                     </div>
@@ -177,11 +177,11 @@
                                             {{ produto.estoque }}
                                         </span>
                                     </td>
-                                    <td>R$ {{ "%.2f"|format(produto.preco_custo or produto.preco * 0.7)|replace('.', ',') }}</td>
-                                    <td>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</td>
+                                    <td><span class="text-info">R$ {{ "%.2f"|format((produto.preco or 0) / 2)|replace('.', ',') }}</span></td>
+                                    <td>R$ {{ "%.2f"|format(produto.preco or 0)|replace('.', ',') }}</td>
                                     <td>
                                         <button class="btn btn-sm btn-primary btn-add-item" 
-                                                onclick="adicionarItem({{ produto.id }}, '{{ produto.nome|replace("'", "\\'") }}', {{ produto.preco }}, {{ produto.estoque }})"
+                                                onclick="adicionarItem({{ produto.id }}, '{{ produto.nome|replace("'", "\\'") }}', {{ produto.preco or 0 }}, {{ produto.estoque }})"
                                                 title="Adicionar ao orçamento">
                                             <i class="fas fa-plus"></i>
                                         </button>
@@ -889,8 +889,8 @@ function atualizarTabelaProdutos(produtos) {
     tbody.innerHTML = '';
     
     produtos.forEach(produto => {
-        const preco = parseFloat(produto.preco);
-        const custoEstimado = preco * 0.7;
+        const preco = parseFloat(produto.preco) || 0;
+        const custoEstimado = preco / 2; // Margem de 100%
         const estoque = produto.estoque || 0;
         const estoqueMinimo = produto.estoque_minimo || 5;
         
@@ -949,11 +949,16 @@ function atualizarTabelaProdutos(produtos) {
 
 function buscarProdutosLocal(termo) {
     console.log('Iniciando busca local para:', termo);
-    const termoLower = termo.toLowerCase();
+    
+    // Dividir termo em múltiplas palavras (separadas por % ou espaço)
+    const termoLimpo = termo.replace(/%/g, ' ').trim();
+    const termos = termoLimpo.split(/\s+/).filter(t => t.length > 0).map(t => t.toLowerCase());
+    
     const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
     let visiveisCount = 0;
     
     console.log('Encontradas', linhas.length, 'linhas para filtrar');
+    console.log('Termos de busca:', termos);
     
     linhas.forEach((linha, index) => {
         if (!linha.cells || linha.cells.length < 4) {
@@ -967,11 +972,11 @@ function buscarProdutosLocal(termo) {
         const codigoFornecedor = linha.cells[2]?.textContent?.toLowerCase() || '';
         const categoria = linha.cells[3]?.textContent?.toLowerCase() || '';
         
-        // Busca mais específica
-        const match = codigo.includes(termoLower) ||
-                     nome.includes(termoLower) ||
-                     codigoFornecedor.includes(termoLower) ||
-                     categoria.includes(termoLower);
+        // Combinar todos os campos em um único texto para busca
+        const textoCompleto = `${codigo} ${nome} ${codigoFornecedor} ${categoria}`;
+        
+        // Verificar se TODOS os termos estão presentes no texto
+        const match = termos.length === 0 || termos.every(termo => textoCompleto.includes(termo));
         
         if (match) {
             linha.style.display = '';
@@ -981,7 +986,7 @@ function buscarProdutosLocal(termo) {
         }
         
         if (index < 3) { // Log apenas os 3 primeiros para debug
-            console.log(`Linha ${index}:`, {codigo, nome, match});
+            console.log(`Linha ${index}:`, {codigo, nome, match, termos});
         }
     });
     

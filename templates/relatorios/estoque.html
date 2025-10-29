@@ -34,7 +34,7 @@
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque) }}</h4>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque)|replace('.', ',') }}</h4>
                                     <p class="mb-0">Valor do Estoque</p>
                                 </div>
                                 <div class="align-self-center">
@@ -69,6 +69,50 @@
                                 </div>
                                 <div class="align-self-center">
                                     <i class="fas fa-times-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cards de Valor em Estoque -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card border-success shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-8">
+                                    <h6 class="text-muted mb-1">
+                                        <i class="fas fa-shopping-cart"></i> Valor Total em Estoque (Preço de Venda)
+                                    </h6>
+                                    <h3 class="text-success mb-0">
+                                        R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque)|replace('.', ',') }}
+                                    </h3>
+                                    <small class="text-muted">Quantidade × Preço de Venda (Margem 100%)</small>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <i class="fas fa-dollar-sign fa-3x text-success opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-info shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-8">
+                                    <h6 class="text-muted mb-1">
+                                        <i class="fas fa-box"></i> Valor Total em Estoque (Preço de Custo)
+                                    </h6>
+                                    <h3 class="text-info mb-0">
+                                        R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque_custo)|replace('.', ',') }}
+                                    </h3>
+                                    <small class="text-muted">Quantidade × Preço de Custo (Sem Margem)</small>
+                                </div>
+                                <div class="col-4 text-end">
+                                    <i class="fas fa-coins fa-3x text-info opacity-50"></i>
                                 </div>
                             </div>
                         </div>
@@ -169,7 +213,8 @@
                                         <th>Categoria</th>
                                         <th>Estoque Atual</th>
                                         <th>Estoque Mínimo</th>
-                                        <th>Preço</th>
+                                        <th>Preço Custo</th>
+                                        <th>Preço Venda</th>
                                         <th>Valor Estoque</th>
                                         <th>Status</th>
                                     </tr>
@@ -186,8 +231,9 @@
                                                 </strong>
                                             </td>
                                             <td>{{ produto.estoque_minimo }}</td>
-                                            <td>R$ {{ "%.2f"|format(produto.preco) }}</td>
-                                            <td>R$ {{ "%.2f"|format(produto.valor_estoque) }}</td>
+                                            <td><span class="text-info">R$ {{ "%.2f"|format(produto.preco_custo)|replace('.', ',') }}</span></td>
+                                            <td>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</td>
+                                            <td>R$ {{ "%.2f"|format(produto.valor_estoque)|replace('.', ',') }}</td>
                                             <td>
                                                 {% if produto.status == 'Sem Estoque' %}
                                                     <span class="badge bg-danger">{{ produto.status }}</span>

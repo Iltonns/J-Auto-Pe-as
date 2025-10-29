@@ -495,8 +495,12 @@
                 <span class="input-group-text">
                     <i class="fas fa-search"></i>
                 </span>
-                <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, marca, código, categoria...">
+                <input type="text" id="searchInput" class="form-control" placeholder="Ex: PIVO%GOL ou AMORTECEDOR DIANTEIRO">
+                <span class="input-group-text" title="Use % ou espaço para buscar múltiplos termos">
+                    <i class="fas fa-info-circle"></i>
+                </span>
             </div>
+            <small class="text-muted">💡 Busque por múltiplos termos: PIVO%GOL encontra todos os pivôs do Gol</small>
         </div>
         <div class="col-md-3">
             <select id="categoriaFilter" class="form-select">
@@ -582,7 +586,8 @@
                             <th>Nome do Produto</th>
                             <th>Marca</th>
                             <th>Categoria</th>
-                            <th>Preço</th>
+                            <th>Preço Custo</th>
+                            <th>Preço Venda</th>
                             <th>Estoque</th>
                             <th>Código</th>
                             <th>Cód. Fornecedor</th>
@@ -630,13 +635,10 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="text-success">R$ {{ "%.2f"|format(produto.preco) }}</div>
-                                {% if produto.preco_custo and produto.preco_custo > 0 %}
-                                    <small class="text-muted">Custo: R$ {{ "%.2f"|format(produto.preco_custo) }}</small>
-                                    {% if produto.margem_lucro %}
-                                        <br><small class="text-muted">Margem: {{ "%.1f"|format(produto.margem_lucro) }}%</small>
-                                    {% endif %}
-                                {% endif %}
+                                <span class="text-info">R$ {{ "%.2f"|format(produto.preco / 2)|replace('.', ',') }}</span>
+                            </td>
+                            <td>
+                                <span class="text-success">R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</span>
                             </td>
                             <td>
                                 {{ produto.estoque }}

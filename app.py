@@ -958,29 +958,24 @@ def buscar_produto_route():
 @app.route('/api/produtos/buscar')
 @login_required
 def api_buscar_produtos():
-    """API avançada para buscar produtos com filtros"""
+    """API avançada para buscar produtos com filtros
+    Suporta busca com múltiplos termos separados por % ou espaço
+    Exemplo: 'PIVO%GOL' ou 'PIVO GOL' retorna produtos que contenham ambos os termos
+    """
     try:
-        termo = request.args.get('q', '').strip().lower()
+        termo = request.args.get('q', '').strip()
         categoria = request.args.get('categoria', '')
         
-        produtos = listar_produtos()
+        # Se não houver termo, retornar lista completa
+        if not termo:
+            produtos = listar_produtos()
+        else:
+            # Usar a função buscar_produto que já tem a lógica inteligente
+            produtos = buscar_produto(termo)
         
         # Filtrar por categoria se especificada
         if categoria and categoria != 'todas':
             produtos = [p for p in produtos if p.get('categoria') == categoria]
-        
-        # Filtrar por termo de busca se especificado
-        if termo:
-            produtos_filtrados = []
-            for produto in produtos:
-                if (termo in produto['nome'].lower() or 
-                    termo in str(produto['id']) or
-                    (produto.get('codigo_barras') and termo in produto['codigo_barras'].lower()) or
-                    (produto.get('codigo_fornecedor') and termo in produto['codigo_fornecedor'].lower()) or
-                    (produto.get('categoria') and termo in produto['categoria'].lower()) or
-                    (produto.get('descricao') and termo in produto['descricao'].lower())):
-                    produtos_filtrados.append(produto)
-            produtos = produtos_filtrados
         
         # Converter Decimals para float
         for produto in produtos:

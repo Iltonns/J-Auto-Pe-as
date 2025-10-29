@@ -1334,7 +1334,7 @@ def listar_produtos():
         produtos.append({
             'id': row[0],
             'nome': row[1],
-            'preco': row[2],
+            'preco': row[2] if row[2] is not None else 0,
             'estoque': row[3],
             'estoque_minimo': row[4],
             'codigo_barras': row[5],
@@ -1354,29 +1354,81 @@ def listar_produtos():
     return produtos
 
 def buscar_produto(termo_busca):
-    """Busca produto por nome, código de barras, código do fornecedor, marca ou ID"""
+    """Busca produto por nome, código de barras, código do fornecedor, marca ou ID
+    Suporta busca com múltiplos termos separados por % ou espaço
+    Exemplo: 'PIVO%GOL' ou 'PIVO GOL' retorna produtos que contenham ambos os termos
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
-        FROM produtos
-        WHERE ativo = TRUE AND (
-            nome LIKE %s OR 
-            codigo_barras = %s OR 
-            codigo_fornecedor LIKE %s OR
-            marca LIKE %s OR
-            CAST(id AS TEXT) = %s
-        )
-        LIMIT 10
-    ''', (f'%{termo_busca}%', termo_busca, f'%{termo_busca}%', f'%{termo_busca}%', termo_busca))
+    # Dividir o termo de busca em múltiplas palavras
+    # Substituir % por espaço e dividir
+    termo_limpo = termo_busca.replace('%', ' ').strip()
+    termos = [t.strip() for t in termo_limpo.split() if t.strip()]
+    
+    # Se não houver termos, retornar vazio
+    if not termos:
+        conn.close()
+        return []
+    
+    # Se houver apenas um termo, usar busca simples
+    if len(termos) == 1:
+        termo = termos[0]
+        cursor.execute('''
+            SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
+            FROM produtos
+            WHERE ativo = TRUE AND (
+                nome ILIKE %s OR 
+                codigo_barras = %s OR 
+                codigo_fornecedor ILIKE %s OR
+                marca ILIKE %s OR
+                categoria ILIKE %s OR
+                CAST(id AS TEXT) = %s
+            )
+            ORDER BY 
+                CASE 
+                    WHEN nome ILIKE %s THEN 1
+                    WHEN marca ILIKE %s THEN 2
+                    WHEN codigo_barras = %s THEN 3
+                    ELSE 4
+                END
+            LIMIT 50
+        ''', (f'%{termo}%', termo, f'%{termo}%', f'%{termo}%', f'%{termo}%', termo,
+              f'{termo}%', f'{termo}%', termo))
+    else:
+        # Busca com múltiplos termos - todos devem estar presentes
+        conditions = []
+        params = []
+        
+        for termo in termos:
+            # Para cada termo, verificar se está presente em qualquer campo
+            conditions.append('''(
+                nome ILIKE %s OR 
+                codigo_fornecedor ILIKE %s OR
+                marca ILIKE %s OR
+                categoria ILIKE %s
+            )''')
+            params.extend([f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%'])
+        
+        # Juntar todas as condições com AND (todos os termos devem estar presentes)
+        where_clause = ' AND '.join(conditions)
+        
+        query = f'''
+            SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
+            FROM produtos
+            WHERE ativo = TRUE AND ({where_clause})
+            ORDER BY nome
+            LIMIT 50
+        '''
+        
+        cursor.execute(query, params)
     
     produtos = []
     for row in cursor.fetchall():
         produtos.append({
             'id': row[0],
             'nome': row[1],
-            'preco': row[2],
+            'preco': row[2] if row[2] is not None else 0,
             'estoque': row[3],
             'codigo_barras': row[4],
             'codigo_fornecedor': row[5],
@@ -1408,7 +1460,7 @@ def obter_produto_por_id(produto_id):
         return {
             'id': row[0],
             'nome': row[1],
-            'preco': row[2],
+            'preco': row[2] if row[2] is not None else 0,
             'estoque': row[3],
             'estoque_minimo': row[4],
             'codigo_barras': row[5],
@@ -4053,22 +4105,30 @@ def gerar_relatorio_estoque():
         
         produtos = []
         valor_total_estoque = 0
+        valor_total_estoque_custo = 0
         produtos_sem_estoque = 0
         produtos_estoque_baixo = 0
         
         for row in cursor.fetchall():
+            preco_venda = row[4] if row[4] is not None else 0
+            preco_custo = preco_venda / 2  # Margem de 100%
+            valor_estoque_custo = row[2] * preco_custo  # estoque * preço de custo
+            
             produto = {
                 'nome': row[0],
                 'codigo': row[1],
                 'estoque': row[2],
                 'estoque_minimo': row[3],
-                'preco': row[4],
+                'preco': preco_venda,
+                'preco_custo': preco_custo,
                 'valor_estoque': row[5],
+                'valor_estoque_custo': valor_estoque_custo,
                 'categoria': row[6],
                 'status': row[7]
             }
             produtos.append(produto)
-            valor_total_estoque += row[5]
+            valor_total_estoque += row[5] if row[5] else 0
+            valor_total_estoque_custo += valor_estoque_custo
             
             if row[2] <= 0:
                 produtos_sem_estoque += 1
@@ -4105,6 +4165,7 @@ def gerar_relatorio_estoque():
             'categorias': categorias,
             'resumo': {
                 'valor_total_estoque': valor_total_estoque,
+                'valor_total_estoque_custo': valor_total_estoque_custo,
                 'total_produtos': len(produtos),
                 'produtos_sem_estoque': produtos_sem_estoque,
                 'produtos_estoque_baixo': produtos_estoque_baixo
@@ -4462,9 +4523,9 @@ def listar_produtos_por_fornecedor(fornecedor_id):
             produtos.append({
                 'id': row[0],
                 'nome': row[1],
-                'preco': row[2],
+                'preco': row[2] if row[2] is not None else 0,
                 'estoque': row[3],
-                'preco_custo': row[4],
+                'preco_custo': row[4] or 0,
                 'codigo_barras': row[5]
             })
         
