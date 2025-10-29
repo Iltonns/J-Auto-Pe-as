@@ -822,254 +822,55 @@ function consultarOrcamentos() {
     });
 }
 
-// Busca de produtos
+// Busca de produtos - DESABILITADA - TablePagination cuida disso agora
 let timeoutBusca = null;
 
+// A busca inteligente com múltiplos termos agora é gerenciada automaticamente pelo TablePagination
+// Não é necessário implementar busca manual aqui
 function buscarProdutos() {
-    const termo = document.getElementById('campoBusca').value.trim();
-    console.log('Iniciando busca para termo:', termo);
-    
-    // Mostrar loading
-    mostrarLoading(true);
-    
-    // Se termo vazio, mostrar todos os produtos
-    if (termo === '') {
-        const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
-        linhas.forEach(linha => {
-            linha.style.display = '';
-        });
-        // Atualizar contador
-        const contadorElement = document.getElementById('produtosVisiveisOrcamento');
-        if (contadorElement) {
-            contadorElement.textContent = linhas.length;
-        }
-        mostrarLoading(false);
-        return;
-    }
-    
-    // Busca AJAX
-    console.log('Fazendo busca AJAX para:', termo);
-    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
-        .then(response => {
-            console.log('Response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(produtos => {
-            console.log('Produtos encontrados:', produtos.length);
-            atualizarTabelaProdutos(produtos);
-            mostrarLoading(false);
-        })
-        .catch(error => {
-            console.error('Erro na busca AJAX:', error);
-            console.log('Usando busca local como fallback');
-            // Fallback para busca local
-            buscarProdutosLocal(termo);
-            mostrarLoading(false);
-        });
+    // Esta função foi mantida para compatibilidade, mas o TablePagination já cuida da busca
+    console.log('buscarProdutos() chamada - TablePagination já gerencia a busca automaticamente');
 }
 
+// mostrarLoading - mantida para compatibilidade mas não é mais usada
 function mostrarLoading(mostrar) {
-    const spinner = document.getElementById('loadingSpinner');
-    const texto = document.getElementById('btnBuscarTexto');
-    
-    if (mostrar) {
-        spinner.style.display = 'inline-block';
-        texto.textContent = 'Buscando...';
-    } else {
-        spinner.style.display = 'none';
-        texto.textContent = 'Busca Avançada';
-    }
+    // TablePagination gerencia o estado de loading automaticamente
+    console.log('mostrarLoading() chamada - não é mais necessária');
 }
 
+// atualizarTabelaProdutos - DESABILITADA - TablePagination cuida disso agora
+// Não é mais necessário atualizar manualmente a tabela
 function atualizarTabelaProdutos(produtos) {
-    const tbody = document.getElementById('tabelaProdutos');
-    tbody.innerHTML = '';
-    
-    produtos.forEach(produto => {
-        const preco = parseFloat(produto.preco) || 0;
-        const custoEstimado = preco / 2; // Margem de 100%
-        const estoque = produto.estoque || 0;
-        const estoqueMinimo = produto.estoque_minimo || 5;
-        
-        // Definir cor do texto para estoque
-        let estoqueClass = 'text-success';
-        if (estoque <= estoqueMinimo) {
-            estoqueClass = 'text-danger';
-        } else if (estoque <= estoqueMinimo * 2) {
-            estoqueClass = 'text-warning';
-        }
-        
-        const row = `
-            <tr class="produto-row">
-                <td>${produto.id}</td>
-                <td>
-                    ${produto.nome}
-                    ${produto.codigo_barras ? `<br><small class="text-muted"><i class="fas fa-barcode"></i> ${produto.codigo_barras}</small>` : ''}
-                </td>
-                <td>
-                    ${produto.marca ? `<span class="text-dark">${produto.marca}</span>` : '<small class="text-muted">-</small>'}
-                </td>
-                <td>
-                    ${produto.codigo_fornecedor ? `<span class="text-dark">${produto.codigo_fornecedor}</span>` : '<small class="text-muted">-</small>'}
-                </td>
-                <td>
-                    ${produto.categoria ? `<span class="text-dark">${produto.categoria}</span>` : '<small class="text-muted">-</small>'}
-                </td>
-                <td>
-                    <span class="${estoqueClass}">${estoque}</span>
-                </td>
-                <td>R$ ${custoEstimado.toFixed(2).replace('.', ',')}</td>
-                <td>R$ ${preco.toFixed(2).replace('.', ',')}</td>
-                <td>
-                    <button class="btn btn-sm btn-primary btn-add-item" 
-                            onclick="adicionarItem(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', ${preco}, ${estoque})"
-                            title="Adicionar ao orçamento">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
-        tbody.innerHTML += row;
-    });
-    
-    if (produtos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum produto encontrado</td></tr>';
-    }
-    
-    // Atualizar paginação após mudança na tabela
-    todasAsLinhasOrcamento = Array.from(document.querySelectorAll('#tabelaProdutos tr.produto-row'));
-    paginaAtualOrcamento = 1;
-    if (typeof atualizarPaginacaoOrcamento === 'function') {
-        atualizarPaginacaoOrcamento();
-    }
+    console.log('atualizarTabelaProdutos() chamada - não é mais necessária');
+    // TablePagination gerencia tudo automaticamente
 }
 
+// buscarProdutosLocal - DESABILITADA - TablePagination cuida disso agora
+// A busca inteligente com múltiplos termos já está implementada no pagination.js
 function buscarProdutosLocal(termo) {
-    console.log('Iniciando busca local para:', termo);
-    
-    // Dividir termo em múltiplas palavras (separadas por % ou espaço)
-    const termoLimpo = termo.replace(/%/g, ' ').trim();
-    const termos = termoLimpo.split(/\s+/).filter(t => t.length > 0).map(t => t.toLowerCase());
-    
-    const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
-    let visiveisCount = 0;
-    
-    console.log('Encontradas', linhas.length, 'linhas para filtrar');
-    console.log('Termos de busca:', termos);
-    
-    linhas.forEach((linha, index) => {
-        if (!linha.cells || linha.cells.length < 4) {
-            console.warn('Linha inválida encontrada:', index);
-            linha.style.display = 'none';
-            return;
-        }
-        
-        const codigo = linha.cells[0]?.textContent?.toLowerCase() || '';
-        const nome = linha.cells[1]?.textContent?.toLowerCase() || '';
-        const codigoFornecedor = linha.cells[2]?.textContent?.toLowerCase() || '';
-        const categoria = linha.cells[3]?.textContent?.toLowerCase() || '';
-        
-        // Combinar todos os campos em um único texto para busca
-        const textoCompleto = `${codigo} ${nome} ${codigoFornecedor} ${categoria}`;
-        
-        // Verificar se TODOS os termos estão presentes no texto
-        const match = termos.length === 0 || termos.every(termo => textoCompleto.includes(termo));
-        
-        if (match) {
-            linha.style.display = '';
-            visiveisCount++;
-        } else {
-            linha.style.display = 'none';
-        }
-        
-        if (index < 3) { // Log apenas os 3 primeiros para debug
-            console.log(`Linha ${index}:`, {codigo, nome, match, termos});
-        }
-    });
-    
-    console.log('Produtos visíveis após busca:', visiveisCount);
-    
-    // Atualizar contador
-    const contadorElement = document.getElementById('produtosVisiveisOrcamento');
-    if (contadorElement) {
-        contadorElement.textContent = visiveisCount;
-    }
-    
-    // Mostrar mensagem se nenhum resultado
-    if (visiveisCount === 0 && termo.length > 0) {
-        console.log('Nenhum produto encontrado para:', termo);
-        mostrarFeedback('Nenhum produto encontrado', 'info');
-    }
+    console.log('buscarProdutosLocal() chamada - TablePagination já gerencia a busca automaticamente');
+    // Não faz nada - TablePagination cuida de tudo
 }
 
-// Inicializar busca em tempo real
+// Inicializar busca em tempo real - DESABILITADA - TablePagination cuida de tudo
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM carregado, inicializando eventos');
     calcularTotal();
     
-    // Busca em tempo real
-    const campoBusca = document.getElementById('campoBusca');
-    if (campoBusca) {
-        console.log('Campo de busca encontrado, adicionando eventos');
-        
-        // Remover eventos anteriores para evitar duplicação
-        campoBusca.removeEventListener('input', handleBuscaInput);
-        campoBusca.removeEventListener('keypress', handleBuscaKeypress);
-        
-        // Adicionar eventos
-        campoBusca.addEventListener('input', handleBuscaInput);
-        campoBusca.addEventListener('keypress', handleBuscaKeypress);
-    } else {
-        console.error('Campo de busca não encontrado!');
-    }
-    
-    // Botão de busca
-    const btnBuscar = document.getElementById('btnBuscar');
-    if (btnBuscar) {
-        btnBuscar.removeEventListener('click', buscarProdutos);
-        btnBuscar.addEventListener('click', buscarProdutos);
-    }
+    // A busca é gerenciada automaticamente pelo TablePagination
+    // Não precisa mais de handlers manuais
     
     // Inicializar paginação de orçamentos
     inicializarPaginacaoOrcamento();
 });
 
-// Função separada para busca de input
+// Funções de busca desabilitadas - TablePagination cuida de tudo
 function handleBuscaInput() {
-    clearTimeout(timeoutBusca);
-    const termo = this.value.trim();
-    console.log('Input na busca:', termo);
-    
-    if (termo.length === 0) {
-        // Mostrar todos os produtos
-        const linhas = document.querySelectorAll('#tabelaProdutos tr.produto-row');
-        linhas.forEach(linha => {
-            linha.style.display = '';
-        });
-        // Atualizar contador
-        const contadorElement = document.getElementById('produtosVisiveisOrcamento');
-        if (contadorElement) {
-            contadorElement.textContent = linhas.length;
-        }
-    } else if (termo.length >= 1) {
-        // Busca local em tempo real
-        timeoutBusca = setTimeout(() => {
-            console.log('Executando busca local para:', termo);
-            buscarProdutosLocal(termo);
-        }, 300);
-    }
+    // TablePagination gerencia automaticamente
 }
 
-// Função separada para tecla Enter
 function handleBuscaKeypress(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        console.log('Enter pressionado, fazendo busca avançada');
-        buscarProdutos();
-    }
+    // TablePagination gerencia automaticamente
 }
 
 // Variáveis de paginação para orçamentos

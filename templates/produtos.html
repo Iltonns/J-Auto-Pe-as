@@ -495,7 +495,7 @@
                 <span class="input-group-text">
                     <i class="fas fa-search"></i>
                 </span>
-                <input type="text" id="searchInput" class="form-control" placeholder="Ex: PIVO%GOL ou AMORTECEDOR DIANTEIRO">
+                <input type="text" id="buscaProdutos" class="form-control" placeholder="Ex: PIVO%GOL ou AMORTECEDOR DIANTEIRO">
                 <span class="input-group-text" title="Use % ou espaço para buscar múltiplos termos">
                     <i class="fas fa-info-circle"></i>
                 </span>
@@ -1759,12 +1759,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Eventos dos filtros
         categoriaFilter.addEventListener('change', aplicarFiltros);
         statusFilter.addEventListener('change', aplicarFiltros);
-        
-        // Remover o event listener do searchInput antigo se existir
-        const searchInputAntigo = document.getElementById('searchInput');
-        if (searchInputAntigo) {
-            searchInputAntigo.style.display = 'none'; // Ocultar o campo de busca antigo
-        }
     }
 });
 

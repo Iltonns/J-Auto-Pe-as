@@ -101,15 +101,22 @@ class TablePagination {
     }
     
     performSearch() {
-        const searchTerm = this.$search.val().toLowerCase().trim();
+        const searchTerm = this.$search.val().trim();
         
         if (!searchTerm) {
             this.filteredRows = [...this.allRows];
         } else {
+            // Busca inteligente com múltiplos termos
+            // Dividir por % ou espaço
+            const termoLimpo = searchTerm.replace(/%/g, ' ').trim();
+            const termos = termoLimpo.split(/\s+/).filter(t => t.length > 0).map(t => t.toLowerCase());
+            
             this.filteredRows = this.allRows.filter(row => {
                 const $row = $(row);
                 const text = $row.text().toLowerCase();
-                return text.includes(searchTerm);
+                
+                // TODOS os termos devem estar presentes (lógica AND)
+                return termos.length === 0 || termos.every(termo => text.includes(termo));
             });
         }
         
