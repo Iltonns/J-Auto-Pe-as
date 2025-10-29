@@ -532,8 +532,8 @@
                                                     {% endif %}
                                                 </td>
                                                 <td>
-                                                    {% if conta.data_pagamento %}
-                                                        <span class="badge bg-success">{{ conta.data_pagamento.strftime('%d/%m/%Y') if conta.data_pagamento is not string else conta.data_pagamento }}</span>
+                                                    {% if conta.data_recebimento %}
+                                                        <span class="badge bg-success">{{ conta.data_recebimento.strftime('%d/%m/%Y') if conta.data_recebimento is not string else conta.data_recebimento }}</span>
                                                     {% else %}
                                                         <span class="text-muted">-</span>
                                                     {% endif %}

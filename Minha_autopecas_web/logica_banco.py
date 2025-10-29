@@ -4523,7 +4523,7 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
                 cr.descricao,
                 cr.valor,
                 cr.data_vencimento,
-                cr.data_pagamento,
+                cr.data_recebimento,
                 cr.status,
                 c.nome as cliente
             FROM contas_receber cr
@@ -4547,7 +4547,7 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
                 'descricao': row[1],
                 'valor': row[2],
                 'data_vencimento': row[3],
-                'data_pagamento': row[4],
+                'data_recebimento': row[4],
                 'status': row[5],
                 'cliente': row[6] or 'Cliente Avulso'
             })
