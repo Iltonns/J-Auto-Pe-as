@@ -4446,7 +4446,7 @@ def gerar_relatorio_estoque():
         return {'erro': str(e)}
 
 def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
-    """Gera relatório financeiro completo"""
+    """Gera relatório financeiro completo com detalhes de todas as movimentações"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -4485,7 +4485,7 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
             vendas_forma_pagamento.append(forma)
             total_vendas += row[2]
         
-        # Contas a receber
+        # Contas a receber RESUMO
         query_receber = '''
             SELECT 
                 status,
@@ -4503,7 +4503,7 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         query_receber += " GROUP BY status"
         
         cursor.execute(query_receber, params)
-        contas_receber = []
+        contas_receber_resumo = []
         total_a_receber = 0
         
         for row in cursor.fetchall():
@@ -4512,13 +4512,49 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
                 'quantidade': row[1],
                 'valor': row[2]
             }
-            contas_receber.append(conta)
+            contas_receber_resumo.append(conta)
             if row[0] == 'pendente':
                 total_a_receber += row[2]
         
-        # Contas a pagar
+        # Contas a receber DETALHADAS
+        query_receber_detalhado = '''
+            SELECT 
+                cr.id,
+                cr.descricao,
+                cr.valor,
+                cr.data_vencimento,
+                cr.data_pagamento,
+                cr.status,
+                c.nome as cliente
+            FROM contas_receber cr
+            LEFT JOIN clientes c ON cr.cliente_id = c.id
+            WHERE 1=1
+        '''
+        
+        if data_inicio:
+            query_receber_detalhado += " AND DATE(cr.data_vencimento) >= %s"
+        if data_fim:
+            query_receber_detalhado += " AND DATE(cr.data_vencimento) <= %s"
+        
+        query_receber_detalhado += " ORDER BY cr.data_vencimento DESC"
+        
+        cursor.execute(query_receber_detalhado, params)
+        contas_receber_detalhadas = []
+        
+        for row in cursor.fetchall():
+            contas_receber_detalhadas.append({
+                'id': row[0],
+                'descricao': row[1],
+                'valor': row[2],
+                'data_vencimento': row[3],
+                'data_pagamento': row[4],
+                'status': row[5],
+                'cliente': row[6] or 'Cliente Avulso'
+            })
+        
+        # Contas a pagar RESUMO
         cursor.execute(query_receber.replace('contas_receber', 'contas_pagar'), params)
-        contas_pagar = []
+        contas_pagar_resumo = []
         total_a_pagar = 0
         
         for row in cursor.fetchall():
@@ -4527,11 +4563,47 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
                 'quantidade': row[1],
                 'valor': row[2]
             }
-            contas_pagar.append(conta)
+            contas_pagar_resumo.append(conta)
             if row[0] == 'pendente':
                 total_a_pagar += row[2]
         
-        # Movimentações do caixa
+        # Contas a pagar DETALHADAS
+        query_pagar_detalhado = '''
+            SELECT 
+                cp.id,
+                cp.descricao,
+                cp.valor,
+                cp.data_vencimento,
+                cp.data_pagamento,
+                cp.status,
+                f.nome as fornecedor
+            FROM contas_pagar cp
+            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+            WHERE 1=1
+        '''
+        
+        if data_inicio:
+            query_pagar_detalhado += " AND DATE(cp.data_vencimento) >= %s"
+        if data_fim:
+            query_pagar_detalhado += " AND DATE(cp.data_vencimento) <= %s"
+        
+        query_pagar_detalhado += " ORDER BY cp.data_vencimento DESC"
+        
+        cursor.execute(query_pagar_detalhado, params)
+        contas_pagar_detalhadas = []
+        
+        for row in cursor.fetchall():
+            contas_pagar_detalhadas.append({
+                'id': row[0],
+                'descricao': row[1],
+                'valor': row[2],
+                'data_vencimento': row[3],
+                'data_pagamento': row[4],
+                'status': row[5],
+                'fornecedor': row[6] or 'Sem Fornecedor'
+            })
+        
+        # Movimentações do caixa RESUMO
         query_caixa = '''
             SELECT 
                 tipo,
@@ -4549,7 +4621,7 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
         query_caixa += " GROUP BY tipo"
         
         cursor.execute(query_caixa, params)
-        movimentacoes_caixa = []
+        movimentacoes_caixa_resumo = []
         
         for row in cursor.fetchall():
             movimento = {
@@ -4557,15 +4629,63 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
                 'quantidade': row[1],
                 'valor': row[2]
             }
-            movimentacoes_caixa.append(movimento)
+            movimentacoes_caixa_resumo.append(movimento)
+        
+        # Movimentações do caixa DETALHADAS
+        query_caixa_detalhado = '''
+            SELECT 
+                cm.id,
+                cm.tipo,
+                cm.categoria,
+                cm.descricao,
+                cm.valor,
+                cm.data_movimentacao,
+                cm.observacoes,
+                cm.venda_id,
+                cm.conta_pagar_id,
+                cm.conta_receber_id,
+                u.nome_completo,
+                u.username
+            FROM caixa_movimentacoes cm
+            JOIN usuarios u ON cm.usuario_id = u.id
+            WHERE 1=1
+        '''
+        
+        if data_inicio:
+            query_caixa_detalhado += " AND cm.data_movimentacao::date >= %s"
+        if data_fim:
+            query_caixa_detalhado += " AND cm.data_movimentacao::date <= %s"
+        
+        query_caixa_detalhado += " ORDER BY cm.data_movimentacao DESC"
+        
+        cursor.execute(query_caixa_detalhado, params)
+        movimentacoes_caixa_detalhadas = []
+        
+        for row in cursor.fetchall():
+            movimentacoes_caixa_detalhadas.append({
+                'id': row[0],
+                'tipo': row[1],
+                'categoria': row[2],
+                'descricao': row[3],
+                'valor': row[4],
+                'data_movimentacao': row[5],
+                'observacoes': row[6],
+                'venda_id': row[7],
+                'conta_pagar_id': row[8],
+                'conta_receber_id': row[9],
+                'usuario_nome': row[10] if row[10] else row[11]
+            })
         
         conn.close()
         
         return {
             'vendas_forma_pagamento': vendas_forma_pagamento,
-            'contas_receber': contas_receber,
-            'contas_pagar': contas_pagar,
-            'movimentacoes_caixa': movimentacoes_caixa,
+            'contas_receber': contas_receber_resumo,
+            'contas_receber_detalhadas': contas_receber_detalhadas,
+            'contas_pagar': contas_pagar_resumo,
+            'contas_pagar_detalhadas': contas_pagar_detalhadas,
+            'movimentacoes_caixa': movimentacoes_caixa_resumo,
+            'movimentacoes_caixa_detalhadas': movimentacoes_caixa_detalhadas,
             'resumo': {
                 'total_vendas': total_vendas,
                 'total_a_receber': total_a_receber,

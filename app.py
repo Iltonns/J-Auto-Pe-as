@@ -3178,9 +3178,9 @@ def criar_pdf_estoque(relatorio):
     return buffer
 
 def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
-    """Gera PDF do relatório financeiro"""
+    """Gera PDF do relatório financeiro com detalhes completos"""
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=40, rightMargin=40)
     styles = getSampleStyleSheet()
     story = []
     
@@ -3199,12 +3199,21 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
         textColor=colors.HexColor('#2962ff')
     )
     
-    story.append(Paragraph("RELATÓRIO FINANCEIRO", title_style))
+    subtitle_style = ParagraphStyle(
+        'SubtitleStyle',
+        parent=styles['Heading3'],
+        fontSize=12,
+        spaceAfter=10,
+        textColor=colors.HexColor('#1a237e'),
+        fontName='Helvetica-Bold'
+    )
+    
+    story.append(Paragraph("RELATÓRIO FINANCEIRO COMPLETO", title_style))
     
     if data_inicio and data_fim:
         periodo = f"Período: {data_inicio} a {data_fim}"
         story.append(Paragraph(periodo, styles['Normal']))
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 15))
     
     # Resumo - usar dados do resumo se disponível
     resumo = relatorio.get('resumo', {})
@@ -3213,129 +3222,217 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
     if relatorio.get('erro'):
         story.append(Paragraph(f"Erro ao gerar relatório: {relatorio['erro']}", styles['Normal']))
         story.append(Spacer(1, 20))
-        # Gerar PDF vazio com erro
         doc.build(story)
         buffer.seek(0)
         return buffer
     
+    total_vendas = resumo.get('total_vendas', 0)
     total_a_receber = resumo.get('total_a_receber', 0)
     total_a_pagar = resumo.get('total_a_pagar', 0)
     saldo_liquido = resumo.get('saldo_liquido', total_a_receber - total_a_pagar)
     
-    # Se não temos dados do resumo, calcular a partir das contas
-    if not resumo:
-        if relatorio.get('contas_receber'):
-            total_a_receber = sum(conta.get('valor', 0) for conta in relatorio['contas_receber'])
-        if relatorio.get('contas_pagar'):
-            total_a_pagar = sum(conta.get('valor', 0) for conta in relatorio['contas_pagar'])
-        saldo_liquido = total_a_receber - total_a_pagar
-    
+    # Resumo Geral
     resumo_data = [
         ['Indicador', 'Valor'],
+        ['Total em Vendas', f"R$ {total_vendas:.2f}"],
         ['Total a Receber', f"R$ {total_a_receber:.2f}"],
         ['Total a Pagar', f"R$ {total_a_pagar:.2f}"],
         ['Saldo Líquido', f"R$ {saldo_liquido:.2f}"]
     ]
     
-    resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
+    resumo_table = Table(resumo_data, colWidths=[3.5*inch, 2.5*inch])
     resumo_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
     ]))
     
     story.append(resumo_table)
-    story.append(Spacer(1, 30))
+    story.append(Spacer(1, 25))
     
-    # Contas a Receber
-    if relatorio.get('contas_receber'):
-        story.append(Paragraph("Contas a Receber", styles['Heading3']))
-        story.append(Spacer(1, 12))
+    # MOVIMENTAÇÕES DO CAIXA DETALHADAS
+    if relatorio.get('movimentacoes_caixa_detalhadas'):
+        story.append(Paragraph("MOVIMENTAÇÕES DO CAIXA - DETALHAMENTO COMPLETO", subtitle_style))
+        story.append(Spacer(1, 8))
         
-        receber_data = [['Data Vencimento', 'Descrição', 'Cliente', 'Valor', 'Status']]
+        mov_data = [['Data/Hora', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Usuário']]
         
-        for conta in relatorio['contas_receber']:
+        for mov in relatorio['movimentacoes_caixa_detalhadas']:
+            data_mov = mov.get('data_movimentacao', '')
+            if isinstance(data_mov, str):
+                data_mov_str = data_mov
+            else:
+                data_mov_str = data_mov.strftime('%d/%m/%Y %H:%M') if data_mov else '-'
+            
+            tipo_str = '↑ Entrada' if mov.get('tipo') == 'entrada' else '↓ Saída'
+            categoria_str = str(mov.get('categoria', ''))[:15]
+            descricao_str = str(mov.get('descricao', ''))[:30]
+            
+            # Adicionar informações de link se existir
+            if mov.get('venda_id'):
+                descricao_str += f" (V#{mov['venda_id']})"
+            elif mov.get('conta_pagar_id'):
+                descricao_str += f" (CP#{mov['conta_pagar_id']})"
+            elif mov.get('conta_receber_id'):
+                descricao_str += f" (CR#{mov['conta_receber_id']})"
+            
+            valor = mov.get('valor', 0)
+            usuario_str = str(mov.get('usuario_nome', ''))[:15]
+            
+            mov_data.append([
+                data_mov_str,
+                tipo_str,
+                categoria_str,
+                descricao_str,
+                f"R$ {valor:.2f}",
+                usuario_str
+            ])
+        
+        mov_table = Table(mov_data, colWidths=[1.1*inch, 0.8*inch, 1*inch, 2*inch, 0.9*inch, 1*inch])
+        mov_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#e3f2fd')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+        ]))
+        
+        story.append(mov_table)
+        story.append(Spacer(1, 20))
+    
+    # CONTAS A RECEBER DETALHADAS
+    if relatorio.get('contas_receber_detalhadas'):
+        story.append(Paragraph("CONTAS A RECEBER - DETALHAMENTO COMPLETO", subtitle_style))
+        story.append(Spacer(1, 8))
+        
+        receber_data = [['ID', 'Vencimento', 'Pagamento', 'Descrição', 'Cliente', 'Valor', 'Status']]
+        
+        for conta in relatorio['contas_receber_detalhadas']:
+            id_str = f"#{conta.get('id', '')}"
+            
             data_venc = conta.get('data_vencimento', '')
             if isinstance(data_venc, str):
                 data_venc_str = data_venc
             else:
-                data_venc_str = data_venc.strftime('%d/%m/%Y') if data_venc else ''
+                data_venc_str = data_venc.strftime('%d/%m/%Y') if data_venc else '-'
+            
+            data_pag = conta.get('data_pagamento', '')
+            if isinstance(data_pag, str):
+                data_pag_str = data_pag if data_pag else '-'
+            else:
+                data_pag_str = data_pag.strftime('%d/%m/%Y') if data_pag else '-'
+            
+            descricao_str = str(conta.get('descricao', ''))[:20]
+            cliente_str = str(conta.get('cliente', ''))[:15]
+            valor = conta.get('valor', 0)
+            status_str = str(conta.get('status', '')).title()
             
             receber_data.append([
+                id_str,
                 data_venc_str,
-                str(conta.get('descricao', ''))[:25],
-                str(conta.get('cliente', ''))[:20],
-                f"R$ {conta.get('valor', 0):.2f}",
-                str(conta.get('status', ''))
+                data_pag_str,
+                descricao_str,
+                cliente_str,
+                f"R$ {valor:.2f}",
+                status_str
             ])
         
-        receber_table = Table(receber_data, colWidths=[1.2*inch, 2*inch, 1.5*inch, 1*inch, 1*inch])
+        receber_table = Table(receber_data, colWidths=[0.5*inch, 1*inch, 1*inch, 1.5*inch, 1.3*inch, 0.9*inch, 0.8*inch])
         receber_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#28a745')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
             ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#d4edda')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
         ]))
         
         story.append(receber_table)
         story.append(Spacer(1, 20))
     
-    # Contas a Pagar
-    if relatorio.get('contas_pagar'):
-        story.append(Paragraph("Contas a Pagar", styles['Heading3']))
-        story.append(Spacer(1, 12))
+    # CONTAS A PAGAR DETALHADAS
+    if relatorio.get('contas_pagar_detalhadas'):
+        story.append(Paragraph("CONTAS A PAGAR - DETALHAMENTO COMPLETO", subtitle_style))
+        story.append(Spacer(1, 8))
         
-        pagar_data = [['Data Vencimento', 'Descrição', 'Fornecedor', 'Valor', 'Status']]
+        pagar_data = [['ID', 'Vencimento', 'Pagamento', 'Descrição', 'Fornecedor', 'Valor', 'Status']]
         
-        for conta in relatorio['contas_pagar']:
+        for conta in relatorio['contas_pagar_detalhadas']:
+            id_str = f"#{conta.get('id', '')}"
+            
             data_venc = conta.get('data_vencimento', '')
             if isinstance(data_venc, str):
                 data_venc_str = data_venc
             else:
-                data_venc_str = data_venc.strftime('%d/%m/%Y') if data_venc else ''
+                data_venc_str = data_venc.strftime('%d/%m/%Y') if data_venc else '-'
+            
+            data_pag = conta.get('data_pagamento', '')
+            if isinstance(data_pag, str):
+                data_pag_str = data_pag if data_pag else '-'
+            else:
+                data_pag_str = data_pag.strftime('%d/%m/%Y') if data_pag else '-'
+            
+            descricao_str = str(conta.get('descricao', ''))[:20]
+            fornecedor_str = str(conta.get('fornecedor', ''))[:15]
+            valor = conta.get('valor', 0)
+            status_str = str(conta.get('status', '')).title()
             
             pagar_data.append([
+                id_str,
                 data_venc_str,
-                str(conta.get('descricao', ''))[:25],
-                str(conta.get('fornecedor', ''))[:20],
-                f"R$ {conta.get('valor', 0):.2f}",
-                str(conta.get('status', ''))
+                data_pag_str,
+                descricao_str,
+                fornecedor_str,
+                f"R$ {valor:.2f}",
+                status_str
             ])
         
-        pagar_table = Table(pagar_data, colWidths=[1.2*inch, 2*inch, 1.5*inch, 1*inch, 1*inch])
+        pagar_table = Table(pagar_data, colWidths=[0.5*inch, 1*inch, 1*inch, 1.5*inch, 1.3*inch, 0.9*inch, 0.8*inch])
         pagar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc3545')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
             ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8d7da')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
         ]))
         
         story.append(pagar_table)
+        story.append(Spacer(1, 10))
     
     # Adicionar rodapé
     def add_page_number(canvas, doc):
         canvas.saveState()
         rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(40, 25, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 40, 25, f"Página {canvas.getPageNumber()}")
         canvas.restoreState()
     
     doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
