@@ -314,9 +314,9 @@
                             <button class="btn btn-sm btn-success" onclick="exportarCSV()">
                                 <i class="fas fa-file-csv"></i> Exportar CSV
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="exportarPDFEstoque()">
+                            <a href="{{ url_for('exportar_estoque_pdf') }}" class="btn btn-sm btn-danger" target="_blank">
                                 <i class="fas fa-file-pdf"></i> Exportar PDF
-                            </button>
+                            </a>
                             <button class="btn btn-sm btn-secondary" onclick="window.print()">
                                 <i class="fas fa-print"></i> Imprimir
                             </button>
@@ -545,8 +545,7 @@ function exportarPDFEstoque() {
         console.error('Erro:', error);
     }
 }
-
-<script>
+// ...existing code...
 function filtrarPor(tipo) {
     const tabela = document.getElementById('tabelaEstoque').getElementsByTagName('tbody')[0];
     const linhas = tabela.getElementsByTagName('tr');
