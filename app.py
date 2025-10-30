@@ -929,6 +929,9 @@ def produtos_fornecedor(id):
 # PRODUTOS
 # === ROTAS DE PRODUTOS ===
 
+# app.py
+
+# ... (Linha 603)
 @app.route('/produtos')
 @login_required
 def produtos():
@@ -936,11 +939,15 @@ def produtos():
     try:
         produtos_lista = listar_produtos()
         fornecedores_lista = obter_fornecedores_para_select()
-        return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista)
+        # Novo: Obter estatísticas para o card
+        estatisticas = obter_estatisticas_dashboard()
+        return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista, estatisticas=estatisticas)
     except Exception as e:
         flash(f'Erro ao carregar produtos: {str(e)}', 'error')
-        return render_template('produtos.html', produtos=[], fornecedores=[])
-
+        # Passar estatísticas de fallback em caso de erro
+        return render_template('produtos.html', produtos=[], fornecedores=[], estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0})
+    
+    
 @app.route('/produtos/buscar')
 @login_required
 def buscar_produto_route():
@@ -3068,10 +3075,12 @@ def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None,
     buffer.seek(0)
     return buffer
 
+
 def criar_pdf_estoque(relatorio):
-    """Gera PDF do relatório de estoque"""
+    """Gera PDF do relatório de estoque com layout padronizado."""
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
+    # Usar A4, mas definir margens
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=40, rightMargin=40)
     styles = getSampleStyleSheet()
     story = []
     
@@ -3081,93 +3090,133 @@ def criar_pdf_estoque(relatorio):
     # Cabeçalho da empresa
     story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
     
+    # Configurar estilos (Laranja de Alerta para Estoque)
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading2'],
         fontSize=16,
         spaceAfter=20,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
+        textColor=colors.HexColor('#F57C00')
     )
     
-    story.append(Paragraph("RELATÓRIO DE ESTOQUE", title_style))
-    story.append(Spacer(1, 20))
+    subtitle_style = ParagraphStyle(
+        'SubtitleStyle',
+        parent=styles['Heading3'],
+        fontSize=12,
+        spaceAfter=10,
+        textColor=colors.HexColor('#1a237e'),
+        fontName='Helvetica-Bold'
+    )
+    
+    # Título do relatório
+    story.append(Paragraph("RELATÓRIO COMPLETO DE ESTOQUE", title_style))
     
     # Verificar se há erro no relatório
     if relatorio.get('erro'):
         story.append(Paragraph(f"Erro ao gerar relatório: {relatorio['erro']}", styles['Normal']))
-    else:
-        # Resumo - usar dados do resumo se disponível, senão calcular
-        resumo = relatorio.get('resumo', {})
-        total_produtos = resumo.get('total_produtos', len(relatorio.get('produtos', [])))
-        produtos_sem_estoque = resumo.get('produtos_sem_estoque', 0)
-        produtos_estoque_baixo = resumo.get('produtos_estoque_baixo', 0)
-        valor_total_estoque = resumo.get('valor_total_estoque', 0)
+        doc.build(story)
+        buffer.seek(0)
+        return buffer
+    
+    # Resumo Geral
+    resumo = relatorio.get('resumo', {})
+    
+    story.append(Paragraph("RESUMO DE INDICADORES", subtitle_style))
+    
+    # Usar o novo nome da variável no resumo_data
+    resumo_data = [
+        ['Indicador', 'Valor'],
+        ['Total de Produtos Cadastrados', str(resumo.get('total_produtos', 0))],
+        ['Produtos Sem Estoque (0 un.)', str(resumo.get('produtos_sem_estoque', 0))],
+        ['Produtos em Estoque Baixo', str(resumo.get('produtos_estoque_baixo', 0))],
+        ['Valor Total do Estoque (Venda)', f"R$ {resumo.get('valor_total_estoque', 0):,.2f}"],
+        ['Valor Total do Estoque (Custo)', f"R$ {resumo.get('valor_total_estoque_custo', 0):,.2f}"]
+    ]
+    
+    resumo_table = Table(resumo_data, colWidths=[3*inch, 2.5*inch])
+    resumo_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F57C00')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#fff3e0')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+    ]))
+    
+    story.append(resumo_table)
+    story.append(Spacer(1, 20))
+    
+    # Tabela Detalhada de Produtos
+    if relatorio.get('produtos'):
+        story.append(Paragraph("PRODUTOS DETALHADOS", subtitle_style))
+        story.append(Spacer(1, 8))
         
-        # Se não temos dados do resumo, calcular a partir dos produtos
-        if not resumo and relatorio.get('produtos'):
-            valor_total_estoque = sum(produto.get('valor_estoque', produto.get('preco', 0) * produto.get('estoque', 0)) 
-                                    for produto in relatorio['produtos'])
-            produtos_sem_estoque = sum(1 for produto in relatorio['produtos'] 
-                                     if produto.get('estoque', 0) <= 0)
-            produtos_estoque_baixo = sum(1 for produto in relatorio['produtos'] 
-                                       if produto.get('status') == 'Estoque Baixo')
-        
-        resumo_data = [
-            ['Indicador', 'Valor'],
-            ['Total de Produtos', str(total_produtos)],
-            ['Produtos em Estoque', str(total_produtos - produtos_sem_estoque)],
-            ['Produtos em Falta', str(produtos_sem_estoque)],
-            ['Valor Total em Estoque', f"R$ {valor_total_estoque:.2f}"]
+        produtos_data = [
+            ['Código', 'Produto', 'Qtd', 'Mínimo', 'Custo', 'Venda', 'Valor Estoque', 'Status']
         ]
         
-        resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
-        resumo_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+        for produto in relatorio['produtos']:
+            status_text = produto.get('status', 'N/A')
+            status_color = colors.HexColor('#2e7d32')
+            if status_text == 'Sem Estoque':
+                status_color = colors.HexColor('#d32f2f')
+            elif status_text == 'Estoque Baixo':
+                status_color = colors.HexColor('#f57c00')
+
+            # Usar Paragraph para formatar texto e cor na célula
+            status_paragrafo = Paragraph(f"<font color='{status_color.rgb()}'><b>{status_text}</b></font>", styles['Normal'])
+            
+            produtos_data.append([
+                str(produto.get('codigo', produto.get('codigo_barras', '-')))[:15],
+                # Detalhe do produto na mesma célula, com quebra de linha para categoria
+                str(produto.get('nome', ''))[:20] + (f"<br/><font size='5'>Cat: {str(produto.get('categoria', ''))[:15]}</font>" if produto.get('categoria') else ""),
+                str(produto.get('estoque', 0)),
+                str(produto.get('estoque_minimo', 1)),
+                f"R$ {produto.get('preco_custo', 0):.2f}",
+                f"R$ {produto.get('preco', 0):.2f}",
+                f"R$ {produto.get('valor_estoque', 0):.2f}",
+                status_paragrafo
+            ])
+        
+        # Ajuste de colunas para o novo layout
+        produtos_table = Table(produtos_data, colWidths=[0.8*inch, 1.8*inch, 0.4*inch, 0.5*inch, 0.8*inch, 0.8*inch, 1*inch, 0.8*inch])
+        produtos_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 1), (1, -1), 'LEFT'), # Nome do Produto à esquerda
+            ('ALIGN', (4, 1), (-2, -1), 'RIGHT'), # Colunas de valores à direita
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#e3f2fd')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
         ]))
         
-        story.append(resumo_table)
-        story.append(Spacer(1, 30))
-        
-        # Produtos
-        if relatorio.get('produtos'):
-            story.append(Paragraph("Produtos Detalhados", styles['Heading3']))
-            story.append(Spacer(1, 12))
-            
-            produtos_data = [['Código', 'Nome', 'Categoria', 'Estoque', 'Preço', 'Valor Total']]
-            
-            for produto in relatorio['produtos']:
-                produtos_data.append([
-                    str(produto.get('codigo', produto.get('codigo_barras', ''))),
-                    str(produto.get('nome', ''))[:25],
-                    str(produto.get('categoria', ''))[:15],
-                    str(produto.get('estoque', 0)),
-                    f"R$ {produto.get('preco', 0):.2f}",
-                    f"R$ {produto.get('valor_estoque', produto.get('preco', 0) * produto.get('estoque', 0)):.2f}"
-                ])
-            
-            produtos_table = Table(produtos_data, colWidths=[1*inch, 2*inch, 1.2*inch, 0.8*inch, 1*inch, 1.2*inch])
-            produtos_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('FONTSIZE', (0, 1), (-1, -1), 7),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-            ]))
-            
-            story.append(produtos_table)
+        story.append(produtos_table)
+    
+    # Adicionar rodapé
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        rodape = criar_rodape_empresa(doc, config_empresa)
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(40, 25, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 40, 25, f"Página {canvas.getPageNumber()}")
+        canvas.restoreState()
+    
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    buffer.seek(0)
+    return buffer
     
     # Adicionar rodapé
     def add_page_number(canvas, doc):

@@ -3078,7 +3078,7 @@ def obter_estatisticas_dashboard():
     valor_estoque = cursor.fetchone()[0] or 0
     
     # Produtos com estoque baixo (estoque menor ou igual a 1)
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= 1")
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo")
     produtos_estoque_baixo = cursor.fetchone()[0]
 
     # Produtos sem estoque (estoque igual a 0)
@@ -3166,7 +3166,7 @@ def produtos_estoque_baixo():
     cursor.execute('''
         SELECT id, nome, estoque, estoque_minimo
         FROM produtos
-        WHERE ativo = TRUE AND estoque <= estoque_minimo
+        WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo
         ORDER BY estoque
     ''')
     

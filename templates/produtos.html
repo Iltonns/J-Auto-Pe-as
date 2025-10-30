@@ -556,9 +556,9 @@
                     <i class="fas fa-exclamation-triangle"></i>
                 </div>
                 <div class="card-number" id="estoqueBaixo">
-                    {{ produtos|selectattr('estoque', 'lt', produtos[0].estoque_minimo if produtos else 1)|list|length }}
+                    {{ estatisticas.produtos_estoque_baixo or 0 }}
                 </div>
-                <div class="card-label" title="Produtos com estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo (≤ 1 unidade)</div>
+                <div class="card-label" title="Produtos com estoque menor ou igual ao estoque mínimo, mas com estoque atual > 0">Estoque Baixo</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -569,7 +569,7 @@
                 <div class="card-number" id="semEstoque">
                     {{ produtos|selectattr('estoque', 'eq', 0)|list|length }}
                 </div>
-                <div class="card-label" title="Produtos com estoque igual a 0 unidade">Sem Estoque (0 unidade)</div>
+                <div class="card-label" title="Produtos com estoque igual a 0 unidade">Sem Estoque</div>
             </div>
         </div>
     </div>
@@ -667,7 +667,7 @@
                                 {% if produto.estoque > produto.estoque_minimo %}
                                     <span class="status-disponivel">Disponível</span>
                                 {% elif produto.estoque > 0 %}
-                                    <span class="status-baixo" title="Estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo (≤ 1)</span>
+                                    <span class="status-baixo" title="Estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo</span>
                                 {% else %}
                                     <span class="status-indisponivel">Indisponível</span>
                                 {% endif %}
