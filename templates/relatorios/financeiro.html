@@ -351,20 +351,20 @@
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                    <div class="card bg-danger text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_pago|default(0)) }}</h4>
-                                    <p class="mb-0">Valor Pago</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-money-bill-wave fa-2x"></i>
-                                </div>
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_pago) }}</h4>
+                                <p class="mb-0">Total Pago</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-money-bill-wave fa-2x"></i>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
                 <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                     <div class="card {% if relatorio.resumo.saldo_liquido >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
                         <div class="card-body">
