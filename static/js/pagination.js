@@ -45,6 +45,14 @@ class TablePagination {
         this.$nextBtn = $(`#${this.nextBtnId}`);
         this.$paginationControls = $(`#${this.paginationControlsId}`);
         this.$pageInfo = $(`#${this.pageInfoId}`);
+        
+        // Garantir que o select tenha o valor correto
+        if (this.$itemsPerPage.length) {
+            const currentVal = this.$itemsPerPage.val();
+            if (currentVal === 'all') {
+                this.$itemsPerPage.val(this.itemsPerPage.toString());
+            }
+        }
     }
     
     bindEvents() {
@@ -74,23 +82,6 @@ class TablePagination {
             if (this.currentPage < totalPages) {
                 this.currentPage++;
                 this.updatePagination();
-            }
-        });
-        
-        // Teclas de navegação
-        $(document).on('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            
-            const totalPages = Math.ceil(this.filteredRows.length / this.itemsPerPage);
-            
-            if (e.key === 'ArrowLeft' && this.currentPage > 1) {
-                this.currentPage--;
-                this.updatePagination();
-                e.preventDefault();
-            } else if (e.key === 'ArrowRight' && this.currentPage < totalPages) {
-                this.currentPage++;
-                this.updatePagination();
-                e.preventDefault();
             }
         });
     }

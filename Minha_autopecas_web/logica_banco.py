@@ -2540,21 +2540,26 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     
     params = [status]
     
+    # Para contas pagas, usar data_pagamento; para pendentes, usar data_vencimento
+    campo_data = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
+    
     if filtro == 'hoje':
-        base_query += " AND cp.data_vencimento::date = CURRENT_DATE"
+        base_query += f" AND {campo_data}::date = CURRENT_DATE"
     elif filtro == 'atrasadas':
-        base_query += " AND cp.data_vencimento::date < CURRENT_DATE"
+        base_query += f" AND {campo_data}::date < CURRENT_DATE"
     elif filtro == 'futuras':
-        base_query += " AND cp.data_vencimento::date > CURRENT_DATE"
+        base_query += f" AND {campo_data}::date > CURRENT_DATE"
     elif filtro == 'proximos_7_dias':
-        base_query += " AND cp.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
+        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
     elif filtro == 'proximos_30_dias':
-        base_query += " AND cp.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
+        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND cp.data_vencimento::date BETWEEN %s AND %s"
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
-    base_query += " ORDER BY cp.data_vencimento"
+    # Ordenar por data_pagamento se estiver consultando contas pagas
+    campo_ordenacao = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
+    base_query += f" ORDER BY {campo_ordenacao}"
     
     cursor.execute(base_query, params)
     
@@ -2816,21 +2821,26 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     
     params = [status]
     
+    # Para contas recebidas, usar data_recebimento; para pendentes, usar data_vencimento
+    campo_data = 'cr.data_recebimento' if status == 'recebido' else 'cr.data_vencimento'
+    
     if filtro == 'hoje':
-        base_query += " AND cr.data_vencimento::date = CURRENT_DATE"
+        base_query += f" AND {campo_data}::date = CURRENT_DATE"
     elif filtro == 'atrasadas':
-        base_query += " AND cr.data_vencimento::date < CURRENT_DATE"
+        base_query += f" AND {campo_data}::date < CURRENT_DATE"
     elif filtro == 'futuras':
-        base_query += " AND cr.data_vencimento::date > CURRENT_DATE"
+        base_query += f" AND {campo_data}::date > CURRENT_DATE"
     elif filtro == 'proximos_7_dias':
-        base_query += " AND cr.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
+        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
     elif filtro == 'proximos_30_dias':
-        base_query += " AND cr.data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
+        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
     elif filtro == 'personalizado' and data_inicio and data_fim:
-        base_query += " AND cr.data_vencimento::date BETWEEN %s AND %s"
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
-    base_query += " ORDER BY cr.data_vencimento"
+    # Ordenar por data_recebimento se estiver consultando contas recebidas
+    campo_ordenacao = 'cr.data_recebimento' if status == 'recebido' else 'cr.data_vencimento'
+    base_query += f" ORDER BY {campo_ordenacao}"
     
     cursor.execute(base_query, params)
     

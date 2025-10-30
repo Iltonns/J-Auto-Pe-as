@@ -3,10 +3,119 @@
 {% block title %}Produtos Mais Vendidos - Sistema de Autopeças{% endblock %}
 {% block page_title %}Produtos Mais Vendidos{% endblock %}
 
+{% block extra_css %}
+<style>
+.print-only { display: none; }
+
+@media print {
+    .no-print, nav, .sidebar, .top-navbar, .btn, button, .export-buttons, .form-select, .input-group, hr.section-divider { display: none !important; }
+    .container-fluid { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+    .print-header, .stats-for-print { display: block !important; page-break-inside: avoid; margin-bottom: 20px !important; }
+    .print-only { display: table-cell !important; }
+    .table { font-size: 8px !important; page-break-inside: auto; width: 100% !important; table-layout: auto; }
+    .table th, .table td { padding: 5px 3px !important; font-size: 8px !important; vertical-align: middle !important; }
+    .table th { background-color: #28a745 !important; color: white !important; font-weight: bold !important; }
+    .table td.print-only { white-space: normal !important; word-wrap: break-word !important; }
+    .table td:not(.print-only) { white-space: nowrap !important; }
+    .table tr { page-break-inside: avoid; page-break-after: auto; }
+    .table thead { display: table-header-group; }
+    .card { border: none !important; box-shadow: none !important; }
+}
+
+#contentToPrint { background: white; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <!-- Filtros -->
+<div class="container-fluid" id="contentToPrint">
+    <!-- Cabeçalho para Impressão/PDF -->
+    <div class="print-header" style="display: none;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 0 0 25%; text-align: left;">
+                {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
+                {% else %}
+                    <div style="width: 150px; height: 80px; background: #28a745; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <i class="fas fa-building fa-3x"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
+                <h2 style="color: #28a745; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
+                </h2>
+                <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;">Tel: {{ configuracoes_empresa.telefone if configuracoes_empresa and configuracoes_empresa.telefone else '(98) 98463-8495' }} | Email: {{ configuracoes_empresa.email if configuracoes_empresa and configuracoes_empresa.email else 'fg_autopecas@hotmail.com' }}</p>
+            </div>
+            <div style="flex: 0 0 25%; text-align: right;">
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Data Emissão:</strong> {{ now().strftime('%d/%m/%Y %H:%M') if now else '' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Relatório:</strong> Produtos Mais Vendidos</p>
+                {% if data_inicio and data_fim %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Período:</strong> {{ data_inicio }} a {{ data_fim }}</p>
+                {% else %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Período:</strong> Todas as datas</p>
+                {% endif %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ relatorio.produtos|length if relatorio.produtos else 0 }}</p>
+            </div>
+        </div>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #28a745;">
+        <h3 style="text-align: center; color: #28a745; font-size: 18px; font-weight: bold; margin: 15px 0;">RANKING DE PRODUTOS MAIS VENDIDOS</h3>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+            <p style="margin: 0; font-size: 10px; text-align: center;">
+                <strong>Top:</strong> {{ limite }} produtos | 
+                <strong>Total Vendido:</strong> {{ relatorio.produtos|sum(attribute='quantidade_vendida') if relatorio.produtos else 0 }} unidades | 
+                <strong>Valor Total:</strong> R$ {{ "%.2f"|format(relatorio.produtos|sum(attribute='valor_total')) if relatorio.produtos else 0 }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Resumo para PDF -->
+    <div class="stats-for-print" style="display: none;">
+        <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <h4 style="margin: 0; font-size: 16px; text-align: center;">
+                <i class="fas fa-trophy"></i> TOP {{ limite }} PRODUTOS MAIS VENDIDOS
+            </h4>
+        </div>
+    </div>
+
+    <!-- Cabeçalho da Empresa (Visível na Tela) -->
+    <div class="card mb-4 no-print">
+        <div class="card-body" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%); color: white;">
+            <div class="row align-items-center">
+                <div class="col-md-2 text-center">
+                    {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                        <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
+                    {% else %}
+                        <div style="width: 100px; height: 100px; background: white; color: #28a745; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                            <i class="fas fa-building fa-3x"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-7">
+                    <h3 class="mb-2">{{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}</h3>
+                    {% if configuracoes_empresa %}
+                        <p class="mb-1"><i class="fas fa-map-marker-alt"></i> {{ configuracoes_empresa.endereco }}</p>
+                        <p class="mb-1">
+                            <i class="fas fa-phone"></i> {{ configuracoes_empresa.telefone }}
+                            <span class="ms-3"><i class="fas fa-envelope"></i> {{ configuracoes_empresa.email }}</span>
+                        </p>
+                        {% if configuracoes_empresa.cnpj %}
+                            <p class="mb-0"><i class="fas fa-id-card"></i> CNPJ: {{ configuracoes_empresa.cnpj }}</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="col-md-3 text-end">
+                    <h4 class="mb-2"><i class="fas fa-trophy"></i> Produtos Mais Vendidos</h4>
+                    <p class="mb-1"><i class="fas fa-calendar"></i> {{ now().strftime('%d/%m/%Y') if now else '' }}</p>
+                    <p class="mb-0"><i class="fas fa-clock"></i> {{ now().strftime('%H:%M') if now else '' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <!-- Filtros -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -58,10 +167,12 @@
                         <button class="btn btn-sm btn-success" onclick="exportarCSV()">
                             <i class="fas fa-file-csv"></i> Exportar CSV
                         </button>
-                        <a href="{{ url_for('exportar_produtos_mais_vendidos_pdf', data_inicio=data_inicio, data_fim=data_fim, limite=limite) }}" 
-                           class="btn btn-sm btn-danger">
+                        <button class="btn btn-sm btn-danger" onclick="exportarPDFRelatorio()">
                             <i class="fas fa-file-pdf"></i> Exportar PDF
-                        </a>
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="window.print()">
+                            <i class="fas fa-print"></i> Imprimir
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -97,28 +208,40 @@
                                         <th>Posição</th>
                                         <th>Código</th>
                                         <th>Produto</th>
+                                        <th class="print-only">Categoria</th>
                                         <th>Qtd. Vendida</th>
                                         <th>Valor Total</th>
                                         <th>Preço Médio</th>
                                         <th>Nº de Vendas</th>
+                                        <th class="print-only">% do Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for produto in relatorio.produtos %}
                                         <tr>
                                             <td>
-                                                <span class="badge {% if loop.index <= 3 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                                <span class="badge {% if loop.index <= 3 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
                                                     {{ loop.index }}º
                                                 </span>
                                             </td>
                                             <td>{{ produto.codigo }}</td>
-                                            <td>{{ produto.nome }}</td>
-                                            <td>
-                                                <strong>{{ produto.quantidade_vendida }}</strong>
+                                            <td><strong>{{ produto.nome }}</strong></td>
+                                            <td class="print-only" style="font-size: 8px;">
+                                                {{ produto.categoria or 'N/A' }}
                                             </td>
-                                            <td>R$ {{ "%.2f"|format(produto.valor_total) }}</td>
+                                            <td>
+                                                <strong style="color: #28a745;">{{ produto.quantidade_vendida }}</strong>
+                                            </td>
+                                            <td><strong>R$ {{ "%.2f"|format(produto.valor_total) }}</strong></td>
                                             <td>R$ {{ "%.2f"|format(produto.preco_medio) }}</td>
                                             <td>{{ produto.numero_vendas }}</td>
+                                            <td class="print-only" style="font-size: 8px;">
+                                                {% if relatorio.produtos[0].quantidade_vendida > 0 %}
+                                                    {{ "%.1f"|format((produto.quantidade_vendida / relatorio.produtos[0].quantidade_vendida * 100)) }}%
+                                                {% else %}
+                                                    0%
+                                                {% endif %}
+                                            </td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
@@ -176,12 +299,103 @@
                 </div>
             </div>
         {% endif %}
+        
+        <!-- Informações Adicionais para PDF -->
+        <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                <h5 style="color: #28a745; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+                    <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO
+                </h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
+                    <div>
+                        <p style="margin: 3px 0;"><strong>• Top Produtos:</strong> {{ limite }}</p>
+                        {% if data_inicio and data_fim %}
+                        <p style="margin: 3px 0;"><strong>• Período:</strong> {{ data_inicio }} a {{ data_fim }}</p>
+                        {% endif %}
+                        <p style="margin: 3px 0;"><strong>• Total de Produtos Listados:</strong> {{ relatorio.produtos|length if relatorio.produtos else 0 }}</p>
+                    </div>
+                    <div>
+                        <p style="margin: 3px 0;"><strong>• Produto Mais Vendido:</strong> {{ relatorio.produtos[0].nome if relatorio.produtos else 'N/A' }}</p>
+                        <p style="margin: 3px 0;"><strong>• Maior Qtd Vendida:</strong> {{ relatorio.produtos[0].quantidade_vendida if relatorio.produtos else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Data de Geração:</strong> {{ now().strftime('%d/%m/%Y %H:%M:%S') if now else '' }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; border-top: 2px solid #dee2e6; font-size: 8px; color: #666;">
+                <p style="margin: 0; text-align: center;">
+                    Este relatório foi gerado automaticamente pelo Sistema de Gestão de Autopeças
+                </p>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
+// Carregar biblioteca html2pdf
+if (typeof html2pdf === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    document.head.appendChild(script);
+}
+
 function exportarCSV() {
     exportarCSVMelhorado('tabelaProdutos', 'relatorio_produtos_mais_vendidos.csv');
+}
+
+function exportarPDFRelatorio() {
+    if (typeof html2pdf === 'undefined') {
+        alert('Aguarde o carregamento da biblioteca PDF...');
+        setTimeout(exportarPDFRelatorio, 1000);
+        return;
+    }
+    
+    try {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
+        
+        const element = document.getElementById('contentToPrint');
+        const clone = element.cloneNode(true);
+        
+        // Remover elementos desnecessários
+        clone.querySelectorAll('.no-print, .export-buttons, button, .input-group, .form-select').forEach(el => el.remove());
+        
+        // Mostrar elementos de impressão
+        const printHeader = clone.querySelector('.print-header');
+        if (printHeader) printHeader.style.display = 'block';
+        
+        const statsForPrint = clone.querySelector('.stats-for-print');
+        if (statsForPrint) statsForPrint.style.display = 'block';
+        
+        clone.querySelectorAll('.print-only').forEach(el => {
+            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
+        });
+        
+        const opt = {
+            margin: [10, 10, 15, 10],
+            filename: 'produtos_mais_vendidos_' + new Date().toISOString().split('T')[0] + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        html2pdf().set(opt).from(clone).save()
+            .then(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao gerar PDF.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+    } catch (error) {
+        console.error('Erro:', error);
+    }
 }
 
 // Inicializar paginação quando o documento estiver carregado

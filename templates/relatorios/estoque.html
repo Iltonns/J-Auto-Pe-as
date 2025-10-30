@@ -3,10 +3,123 @@
 {% block title %}Relatório de Estoque - Sistema de Autopeças{% endblock %}
 {% block page_title %}Relatório de Estoque{% endblock %}
 
+{% block extra_css %}
+<style>
+.print-only { display: none; }
+
+@media print {
+    .no-print, nav, .sidebar, .top-navbar, .btn, button, .export-buttons, .btn-group, .form-select, .input-group, hr.section-divider { display: none !important; }
+    .container-fluid { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+    .print-header, .stats-for-print { display: block !important; page-break-inside: avoid; margin-bottom: 20px !important; }
+    .print-only { display: table-cell !important; }
+    .table { font-size: 7px !important; page-break-inside: auto; width: 100% !important; table-layout: auto; }
+    .table th, .table td { padding: 4px 2px !important; font-size: 7px !important; vertical-align: middle !important; }
+    .table th { background-color: #f57c00 !important; color: white !important; font-weight: bold !important; }
+    .table td.print-only { white-space: normal !important; word-wrap: break-word !important; }
+    .table td:not(.print-only) { white-space: nowrap !important; }
+    .table tr { page-break-inside: avoid; page-break-after: auto; }
+    .table thead { display: table-header-group; }
+    .card { border: none !important; box-shadow: none !important; page-break-inside: avoid; }
+}
+
+#contentToPrint { background: white; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        {% if relatorio.erro %}
+<div class="container-fluid" id="contentToPrint">
+    <!-- Cabeçalho para Impressão/PDF -->
+    <div class="print-header" style="display: none;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 0 0 25%; text-align: left;">
+                {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
+                {% else %}
+                    <div style="width: 150px; height: 80px; background: #f57c00; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <i class="fas fa-building fa-3x"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
+                <h2 style="color: #f57c00; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
+                </h2>
+                <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;">Tel: {{ configuracoes_empresa.telefone if configuracoes_empresa and configuracoes_empresa.telefone else '(98) 98463-8495' }} | Email: {{ configuracoes_empresa.email if configuracoes_empresa and configuracoes_empresa.email else 'fg_autopecas@hotmail.com' }}</p>
+            </div>
+            <div style="flex: 0 0 25%; text-align: right;">
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Data Emissão:</strong> {{ now().strftime('%d/%m/%Y %H:%M') if now else '' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Relatório:</strong> Estoque</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Produtos:</strong> {{ relatorio.resumo.total_produtos if relatorio.resumo else 0 }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ relatorio.produtos|length if relatorio.produtos else 0 }}</p>
+            </div>
+        </div>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #f57c00;">
+        <h3 style="text-align: center; color: #f57c00; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO COMPLETO DE ESTOQUE</h3>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+            <p style="margin: 0; font-size: 10px; text-align: center;">
+                <strong>Total de Produtos:</strong> {{ relatorio.resumo.total_produtos if relatorio.resumo else 0 }} | 
+                <strong>Valor em Estoque:</strong> R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque) if relatorio.resumo else "0,00" }} | 
+                <strong>Sem Estoque:</strong> {{ relatorio.resumo.produtos_sem_estoque if relatorio.resumo else 0 }} | 
+                <strong>Estoque Baixo:</strong> {{ relatorio.resumo.produtos_estoque_baixo if relatorio.resumo else 0 }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Resumo para PDF -->
+    <div class="stats-for-print" style="display: none;">
+        <div style="background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
+            <h4 style="margin: 0; font-size: 16px; text-align: center;">
+                <i class="fas fa-boxes"></i> RESUMO DO ESTOQUE
+            </h4>
+        </div>
+        <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
+            <div class="col-3" style="width: 25%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #007bff; padding: 10px; border-radius: 8px; background: #f8f9fa; text-align: center;">
+                    <div class="stat-label" style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-boxes"></i> TOTAL PRODUTOS
+                    </div>
+                    <div class="stat-value" style="font-size: 18px; font-weight: bold; color: #007bff;">
+                        {{ relatorio.resumo.total_produtos if relatorio.resumo else 0 }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-3" style="width: 25%; padding: 5px;">
+                <div class="stat-box" style="border: 3px solid #28a745; padding: 10px; border-radius: 8px; background: #e8f5e9; text-align: center;">
+                    <div class="stat-label" style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-money-bill-wave"></i> VALOR ESTOQUE
+                    </div>
+                    <div class="stat-value total" style="font-size: 18px; font-weight: bold; color: #28a745;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-3" style="width: 25%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #ffc107; padding: 10px; border-radius: 8px; background: #fff3cd; text-align: center;">
+                    <div class="stat-label" style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-exclamation-triangle"></i> ESTOQUE BAIXO
+                    </div>
+                    <div class="stat-value" style="font-size: 18px; font-weight: bold; color: #ffc107;">
+                        {{ relatorio.resumo.produtos_estoque_baixo if relatorio.resumo else 0 }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-3" style="width: 25%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #dc3545; padding: 10px; border-radius: 8px; background: #f8d7da; text-align: center;">
+                    <div class="stat-label" style="font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-times-circle"></i> SEM ESTOQUE
+                    </div>
+                    <div class="stat-value" style="font-size: 18px; font-weight: bold; color: #dc3545;">
+                        {{ relatorio.resumo.produtos_sem_estoque if relatorio.resumo else 0 }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            {% if relatorio.erro %}
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle"></i>
                 Erro ao gerar relatório: {{ relatorio.erro }}
@@ -71,6 +184,41 @@
                                     <i class="fas fa-times-circle fa-2x"></i>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cabeçalho da Empresa (Visível na Tela) -->
+            <div class="card mb-4 no-print">
+                <div class="card-body" style="background: linear-gradient(135deg, #f57c00 0%, #e65100 100%); color: white;">
+                    <div class="row align-items-center">
+                        <div class="col-md-2 text-center">
+                            {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                                <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
+                            {% else %}
+                                <div style="width: 100px; height: 100px; background: white; color: #f57c00; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                                    <i class="fas fa-building fa-3x"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-7">
+                            <h3 class="mb-2">{{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}</h3>
+                            {% if configuracoes_empresa %}
+                                <p class="mb-1"><i class="fas fa-map-marker-alt"></i> {{ configuracoes_empresa.endereco }}</p>
+                                <p class="mb-1">
+                                    <i class="fas fa-phone"></i> {{ configuracoes_empresa.telefone }}
+                                    <span class="ms-3"><i class="fas fa-envelope"></i> {{ configuracoes_empresa.email }}</span>
+                                </p>
+                                {% if configuracoes_empresa.cnpj %}
+                                    <p class="mb-0"><i class="fas fa-id-card"></i> CNPJ: {{ configuracoes_empresa.cnpj }}</p>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <h4 class="mb-2"><i class="fas fa-boxes"></i> Relatório de Estoque</h4>
+                            <p class="mb-1"><i class="fas fa-calendar"></i> {{ now().strftime('%d/%m/%Y') if now else '' }}</p>
+                            <p class="mb-0"><i class="fas fa-clock"></i> {{ now().strftime('%H:%M') if now else '' }}</p>
                         </div>
                     </div>
                 </div>
@@ -166,9 +314,12 @@
                             <button class="btn btn-sm btn-success" onclick="exportarCSV()">
                                 <i class="fas fa-file-csv"></i> Exportar CSV
                             </button>
-                            <a href="{{ url_for('exportar_estoque_pdf') }}" class="btn btn-sm btn-danger">
+                            <button class="btn btn-sm btn-danger" onclick="exportarPDFEstoque()">
                                 <i class="fas fa-file-pdf"></i> Exportar PDF
-                            </a>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.print()">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
                         </div>
                         <div class="btn-group" role="group">
                             <button class="btn btn-sm btn-outline-secondary" onclick="filtrarPor('todos')">Todos</button>
@@ -189,7 +340,6 @@
                                         <option value="30" selected>30</option>
                                         <option value="50">50</option>
                                         <option value="100">100</option>
-                                        <option value="all">Todos</option>
                                     </select>
                                     <span class="text-muted">produtos</span>
                                 </div>
@@ -211,10 +361,13 @@
                                         <th>Código</th>
                                         <th>Produto</th>
                                         <th>Categoria</th>
+                                        <th class="print-only">Fornecedor</th>
                                         <th>Estoque Atual</th>
                                         <th>Estoque Mínimo</th>
+                                        <th class="print-only">Localização</th>
                                         <th>Preço Custo</th>
                                         <th>Preço Venda</th>
+                                        <th class="print-only">Margem %</th>
                                         <th>Valor Estoque</th>
                                         <th>Status</th>
                                     </tr>
@@ -223,22 +376,35 @@
                                     {% for produto in relatorio.produtos %}
                                         <tr data-status="{{ produto.status.lower().replace(' ', '-') }}">
                                             <td>{{ produto.codigo }}</td>
-                                            <td>{{ produto.nome }}</td>
+                                            <td><strong>{{ produto.nome }}</strong></td>
                                             <td>{{ produto.categoria }}</td>
+                                            <td class="print-only" style="font-size: 7px;">
+                                                {{ produto.fornecedor or 'N/A' }}
+                                            </td>
                                             <td>
-                                                <strong class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= produto.estoque_minimo %}text-warning{% endif %}">
+                                                <strong class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= produto.estoque_minimo %}text-warning{% else %}text-success{% endif %}">
                                                     {{ produto.estoque }}
                                                 </strong>
                                             </td>
                                             <td>{{ produto.estoque_minimo }}</td>
-                                            <td><span class="text-info">R$ {{ "%.2f"|format(produto.preco_custo)|replace('.', ',') }}</span></td>
-                                            <td>R$ {{ "%.2f"|format(produto.preco)|replace('.', ',') }}</td>
-                                            <td>R$ {{ "%.2f"|format(produto.valor_estoque)|replace('.', ',') }}</td>
+                                            <td class="print-only" style="font-size: 7px;">
+                                                {{ produto.localizacao or '-' }}
+                                            </td>
+                                            <td><span class="text-info">R$ {{ "%.2f"|format(produto.preco_custo) }}</span></td>
+                                            <td><strong>R$ {{ "%.2f"|format(produto.preco) }}</strong></td>
+                                            <td class="print-only" style="font-size: 7px;">
+                                                {% if produto.preco_custo and produto.preco_custo > 0 %}
+                                                    {{ "%.1f"|format(((produto.preco - produto.preco_custo) / produto.preco_custo * 100)) }}%
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                            <td><strong>R$ {{ "%.2f"|format(produto.valor_estoque) }}</strong></td>
                                             <td>
                                                 {% if produto.status == 'Sem Estoque' %}
                                                     <span class="badge bg-danger">{{ produto.status }}</span>
                                                 {% elif produto.status == 'Estoque Baixo' %}
-                                                    <span class="badge bg-warning">{{ produto.status }}</span>
+                                                    <span class="badge bg-warning text-dark">{{ produto.status }}</span>
                                                 {% else %}
                                                     <span class="badge bg-success">{{ produto.status }}</span>
                                                 {% endif %}
@@ -275,8 +441,108 @@
                 </div>
             </div>
         {% endif %}
+        
+        <!-- Informações Adicionais para PDF -->
+        <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #f57c00;">
+                <h5 style="color: #f57c00; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+                    <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO
+                </h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
+                    <div>
+                        <p style="margin: 3px 0;"><strong>• Total de Produtos:</strong> {{ relatorio.resumo.total_produtos if relatorio.resumo else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Produtos em Estoque:</strong> {{ (relatorio.resumo.total_produtos - relatorio.resumo.produtos_sem_estoque) if relatorio.resumo else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Produtos Sem Estoque:</strong> {{ relatorio.resumo.produtos_sem_estoque if relatorio.resumo else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Produtos Estoque Baixo:</strong> {{ relatorio.resumo.produtos_estoque_baixo if relatorio.resumo else 0 }}</p>
+                    </div>
+                    <div>
+                        <p style="margin: 3px 0;"><strong>• Valor Total (Venda):</strong> R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque) if relatorio.resumo else "0,00" }}</p>
+                        <p style="margin: 3px 0;"><strong>• Valor Total (Custo):</strong> R$ {{ "%.2f"|format(relatorio.resumo.valor_total_estoque_custo) if relatorio.resumo else "0,00" }}</p>
+                        <p style="margin: 3px 0;"><strong>• Categorias:</strong> {{ relatorio.categorias|length if relatorio.categorias else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Data de Geração:</strong> {{ now().strftime('%d/%m/%Y %H:%M:%S') if now else '' }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; border-top: 2px solid #dee2e6; font-size: 8px; color: #666;">
+                <p style="margin: 0; text-align: center;">
+                    <strong>Legenda:</strong> 
+                    <span style="color: #28a745;">● ESTOQUE NORMAL</span> | 
+                    <span style="color: #ffc107;">● ESTOQUE BAIXO</span> | 
+                    <span style="color: #dc3545;">● SEM ESTOQUE</span>
+                </p>
+                <p style="margin: 5px 0 0 0; text-align: center;">
+                    Este relatório foi gerado automaticamente pelo Sistema de Gestão de Autopeças
+                </p>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Carregar biblioteca html2pdf
+if (typeof html2pdf === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    document.head.appendChild(script);
+}
+
+function exportarPDFEstoque() {
+    if (typeof html2pdf === 'undefined') {
+        alert('Aguarde o carregamento da biblioteca PDF...');
+        setTimeout(exportarPDFEstoque, 1000);
+        return;
+    }
+    
+    try {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
+        
+        const element = document.getElementById('contentToPrint');
+        const clone = element.cloneNode(true);
+        
+        // Remover elementos desnecessários
+        clone.querySelectorAll('.no-print, .export-buttons, button, .input-group, .form-select, .btn-group').forEach(el => el.remove());
+        
+        // Mostrar elementos de impressão
+        const printHeader = clone.querySelector('.print-header');
+        if (printHeader) printHeader.style.display = 'block';
+        
+        const statsForPrint = clone.querySelector('.stats-for-print');
+        if (statsForPrint) statsForPrint.style.display = 'block';
+        
+        clone.querySelectorAll('.print-only').forEach(el => {
+            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
+        });
+        
+        const opt = {
+            margin: [10, 10, 15, 10],
+            filename: 'relatorio_estoque_' + new Date().toISOString().split('T')[0] + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        html2pdf().set(opt).from(clone).save()
+            .then(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao gerar PDF.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
 
 <script>
 function filtrarPor(tipo) {
@@ -358,23 +624,31 @@ function exportarCSV() {
 
 // Inicializar paginação quando o documento estiver carregado
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar se existem produtos para paginar
-    const tabela = document.getElementById('tabelaEstoque');
-    if (tabela && tabela.querySelector('tbody tr')) {
-        // Inicializar sistema de paginação
-        const pagination = new TablePagination({
-            tableId: 'tabelaEstoque',
-            itemsPerPageId: 'itensPorPagina',
-            searchId: 'buscaPrincipal',
-            visibleCountId: 'itensVisiveis',
-            totalCountId: 'totalItens',
-            prevBtnId: 'btnAnterior',
-            nextBtnId: 'btnProximo',
-            paginationControlsId: 'controlesNavegacao',
-            pageInfoId: 'infoPaginacao',
-            defaultItemsPerPage: 30,
-            searchFields: ['codigo', 'nome', 'categoria', 'status']
-        });
+    // Aguardar um momento para garantir que tudo foi carregado
+    setTimeout(function() {
+        // Verificar se existem produtos para paginar
+        const tabela = document.getElementById('tabelaEstoque');
+        if (tabela && tabela.querySelector('tbody tr')) {
+            // Garantir que o select tenha o valor padrão correto ANTES de inicializar
+            const selectItens = document.getElementById('itensPorPagina');
+            if (selectItens) {
+                selectItens.value = '30';
+            }
+            
+            // Inicializar sistema de paginação
+            const pagination = new TablePagination({
+                tableId: 'tabelaEstoque',
+                itemsPerPageId: 'itensPorPagina',
+                searchId: 'buscaPrincipal',
+                visibleCountId: 'itensVisiveis',
+                totalCountId: 'totalItens',
+                prevBtnId: 'btnAnterior',
+                nextBtnId: 'btnProximo',
+                paginationControlsId: 'controlesNavegacao',
+                pageInfoId: 'infoPaginacao',
+                defaultItemsPerPage: 30,
+                searchFields: ['codigo', 'nome', 'categoria', 'status']
+            });
         
         // Manter funcionalidade de filtro por estoque
         window.filtrarPor = function(tipo) {
@@ -408,6 +682,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pagination.updatePagination();
         };
     }
+    }, 100); // Aguardar 100ms
 });
 </script>
 {% endblock %}

@@ -44,6 +44,11 @@
     padding: 0.4rem 0.8rem;
 }
 
+/* Ocultar colunas extras na tela normal */
+.print-only {
+    display: none;
+}
+
 /* Estilos de Impressão */
 @media print {
     .no-print,
@@ -68,19 +73,43 @@
     
     .print-header {
         display: block !important;
-        margin-bottom: 30px;
-        padding: 20px;
-        border-bottom: 3px solid #28a745;
+        margin-bottom: 20px;
     }
     
-    .print-logo {
-        max-width: 150px;
-        max-height: 80px;
+    /* Mostrar colunas extras no PDF */
+    .print-only {
+        display: table-cell !important;
     }
     
     .table {
-        font-size: 11px !important;
+        font-size: 8px !important;
         page-break-inside: auto;
+        width: 100% !important;
+        table-layout: auto;
+    }
+    
+    .table th,
+    .table td {
+        padding: 5px 3px !important;
+        font-size: 8px !important;
+        vertical-align: middle !important;
+    }
+    
+    .table th {
+        background-color: #28a745 !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
+    
+    /* Permitir quebra de linha em observações */
+    .table td.print-only {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+    }
+    
+    /* Outras colunas sem quebra */
+    .table td:not(.print-only) {
+        white-space: nowrap !important;
     }
     
     .table tr {
@@ -98,22 +127,49 @@
     }
     
     /* Cards de estatísticas visíveis no PDF */
-    .card-stats {
+    .stats-for-print {
         display: block !important;
         page-break-inside: avoid;
-        margin-bottom: 10px !important;
+        margin-bottom: 20px !important;
     }
     
-    .card-stats .card-body {
-        padding: 10px !important;
+    .stats-for-print .row {
+        display: flex !important;
+        flex-wrap: wrap !important;
     }
     
-    .card-stats h3 {
-        font-size: 16px !important;
+    .stats-for-print .col-6 {
+        width: 50% !important;
+        float: left !important;
     }
     
-    .card-stats p {
-        font-size: 11px !important;
+    .stats-for-print .stat-box {
+        border: 2px solid #28a745;
+        padding: 15px;
+        margin: 5px;
+        border-radius: 8px;
+        background: #f8f9fa;
+    }
+    
+    .stats-for-print .stat-label {
+        font-size: 11px;
+        color: #666;
+        font-weight: bold;
+    }
+    
+    .stats-for-print .stat-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    .stats-for-print .stat-value.total {
+        color: #28a745;
+        font-size: 20px;
+    }
+    
+    .stats-for-print .stat-value.warning {
+        color: #f57c00;
     }
     
     .card {
@@ -122,35 +178,7 @@
         page-break-inside: avoid;
     }
     
-    /* Resumo de totais para PDF */
-    .print-summary {
-        display: block !important;
-        margin: 20px 0;
-        padding: 15px;
-        background-color: #f8f9fa;
-        border: 2px solid #28a745;
-        border-radius: 8px;
-    }
-    
-    .print-summary h4 {
-        color: #28a745;
-        font-size: 16px;
-        margin-bottom: 10px;
-    }
-    
-    .print-summary .summary-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 5px 0;
-        border-bottom: 1px solid #dee2e6;
-    }
-    
-    .print-summary .summary-item:last-child {
-        border-bottom: none;
-        font-weight: bold;
-        font-size: 14px;
-        color: #28a745;
-    }
+
     
     .row {
         margin: 0 !important;
@@ -160,13 +188,7 @@
         padding: 0 !important;
     }
     
-    .print-title {
-        display: block !important;
-        font-size: 20px;
-        font-weight: bold;
-        color: #28a745;
-        margin-bottom: 10px;
-    }
+
     
     .print-footer {
         display: block !important;
@@ -185,10 +207,6 @@
     background: white;
 }
 
-.print-header {
-    display: none;
-}
-
 .print-footer {
     display: none;
 }
@@ -198,57 +216,126 @@
 {% block content %}
 <div class="container-fluid" id="contentToPrint">
     <!-- Cabeçalho para Impressão/PDF -->
-    <div class="print-header">
-        <div class="row align-items-center">
-            <div class="col-3">
+    <div class="print-header" style="display: none;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 0 0 25%; text-align: left;">
                 {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
-                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="print-logo">
+                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
                 {% else %}
                     <div style="width: 150px; height: 80px; background: #28a745; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <i class="fas fa-building fa-3x"></i>
                     </div>
                 {% endif %}
             </div>
-            <div class="col-6 text-center">
-                <h2 class="mb-1" style="color: #28a745;">
-                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}
+            <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
+                <h2 style="color: #28a745; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
                 </h2>
-                {% if configuracoes_empresa %}
-                    <p class="mb-0"><small>{{ configuracoes_empresa.endereco }}</small></p>
-                    <p class="mb-0"><small>Tel: {{ configuracoes_empresa.telefone }} | Email: {{ configuracoes_empresa.email }}</small></p>
-                    {% if configuracoes_empresa.cnpj %}
-                        <p class="mb-0"><small>CNPJ: {{ configuracoes_empresa.cnpj }}</small></p>
-                    {% endif %}
-                {% endif %}
+                <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;">Tel: {{ configuracoes_empresa.telefone if configuracoes_empresa and configuracoes_empresa.telefone else '(98) 98463-8495' }} | Email: {{ configuracoes_empresa.email if configuracoes_empresa and configuracoes_empresa.email else 'fg_autopecas@hotmail.com' }}</p>
             </div>
-            <div class="col-3 text-end">
-                <p class="mb-0"><strong>Data:</strong> {{ hoje.strftime('%d/%m/%Y') }}</p>
-                <p class="mb-0"><strong>Relatório:</strong> Contas a Receber</p>
-                <p class="mb-0"><small>Status: {{ 'Recebidas' if status_atual == 'recebido' else 'Pendentes' }}</small></p>
+            <div style="flex: 0 0 25%; text-align: right;">
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Data Emissão:</strong> {{ hoje.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Relatório:</strong> Contas a Receber</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Status:</strong> {{ 'Recebidas' if status_atual == 'recebido' else 'Pendentes' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ contas|length if contas else 0 }}</p>
             </div>
         </div>
-        <hr style="margin-top: 15px; border-top: 2px solid #28a745;">
-        <h3 class="print-title text-center">RELATÓRIO DE CONTAS A RECEBER</h3>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #28a745;">
+        <h3 style="text-align: center; color: #28a745; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE CONTAS A RECEBER</h3>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+            <p style="margin: 0; font-size: 10px; text-align: center;">
+                <strong>Período de Análise:</strong> {{ filtro_atual.upper() }} | 
+                <strong>Total de Contas:</strong> {{ estatisticas.total_contas }} | 
+                <strong>Valor Total:</strong> R$ {{ "%.2f"|format(estatisticas.total_valor) }} | 
+                <strong>Atrasadas:</strong> {{ estatisticas.atrasadas }}
+            </p>
+        </div>
     </div>
     
     <!-- Resumo de Totais para PDF -->
-    <div class="print-summary" style="display: none;">
-        <h4><i class="fas fa-chart-bar"></i> Resumo Financeiro</h4>
-        <div class="summary-item">
-            <span>Total de Contas:</span>
-            <span><strong>{{ estatisticas.total_contas }}</strong></span>
+    <div class="stats-for-print" style="display: none;">
+        <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
+            <h4 style="margin: 0; font-size: 16px; text-align: center;">
+                <i class="fas fa-chart-bar"></i> RESUMO FINANCEIRO - CONTAS A RECEBER
+            </h4>
         </div>
-        <div class="summary-item">
-            <span>Contas Atrasadas:</span>
-            <span class="text-warning"><strong>{{ estatisticas.atrasadas }}</strong></span>
+        <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
+            <div class="col-6" style="width: 50%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #28a745; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
+                    <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
+                        <i class="fas fa-list-ol"></i> TOTAL DE CONTAS
+                    </div>
+                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #28a745;">
+                        {{ estatisticas.total_contas }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6" style="width: 50%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #f57c00; padding: 15px; border-radius: 8px; background: #fff3e0; text-align: center;">
+                    <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
+                        <i class="fas fa-exclamation-triangle"></i> CONTAS ATRASADAS
+                    </div>
+                    <div class="stat-value warning" style="font-size: 20px; font-weight: bold; color: #f57c00;">
+                        {{ estatisticas.atrasadas }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6" style="width: 50%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #0288d1; padding: 15px; border-radius: 8px; background: #e1f5fe; text-align: center;">
+                    <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
+                        <i class="fas fa-chart-line"></i> VALOR MÉDIO
+                    </div>
+                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #0288d1;">
+                        R$ {{ "%.2f"|format(estatisticas.valor_medio) }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6" style="width: 50%; padding: 5px;">
+                <div class="stat-box" style="border: 3px solid #28a745; padding: 15px; border-radius: 8px; background: #e8f5e9; text-align: center;">
+                    <div class="stat-label" style="font-size: 12px; color: #666; font-weight: bold; margin-bottom: 8px;">
+                        <i class="fas fa-money-bill-wave"></i> TOTAL A RECEBER
+                    </div>
+                    <div class="stat-value total" style="font-size: 22px; font-weight: bold; color: #28a745;">
+                        R$ {{ "%.2f"|format(estatisticas.total_valor) }}
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="summary-item">
-            <span>Valor Médio:</span>
-            <span><strong>R$ {{ "%.2f"|format(estatisticas.valor_medio) }}</strong></span>
-        </div>
-        <div class="summary-item">
-            <span>TOTAL A RECEBER:</span>
-            <span><strong>R$ {{ "%.2f"|format(estatisticas.total_valor) }}</strong></span>
+    </div>
+    
+    <!-- Cabeçalho da Empresa (Visível na Tela) -->
+    <div class="card mb-4 no-print">
+        <div class="card-body" style="background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); color: white;">
+            <div class="row align-items-center">
+                <div class="col-md-2 text-center">
+                    {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                        <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
+                    {% else %}
+                        <div style="width: 100px; height: 100px; background: white; color: #2e7d32; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                            <i class="fas fa-building fa-3x"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-7">
+                    <h3 class="mb-2">{{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}</h3>
+                    {% if configuracoes_empresa %}
+                        <p class="mb-1"><i class="fas fa-map-marker-alt"></i> {{ configuracoes_empresa.endereco }}</p>
+                        <p class="mb-1">
+                            <i class="fas fa-phone"></i> {{ configuracoes_empresa.telefone }}
+                            <span class="ms-3"><i class="fas fa-envelope"></i> {{ configuracoes_empresa.email }}</span>
+                        </p>
+                        {% if configuracoes_empresa.cnpj %}
+                            <p class="mb-0"><i class="fas fa-id-card"></i> CNPJ: {{ configuracoes_empresa.cnpj }}</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="col-md-3 text-end">
+                    <h4 class="mb-2"><i class="fas fa-hand-holding-usd"></i> Contas a Receber</h4>
+                    <p class="mb-1"><i class="fas fa-calendar"></i> {{ now().strftime('%d/%m/%Y') if now else '' }}</p>
+                    <p class="mb-0"><i class="fas fa-clock"></i> {{ now().strftime('%H:%M') if now else '' }}</p>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -331,13 +418,13 @@
                     <ul class="nav nav-pills filter-pills mb-3">
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if status_atual == 'pendente' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='pendente') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='pendente', data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">
                                 <i class="fas fa-clock me-1"></i>Pendentes
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if status_atual == 'recebido' else '' }}" 
-                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='recebido') }}">
+                               href="{{ url_for('contas_a_receber_hoje', filtro=filtro_atual, status='recebido', data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim')) }}">
                                 <i class="fas fa-check-circle me-1"></i>Recebidas
                             </a>
                         </li>
@@ -347,11 +434,11 @@
                     <div class="row">
                         <div class="col-md-3">
                             <label class="form-label">Data Início</label>
-                            <input type="date" class="form-control" id="data_inicio">
+                            <input type="date" class="form-control" id="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Data Fim</label>
-                            <input type="date" class="form-control" id="data_fim">
+                            <input type="date" class="form-control" id="data_fim" value="{{ request.args.get('data_fim', '') }}">
                         </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <button class="btn btn-outline-success" onclick="aplicarFiltroPersonalizado()">
@@ -448,6 +535,9 @@
                                     <th class="border-0 text-end">Valor</th>
                                     <th class="border-0">Vencimento</th>
                                     <th class="border-0">Prazo</th>
+                                    <th class="border-0 print-only">Observações</th>
+                                    <th class="border-0 print-only">Forma Recebimento</th>
+                                    <th class="border-0 print-only">N° Venda</th>
                                     {% if status_atual == 'recebido' %}
                                     <th class="border-0">Data Recebimento</th>
                                     {% endif %}
@@ -466,7 +556,7 @@
                                     <td>
                                         <div class="fw-semibold">{{ conta.descricao }}</div>
                                         {% if conta.observacoes %}
-                                        <small class="text-muted">{{ conta.observacoes }}</small>
+                                        <small class="text-muted no-print">{{ conta.observacoes[:30] }}{% if conta.observacoes|length > 30 %}...{% endif %}</small>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
@@ -480,6 +570,15 @@
                                         <span class="badge badge-prazo bg-{{ conta.status_visual }}">
                                             {{ conta.texto_prazo }}
                                         </span>
+                                    </td>
+                                    <td class="print-only" style="font-size: 8px; max-width: 100px; word-wrap: break-word;">
+                                        {{ conta.observacoes or '-' }}
+                                    </td>
+                                    <td class="print-only" style="font-size: 8px;">
+                                        {{ conta.forma_recebimento or '-' }}
+                                    </td>
+                                    <td class="print-only" style="font-size: 8px; text-align: center;">
+                                        {% if conta.venda_id %}V#{{ conta.venda_id }}{% else %}-{% endif %}
                                     </td>
                                     {% if status_atual == 'recebido' %}
                                     <td>
@@ -524,6 +623,17 @@
                                     </td>
                                 </tr>
                                 {% endfor %}
+                                <!-- Linha de Totalização -->
+                                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #28a745;">
+                                    <td colspan="3" class="text-end" style="padding: 12px;">
+                                        <strong style="font-size: 14px;">TOTAL GERAL:</strong>
+                                    </td>
+                                    <td class="text-end" style="padding: 12px;">
+                                        <strong style="font-size: 14px; color: #28a745;">R$ {{ "%.2f"|format(estatisticas.total_valor) }}</strong>
+                                    </td>
+                                    <td colspan="{% if status_atual == 'recebido' %}6{% else %}5{% endif %}" class="print-only"></td>
+                                    <td class="no-print"></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -549,6 +659,39 @@
                 </div>
                 {% endif %}
             </div>
+        </div>
+    </div>
+    
+    <!-- Informações Adicionais para PDF -->
+    <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+            <h5 style="color: #28a745; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+                <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO
+            </h5>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
+                <div>
+                    <p style="margin: 3px 0;"><strong>• Filtro Aplicado:</strong> {{ filtro_atual.upper() }}</p>
+                    <p style="margin: 3px 0;"><strong>• Status:</strong> {{ 'Contas Recebidas' if status_atual == 'recebido' else 'Contas Pendentes' }}</p>
+                    <p style="margin: 3px 0;"><strong>• Total de Registros:</strong> {{ contas|length if contas else 0 }}</p>
+                </div>
+                <div>
+                    <p style="margin: 3px 0;"><strong>• Valor Médio:</strong> R$ {{ "%.2f"|format(estatisticas.valor_medio) }}</p>
+                    <p style="margin: 3px 0;"><strong>• Contas Atrasadas:</strong> {{ estatisticas.atrasadas }}</p>
+                    <p style="margin: 3px 0;"><strong>• Data de Geração:</strong> {{ hoje.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; padding: 10px; border-top: 2px solid #dee2e6; font-size: 8px; color: #666;">
+            <p style="margin: 0; text-align: center;">
+                <strong>Legenda de Status:</strong> 
+                <span style="color: #d32f2f;">● VENCIDO</span> | 
+                <span style="color: #f57c00;">● VENCE HOJE</span> | 
+                <span style="color: #28a745;">● EM DIA</span>
+            </p>
+            <p style="margin: 5px 0 0 0; text-align: center;">
+                Este relatório foi gerado automaticamente pelo Sistema de Gestão de Autopeças
+            </p>
         </div>
     </div>
 </div>
@@ -756,7 +899,8 @@ function aplicarFiltroPersonalizado() {
     const dataFim = document.getElementById('data_fim').value;
     
     if (dataInicio && dataFim) {
-        window.location.href = `{{ url_for('contas_a_receber_hoje') }}?filtro=personalizado&data_inicio=${dataInicio}&data_fim=${dataFim}`;
+        const statusAtual = '{{ status_atual }}';
+        window.location.href = `{{ url_for('contas_a_receber_hoje') }}?filtro=personalizado&data_inicio=${dataInicio}&data_fim=${dataFim}&status=${statusAtual}`;
     } else {
         alert('Por favor, selecione ambas as datas para aplicar o filtro personalizado.');
     }
@@ -897,6 +1041,23 @@ function exportarPDF() {
         // Remover botões de ação da tabela
         const actionButtons = clone.querySelectorAll('.btn-group');
         actionButtons.forEach(el => el.remove());
+        
+        // Tornar visíveis o cabeçalho e estatísticas no PDF
+        const printHeader = clone.querySelector('.print-header');
+        if (printHeader) {
+            printHeader.style.display = 'block';
+        }
+        
+        const statsForPrint = clone.querySelector('.stats-for-print');
+        if (statsForPrint) {
+            statsForPrint.style.display = 'block';
+        }
+        
+        // Tornar visíveis as colunas extras e informações adicionais
+        const printOnlyElements = clone.querySelectorAll('.print-only');
+        printOnlyElements.forEach(el => {
+            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
+        });
         
         // Configurações do PDF
         const opt = {

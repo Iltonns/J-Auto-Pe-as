@@ -57,29 +57,205 @@
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     
+    .print-only { display: none; }
+    
     @media print {
         .export-buttons,
         .card-header .btn,
-        .filtros-internos {
+        .filtros-internos,
+        .no-print,
+        nav,
+        .sidebar,
+        .top-navbar,
+        .btn,
+        button,
+        .form-select,
+        .input-group,
+        hr.section-divider {
             display: none !important;
         }
+        
+        .container-fluid { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+        .print-header, .stats-for-print { display: block !important; page-break-inside: avoid; margin-bottom: 20px !important; }
+        .print-only { display: table-cell !important; }
         
         .table-responsive {
             max-height: none;
             overflow: visible;
         }
         
+        .table { font-size: 7px !important; page-break-inside: auto; width: 100% !important; table-layout: auto; }
+        .table th, .table td { padding: 4px 2px !important; font-size: 7px !important; vertical-align: middle !important; }
+        .table th { background-color: #667eea !important; color: white !important; font-weight: bold !important; }
+        .table td.print-only { white-space: normal !important; word-wrap: break-word !important; }
+        .table td:not(.print-only) { white-space: nowrap !important; }
+        .table tr { page-break-inside: avoid; page-break-after: auto; }
+        .table thead { display: table-header-group; }
+        
         .card {
             page-break-inside: avoid;
+            border: none !important;
+            box-shadow: none !important;
         }
     }
+    
+    #contentToPrint { background: white; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <!-- Filtros -->
+<div class="container-fluid" id="contentToPrint">
+    <!-- Cabeçalho para Impressão/PDF -->
+    <div class="print-header" style="display: none;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="flex: 0 0 25%; text-align: left;">
+                {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                    <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
+                {% else %}
+                    <div style="width: 150px; height: 80px; background: #667eea; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <i class="fas fa-building fa-3x"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
+                <h2 style="color: #667eea; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                    {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
+                </h2>
+                <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;">Tel: {{ configuracoes_empresa.telefone if configuracoes_empresa and configuracoes_empresa.telefone else '(98) 98463-8495' }} | Email: {{ configuracoes_empresa.email if configuracoes_empresa and configuracoes_empresa.email else 'fg_autopecas@hotmail.com' }}</p>
+            </div>
+            <div style="flex: 0 0 25%; text-align: right;">
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Data Emissão:</strong> {{ now().strftime('%d/%m/%Y %H:%M') if now else '' }}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Relatório:</strong> Financeiro</p>
+                {% if data_inicio and data_fim %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Período:</strong> {{ data_inicio }} a {{ data_fim }}</p>
+                {% else %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Período:</strong> Todas as datas</p>
+                {% endif %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Saldo Líquido:</strong> R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}</p>
+            </div>
+        </div>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #667eea;">
+        <h3 style="text-align: center; color: #667eea; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO FINANCEIRO COMPLETO</h3>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+            <p style="margin: 0; font-size: 10px; text-align: center;">
+                <strong>Vendas:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_vendas) if relatorio.resumo else "0,00" }} | 
+                <strong>A Receber:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_receber) if relatorio.resumo else "0,00" }} | 
+                <strong>A Pagar:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) if relatorio.resumo else "0,00" }} | 
+                <strong>Saldo:</strong> R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Resumo para PDF -->
+    <div class="stats-for-print" style="display: none;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
+            <h4 style="margin: 0; font-size: 16px; text-align: center;">
+                <i class="fas fa-chart-pie"></i> RESUMO FINANCEIRO
+            </h4>
+        </div>
+        <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 3px solid #28a745; padding: 10px; border-radius: 8px; background: #e8f5e9; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-shopping-cart"></i> VENDAS
+                    </div>
+                    <div class="stat-value total" style="font-size: 16px; font-weight: bold; color: #28a745;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.total_vendas) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #17a2b8; padding: 10px; border-radius: 8px; background: #d1ecf1; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-clock"></i> A RECEBER
+                    </div>
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #17a2b8;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.total_a_receber) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #007bff; padding: 10px; border-radius: 8px; background: #cce5ff; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-check-circle"></i> RECEBIDO
+                    </div>
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #007bff;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.total_recebido|default(0)) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #ffc107; padding: 10px; border-radius: 8px; background: #fff3cd; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-hourglass-half"></i> A PAGAR
+                    </div>
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #ffc107;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 2px solid #dc3545; padding: 10px; border-radius: 8px; background: #f8d7da; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-money-bill-wave"></i> PAGO
+                    </div>
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #dc3545;">
+                        R$ {{ "%.2f"|format(relatorio.resumo.total_pago|default(0)) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-2" style="width: 16.66%; padding: 5px;">
+                <div class="stat-box" style="border: 3px solid {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %}; padding: 10px; border-radius: 8px; background: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#e8f5e9{% else %}#f8d7da{% endif %}; text-align: center;">
+                    <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
+                        <i class="fas fa-balance-scale"></i> SALDO
+                    </div>
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %};">
+                        R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cabeçalho da Empresa (Visível na Tela) -->
+    <div class="card mb-4 no-print">
+        <div class="card-body" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="row align-items-center">
+                <div class="col-md-2 text-center">
+                    {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
+                        <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
+                    {% else %}
+                        <div style="width: 100px; height: 100px; background: white; color: #667eea; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                            <i class="fas fa-building fa-3x"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-7">
+                    <h3 class="mb-2">{{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'Sistema de Autopeças' }}</h3>
+                    {% if configuracoes_empresa %}
+                        <p class="mb-1"><i class="fas fa-map-marker-alt"></i> {{ configuracoes_empresa.endereco }}</p>
+                        <p class="mb-1">
+                            <i class="fas fa-phone"></i> {{ configuracoes_empresa.telefone }}
+                            <span class="ms-3"><i class="fas fa-envelope"></i> {{ configuracoes_empresa.email }}</span>
+                        </p>
+                        {% if configuracoes_empresa.cnpj %}
+                            <p class="mb-0"><i class="fas fa-id-card"></i> CNPJ: {{ configuracoes_empresa.cnpj }}</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="col-md-3 text-end">
+                    <h4 class="mb-2"><i class="fas fa-chart-pie"></i> Relatório Financeiro</h4>
+                    <p class="mb-1"><i class="fas fa-calendar"></i> {{ now().strftime('%d/%m/%Y') if now else '' }}</p>
+                    <p class="mb-0"><i class="fas fa-clock"></i> {{ now().strftime('%H:%M') if now else '' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <!-- Filtros -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -114,7 +290,7 @@
         {% else %}
             <!-- Resumo Financeiro -->
             <div class="row mb-4">
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                     <div class="card bg-success text-white">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -123,13 +299,13 @@
                                     <p class="mb-0">Total em Vendas</p>
                                 </div>
                                 <div class="align-self-center">
-                                    <i class="fas fa-arrow-up fa-2x"></i>
+                                    <i class="fas fa-shopping-cart fa-2x"></i>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                     <div class="card bg-info text-white">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -144,7 +320,22 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_recebido if relatorio.resumo.total_recebido else 0) }}</h4>
+                                    <p class="mb-0">Valor Recebido</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                     <div class="card bg-warning text-white">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -153,13 +344,28 @@
                                     <p class="mb-0">A Pagar</p>
                                 </div>
                                 <div class="align-self-center">
-                                    <i class="fas fa-arrow-down fa-2x"></i>
+                                    <i class="fas fa-hourglass-half fa-2x"></i>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_pago|default(0)) }}</h4>
+                                    <p class="mb-0">Valor Pago</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-money-bill-wave fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
                     <div class="card {% if relatorio.resumo.saldo_liquido >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -183,10 +389,12 @@
                         <button class="btn btn-success" onclick="exportarCSV()">
                             <i class="fas fa-file-csv"></i> Exportar CSV
                         </button>
-                        <a href="{{ url_for('exportar_financeiro_pdf', data_inicio=data_inicio, data_fim=data_fim) }}" 
-                           class="btn btn-danger">
+                        <button class="btn btn-danger" onclick="exportarPDFFinanceiro()">
                             <i class="fas fa-file-pdf"></i> Exportar PDF
-                        </a>
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.print()">
+                            <i class="fas fa-print"></i> Imprimir
+                        </button>
                     </div>
                 </div>
             </div>
@@ -611,10 +819,111 @@
             </div>
             {% endif %}
         {% endif %}
+        
+        <!-- Informações Adicionais para PDF -->
+        <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                <h5 style="color: #667eea; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+                    <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO FINANCEIRO
+                </h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
+                    <div>
+                        {% if data_inicio and data_fim %}
+                        <p style="margin: 3px 0;"><strong>• Período Analisado:</strong> {{ data_inicio }} a {{ data_fim }}</p>
+                        {% endif %}
+                        <p style="margin: 3px 0;"><strong>• Total de Vendas:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_vendas) if relatorio.resumo else "0,00" }}</p>
+                        <p style="margin: 3px 0;"><strong>• Total a Receber:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_receber) if relatorio.resumo else "0,00" }}</p>
+                        <p style="margin: 3px 0;"><strong>• Total a Pagar:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) if relatorio.resumo else "0,00" }}</p>
+                    </div>
+                    <div>
+                        <p style="margin: 3px 0;"><strong>• Saldo Líquido:</strong> <span style="color: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %};">R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}</span></p>
+                        <p style="margin: 3px 0;"><strong>• Formas de Pagamento:</strong> {{ relatorio.vendas_forma_pagamento|length if relatorio.vendas_forma_pagamento else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Contas Detalhadas:</strong> {{ (relatorio.contas_receber_detalhadas|length + relatorio.contas_pagar_detalhadas|length) if (relatorio.contas_receber_detalhadas and relatorio.contas_pagar_detalhadas) else 0 }}</p>
+                        <p style="margin: 3px 0;"><strong>• Data de Geração:</strong> {{ now().strftime('%d/%m/%Y %H:%M:%S') if now else '' }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; border-top: 2px solid #dee2e6; font-size: 8px; color: #666;">
+                <p style="margin: 0; text-align: center;">
+                    <strong>Situação Financeira:</strong> 
+                    {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}
+                        <span style="color: #28a745;">● POSITIVA</span> (Mais recebimentos que pagamentos)
+                    {% else %}
+                        <span style="color: #dc3545;">● ATENÇÃO</span> (Mais pagamentos que recebimentos)
+                    {% endif %}
+                </p>
+                <p style="margin: 5px 0 0 0; text-align: center;">
+                    Este relatório foi gerado automaticamente pelo Sistema de Gestão de Autopeças
+                </p>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
+// Carregar biblioteca html2pdf
+if (typeof html2pdf === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    document.head.appendChild(script);
+}
+
+function exportarPDFFinanceiro() {
+    if (typeof html2pdf === 'undefined') {
+        alert('Aguarde o carregamento da biblioteca PDF...');
+        setTimeout(exportarPDFFinanceiro, 1000);
+        return;
+    }
+    
+    try {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
+        
+        const element = document.getElementById('contentToPrint');
+        const clone = element.cloneNode(true);
+        
+        // Remover elementos desnecessários
+        clone.querySelectorAll('.no-print, .export-buttons, button, .input-group, .form-select, .btn-group').forEach(el => el.remove());
+        
+        // Mostrar elementos de impressão
+        const printHeader = clone.querySelector('.print-header');
+        if (printHeader) printHeader.style.display = 'block';
+        
+        const statsForPrint = clone.querySelector('.stats-for-print');
+        if (statsForPrint) statsForPrint.style.display = 'block';
+        
+        clone.querySelectorAll('.print-only').forEach(el => {
+            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
+        });
+        
+        const opt = {
+            margin: [10, 10, 15, 10],
+            filename: 'relatorio_financeiro_' + new Date().toISOString().split('T')[0] + '.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        html2pdf().set(opt).from(clone).save()
+            .then(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao gerar PDF.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
+
 function exportarCSV() {
     // Criar dados CSV
     let csvData = [];
