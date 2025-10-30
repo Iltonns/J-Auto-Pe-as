@@ -486,7 +486,7 @@
         <div class="stat-header">
             <div class="stat-content">
                 <h3>{{ estatisticas.produtos_estoque_baixo or 0 }}</h3>
-                <p>Estoque Baixo</p>
+                <p title="Produtos com estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo (≤ 1 unidade)</p>
             </div>
             <div class="stat-icon warning">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -543,7 +543,7 @@
         <div class="stat-header">
             <div class="stat-content">
                 <h3>{{ estatisticas.produtos_sem_estoque or 0 }}</h3>
-                <p>Sem Estoque</p>
+                <p title="Produtos com estoque igual a 0 unidade">Sem Estoque (0 unidade)</p>
             </div>
             <div class="stat-icon danger">
                 <i class="fas fa-box-open"></i>

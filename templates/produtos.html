@@ -519,7 +519,7 @@
             <select id="statusFilter" class="form-select">
                 <option value="">Todos os status</option>
                 <option value="disponivel">Disponível</option>
-                <option value="estoque_baixo">Estoque Baixo</option>
+                <option value="estoque_baixo">Estoque Baixo (≤ 1 unidade)</option>
                 <option value="indisponivel">Indisponível</option>
             </select>
         </div>
@@ -558,7 +558,7 @@
                 <div class="card-number" id="estoqueBaixo">
                     {{ produtos|selectattr('estoque', 'lt', produtos[0].estoque_minimo if produtos else 1)|list|length }}
                 </div>
-                <div class="card-label">Estoque Baixo</div>
+                <div class="card-label" title="Produtos com estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo (≤ 1 unidade)</div>
             </div>
         </div>
         <div class="col-md-3">
@@ -569,7 +569,7 @@
                 <div class="card-number" id="semEstoque">
                     {{ produtos|selectattr('estoque', 'eq', 0)|list|length }}
                 </div>
-                <div class="card-label">Sem Estoque</div>
+                <div class="card-label" title="Produtos com estoque igual a 0 unidade">Sem Estoque (0 unidade)</div>
             </div>
         </div>
     </div>
@@ -667,7 +667,7 @@
                                 {% if produto.estoque > produto.estoque_minimo %}
                                     <span class="status-disponivel">Disponível</span>
                                 {% elif produto.estoque > 0 %}
-                                    <span class="status-baixo">Estoque Baixo</span>
+                                    <span class="status-baixo" title="Estoque menor ou igual ao mínimo (1 unidade)">Estoque Baixo (≤ 1)</span>
                                 {% else %}
                                     <span class="status-indisponivel">Indisponível</span>
                                 {% endif %}

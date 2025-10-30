@@ -3077,12 +3077,12 @@ def obter_estatisticas_dashboard():
     cursor.execute("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
     valor_estoque = cursor.fetchone()[0] or 0
     
-    # Produtos com estoque baixo
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= estoque_minimo")
+    # Produtos com estoque baixo (estoque menor ou igual a 1)
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= 1")
     produtos_estoque_baixo = cursor.fetchone()[0]
-    
-    # Produtos sem estoque
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque <= 0")
+
+    # Produtos sem estoque (estoque igual a 0)
+    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
     produtos_sem_estoque = cursor.fetchone()[0]
     
     # Vendas do mês
@@ -4409,9 +4409,9 @@ def gerar_relatorio_estoque():
             valor_total_estoque += row[5] if row[5] else 0
             valor_total_estoque_custo += valor_estoque_custo
             
-            if row[2] <= 0:
+            if row[2] == 0:
                 produtos_sem_estoque += 1
-            elif row[2] <= row[3]:
+            elif row[2] <= 1:
                 produtos_estoque_baixo += 1
         
         # Estatísticas por categoria
