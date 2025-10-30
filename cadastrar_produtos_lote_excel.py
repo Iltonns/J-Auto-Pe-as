@@ -39,7 +39,7 @@ def criar_produto_dict(linha):
         'marca': marca,
         'preco': valor,
         'categoria': None,  # Pode ser extraído da descrição se necessário
-        'estoque_minimo': 5,
+        'estoque_minimo': 1,
         'preco_custo': 0,
         'margem_lucro': 0,
         'descricao': None,

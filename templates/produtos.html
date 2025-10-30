@@ -556,7 +556,7 @@
                     <i class="fas fa-exclamation-triangle"></i>
                 </div>
                 <div class="card-number" id="estoqueBaixo">
-                    {{ produtos|selectattr('estoque', 'lt', produtos[0].estoque_minimo if produtos else 5)|list|length }}
+                    {{ produtos|selectattr('estoque', 'lt', produtos[0].estoque_minimo if produtos else 1)|list|length }}
                 </div>
                 <div class="card-label">Estoque Baixo</div>
             </div>
@@ -812,7 +812,7 @@
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">Estoque Mínimo</label>
-                                        <input type="number" class="form-control" name="estoque_minimo" value="5" min="1">
+                                        <input type="number" class="form-control" name="estoque_minimo" value="1" min="1">
                                     </div>
                                 </div>
                             </div>
@@ -1135,7 +1135,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Estoque Mínimo Padrão</label>
-                                <input type="number" class="form-control" name="estoque_minimo_padrao" value="5" min="0">
+                                <input type="number" class="form-control" name="estoque_minimo_padrao" value="1" min="0">
                                 <small class="text-muted">Quantidade mínima de estoque para novos produtos</small>
                             </div>
                         </div>
@@ -1458,7 +1458,7 @@ function visualizarProduto(id) {
                                             ${produto.codigo_fornecedor ? `<p><strong>Código do Fornecedor:</strong> <span class="font-monospace">${produto.codigo_fornecedor}</span></p>` : ''}
                                             ${produto.preco_custo ? `<p><strong>Preço de Custo:</strong> R$ ${produto.preco_custo.toFixed(2)}</p>` : ''}
                                             ${produto.margem_lucro ? `<p><strong>Margem de Lucro:</strong> ${produto.margem_lucro.toFixed(1)}%</p>` : ''}
-                                            <p><strong>Estoque Mínimo:</strong> ${produto.estoque_minimo || 5}</p>
+                                            <p><strong>Estoque Mínimo:</strong> ${produto.estoque_minimo || 1}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1511,7 +1511,7 @@ function editarProduto(id) {
             document.getElementById('edit_codigo_barras').value = produto.codigo_barras || '';
             document.getElementById('edit_codigo_fornecedor').value = produto.codigo_fornecedor || '';
             document.getElementById('edit_estoque').value = produto.estoque || 0;
-            document.getElementById('edit_estoque_minimo').value = produto.estoque_minimo || 5;
+            document.getElementById('edit_estoque_minimo').value = produto.estoque_minimo || 1;
             document.getElementById('preco_custo_edit').value = produto.preco_custo || '';
             document.getElementById('margem_lucro_edit').value = produto.margem_lucro || '';
             document.getElementById('preco_venda_edit').value = produto.preco || '';

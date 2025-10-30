@@ -481,6 +481,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="{{ url_for('static', filename='js/pagination.js') }}"></script>
 <script>
 // Carregar biblioteca html2pdf
 if (typeof html2pdf === 'undefined') {
@@ -622,67 +624,97 @@ function exportarCSV() {
     }
 }
 
-// Inicializar paginação quando o documento estiver carregado
-document.addEventListener('DOMContentLoaded', function() {
-    // Aguardar um momento para garantir que tudo foi carregado
-    setTimeout(function() {
-        // Verificar se existem produtos para paginar
-        const tabela = document.getElementById('tabelaEstoque');
-        if (tabela && tabela.querySelector('tbody tr')) {
-            // Garantir que o select tenha o valor padrão correto ANTES de inicializar
-            const selectItens = document.getElementById('itensPorPagina');
-            if (selectItens) {
-                selectItens.value = '30';
-            }
-            
-            // Inicializar sistema de paginação
-            const pagination = new TablePagination({
-                tableId: 'tabelaEstoque',
-                itemsPerPageId: 'itensPorPagina',
-                searchId: 'buscaPrincipal',
-                visibleCountId: 'itensVisiveis',
-                totalCountId: 'totalItens',
-                prevBtnId: 'btnAnterior',
-                nextBtnId: 'btnProximo',
-                paginationControlsId: 'controlesNavegacao',
-                pageInfoId: 'infoPaginacao',
-                defaultItemsPerPage: 30,
-                searchFields: ['codigo', 'nome', 'categoria', 'status']
-            });
-        
-        // Manter funcionalidade de filtro por estoque
-        window.filtrarPor = function(tipo) {
-            pagination.currentPage = 1;
-            
-            pagination.allRows.forEach(row => {
-                const $row = $(row);
-                const statusElement = $row.find('td .badge');
-                let mostrar = false;
-                
-                if (tipo === 'todos') {
-                    mostrar = true;
-                } else if (tipo === 'baixo') {
-                    mostrar = statusElement.hasClass('bg-warning');
-                } else if (tipo === 'sem') {
-                    mostrar = statusElement.hasClass('bg-danger');
-                }
-                
-                if (mostrar) {
-                    if (!pagination.filteredRows.includes(row)) {
-                        pagination.filteredRows.push(row);
-                    }
-                } else {
-                    const index = pagination.filteredRows.indexOf(row);
-                    if (index > -1) {
-                        pagination.filteredRows.splice(index, 1);
-                    }
-                }
-            });
-            
-            pagination.updatePagination();
-        };
+// Variável global para controlar a paginação
+let paginationInstance = null;
+
+// Função para inicializar a paginação
+function inicializarPaginacao() {
+    // Verificar se jQuery está disponível
+    if (typeof $ === 'undefined') {
+        console.error('jQuery não está carregado');
+        setTimeout(inicializarPaginacao, 100);
+        return;
     }
-    }, 100); // Aguardar 100ms
-});
+    
+    // Verificar se a classe TablePagination está disponível
+    if (typeof TablePagination === 'undefined') {
+        console.error('TablePagination não está carregada');
+        setTimeout(inicializarPaginacao, 100);
+        return;
+    }
+    
+    // Verificar se existem produtos para paginar
+    const tabela = document.getElementById('tabelaEstoque');
+    if (!tabela || !tabela.querySelector('tbody tr')) {
+        console.log('Tabela de estoque não encontrada ou não possui linhas');
+        return;
+    }
+    
+    // Garantir que o select tenha o valor padrão correto ANTES de inicializar
+    const selectItens = document.getElementById('itensPorPagina');
+    if (selectItens) {
+        selectItens.value = '30';
+    }
+    
+    try {
+        // Inicializar sistema de paginação
+        paginationInstance = new TablePagination({
+            tableId: 'tabelaEstoque',
+            itemsPerPageId: 'itensPorPagina',
+            searchId: 'buscaPrincipal',
+            visibleCountId: 'itensVisiveis',
+            totalCountId: 'totalItens',
+            prevBtnId: 'btnAnterior',
+            nextBtnId: 'btnProximo',
+            paginationControlsId: 'controlesNavegacao',
+            pageInfoId: 'infoPaginacao',
+            defaultItemsPerPage: 30,
+            searchFields: ['codigo', 'nome', 'categoria', 'status']
+        });
+        
+        console.log('✓ Paginação inicializada com sucesso');
+        console.log('✓ Total de produtos:', paginationInstance.allRows.length);
+    } catch (error) {
+        console.error('Erro ao inicializar paginação:', error);
+    }
+}
+
+// Inicializar paginação quando o documento estiver carregado
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(inicializarPaginacao, 150);
+    });
+} else {
+    // DOM já carregado
+    setTimeout(inicializarPaginacao, 150);
+}
+
+// Manter funcionalidade de filtro por estoque
+window.filtrarPor = function(tipo) {
+    if (!paginationInstance) {
+        console.error('Sistema de paginação não inicializado');
+        return;
+    }
+    
+    paginationInstance.currentPage = 1;
+    
+    // Redefinir filteredRows baseado no filtro de status
+    paginationInstance.filteredRows = paginationInstance.allRows.filter(row => {
+        const $row = $(row);
+        const statusElement = $row.find('td .badge');
+        
+        if (tipo === 'todos') {
+            return true;
+        } else if (tipo === 'baixo') {
+            return statusElement.hasClass('bg-warning');
+        } else if (tipo === 'sem') {
+            return statusElement.hasClass('bg-danger');
+        }
+        
+        return false;
+    });
+    
+    paginationInstance.updatePagination();
+};
 </script>
 {% endblock %}

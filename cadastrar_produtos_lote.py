@@ -223,7 +223,7 @@ def cadastrar_produtos():
                 nome=produto['nome'],
                 preco=produto['preco'],
                 estoque=produto['estoque'],
-                estoque_minimo=5,
+                estoque_minimo=1,
                 codigo_barras=codigo_barras,
                 descricao=None,
                 categoria=produto.get('categoria', ''),

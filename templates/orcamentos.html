@@ -173,7 +173,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= (produto.estoque_minimo or 5) %}text-warning{% else %}text-success{% endif %}">
+                                        <span class="{% if produto.estoque <= 0 %}text-danger{% elif produto.estoque <= (produto.estoque_minimo or 1) %}text-warning{% else %}text-success{% endif %}">
                                             {{ produto.estoque }}
                                         </span>
                                     </td>
@@ -479,7 +479,7 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Estoque Mínimo:</label>
-                            <input type="number" class="form-control" name="estoque_minimo" min="0" placeholder="5" value="5">
+                            <input type="number" class="form-control" name="estoque_minimo" min="0" placeholder="1" value="1">
                         </div>
 
                         <!-- Descrição -->

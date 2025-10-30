@@ -111,7 +111,7 @@ def init_db():
             nome TEXT NOT NULL,
             preco DECIMAL(10,2) NOT NULL,
             estoque INTEGER DEFAULT 0,
-            estoque_minimo INTEGER DEFAULT 5,
+            estoque_minimo INTEGER DEFAULT 1,
             codigo_barras TEXT UNIQUE,
             descricao TEXT,
             categoria TEXT,
@@ -361,7 +361,7 @@ def init_db():
             preco_venda DECIMAL(10,2) NOT NULL,
             
             -- Estoque
-            estoque_minimo INTEGER DEFAULT 5,
+            estoque_minimo INTEGER DEFAULT 1,
             
             -- Relacionamentos
             fornecedor_id INTEGER,
@@ -1477,7 +1477,7 @@ def obter_produto_por_id(produto_id):
         }
     return None
 
-def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None, 
+def adicionar_produto(nome, preco, estoque=0, estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None, 
                      codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
     """Adiciona um novo produto"""
     conn = get_db_connection()
@@ -1502,7 +1502,7 @@ def adicionar_produto(nome, preco, estoque=0, estoque_minimo=5, codigo_barras=No
     conn.close()
     return produto_id
 
-def editar_produto(id, nome, preco, estoque, estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
+def editar_produto(id, nome, preco, estoque, estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None,
                   codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
     """Edita um produto existente"""
     conn = get_db_connection()
@@ -1601,7 +1601,7 @@ def atualizar_estoque(produto_id, quantidade):
 
 # FUNÇÕES DE MOVIMENTAÇÕES DE PRODUTOS
 def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='entrada', origem='manual',
-                          estoque_minimo=5, codigo_barras=None, descricao=None, categoria=None,
+                          estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None,
                           codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None,
                           marca=None, fornecedor_id=None, ncm=None, unidade='UN',
                           xml_nfe_chave=None, xml_nfe_numero=None, xml_nfe_data=None,
@@ -1691,7 +1691,7 @@ def obter_movimentacao_por_id(movimentacao_id):
     conn.close()
     return movimentacao
 
-def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_minimo=5,
+def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_minimo=1,
                        codigo_barras=None, descricao=None, categoria=None, codigo_fornecedor=None,
                        preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
     """Edita uma movimentação pendente"""
@@ -3504,7 +3504,7 @@ def mapear_ncm_para_categoria(ncm):
     else:
         return "Geral"
 
-def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=5, usar_preco_nfe=True, acao_existente='atualizar_estoque'):
+def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=1, usar_preco_nfe=True, acao_existente='atualizar_estoque'):
     """
     Importa produtos de um arquivo XML de NFe com configurações avançadas
     Também extrai e cadastra/atualiza automaticamente o fornecedor baseado nos dados do emitente da NF-e
@@ -3975,7 +3975,7 @@ def importar_produtos_de_xml(conteudo_xml):
             'erros': [str(e)]
         }
 
-def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=5, usuario_id=None):
+def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=1, usuario_id=None):
     """
     Importa produtos de um arquivo XML de NFe criando movimentações pendentes de aprovação
     ao invés de adicionar diretamente ao estoque

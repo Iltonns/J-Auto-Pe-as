@@ -1069,7 +1069,7 @@ def adicionar_produto_route():
         
         # Campos numéricos
         estoque = safe_int(request.form.get('estoque', 0))
-        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 1), 1)
         preco_custo = safe_float(request.form.get('preco_custo', 0))
         margem_lucro = safe_float(request.form.get('margem_lucro', 0))
         
@@ -1158,7 +1158,7 @@ def editar_produto_route(id):
         
         # Campos numéricos
         estoque = safe_int(request.form.get('estoque', 0))
-        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 1), 1)
         preco_custo = safe_float(request.form.get('preco_custo', 0))
         margem_lucro = safe_float(request.form.get('margem_lucro', 0))
         
@@ -1336,7 +1336,7 @@ def importar_produtos_xml_route():
             try:
                 # Obter configurações do formulário
                 margem_padrao = float(request.form.get('margem_padrao', 100))
-                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 5))
+                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 1))
                 usar_preco_nfe = request.form.get('usar_preco_nfe') == 'on'
                 acao_existente = request.form.get('acao_existente', 'atualizar_estoque')
                 
@@ -1550,7 +1550,7 @@ def adicionar_movimentacao_route():
         
         # Campos numéricos
         quantidade = safe_int(request.form.get('quantidade', 0))
-        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 1), 1)
         preco_custo = safe_float(request.form.get('preco_custo', 0))
         preco_venda = safe_float(request.form.get('preco_venda', 0))
         
@@ -1685,7 +1685,7 @@ def editar_movimentacao_route(id):
         fornecedor_id = safe_int(request.form.get('fornecedor_id', 0)) or None
         
         quantidade = safe_int(request.form.get('quantidade', 0))
-        estoque_minimo = safe_int(request.form.get('estoque_minimo', 5), 5)
+        estoque_minimo = safe_int(request.form.get('estoque_minimo', 1), 1)
         preco_custo = safe_float(request.form.get('preco_custo', 0))
         margem_lucro = safe_float(request.form.get('margem_lucro', 0))
         
@@ -1847,7 +1847,7 @@ def importar_xml_movimentacoes_route():
             try:
                 # Obter configurações do formulário
                 margem_padrao = float(request.form.get('margem_padrao', 100))
-                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 5))
+                estoque_minimo_padrao = int(request.form.get('estoque_minimo_padrao', 1))
                 
                 # Ler conteúdo do arquivo
                 conteudo_xml = arquivo.read().decode('utf-8')
@@ -2739,7 +2739,12 @@ def relatorio_estoque():
     # Gerar relatório
     relatorio = gerar_relatorio_estoque()
     
-    return render_template('relatorios/estoque.html', relatorio=relatorio)
+    # Obter configurações da empresa
+    configuracoes_empresa = obter_configuracoes_empresa()
+    
+    return render_template('relatorios/estoque.html', 
+                         relatorio=relatorio,
+                         configuracoes_empresa=configuracoes_empresa)
 
 @app.route('/relatorios/financeiro')
 @login_required

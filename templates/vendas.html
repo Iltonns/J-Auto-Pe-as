@@ -1149,7 +1149,7 @@ function mostrarResultadosBusca(produtos) {
             }
             
             const estoqueBadge = produto.estoque <= 0 ? 'danger' : 
-                               produto.estoque <= (produto.estoque_minimo || 5) ? 'warning' : 'success';
+                               produto.estoque <= (produto.estoque_minimo || 1) ? 'warning' : 'success';
             
             // Criar elementos DOM ao invés de string HTML para evitar problemas com aspas
             const row = $('<tr>').addClass('produto-resultado');
