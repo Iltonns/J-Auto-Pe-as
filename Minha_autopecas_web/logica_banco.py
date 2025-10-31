@@ -1918,10 +1918,89 @@ def deletar_movimentacao(movimentacao_id):
         conn.close()
         raise ValueError("Apenas movimentações pendentes ou canceladas podem ser deletadas")
     
-    cursor.execute('DELETE FROM movimentacoes WHERE id = %s', (movimentacao_id,))
-    conn.commit()
     conn.close()
     return True
+
+def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
+    """
+    Vincula uma movimentação pendente a um produto existente no estoque.
+    Atualiza os dados da movimentação com os dados do produto existente,
+    exceto o preço de venda, custo e quantidade.
+    """
+    conn = get_db_connection()
+    # Use RealDictCursor to fetch product data as a dictionary
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    try:
+        # 1. Verificar se a movimentação existe e está pendente
+        cursor.execute("SELECT status FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+        movimentacao = cursor.fetchone()
+        
+        if not movimentacao:
+            return False, "Movimentação não encontrada."
+        
+        if movimentacao['status'] != 'pendente':
+            return False, "Apenas movimentações pendentes podem ser vinculadas."
+            
+        # 2. Buscar os dados do produto de destino
+        # Usando a função já existente para consistência
+        produto_existente = obter_produto_por_id(produto_id)
+
+        if not produto_existente:
+            return False, "Produto de destino não encontrado ou está inativo."
+            
+        # 3. Atualizar a movimentação com os dados do produto, exceto preços e quantidade
+        # ACAO: Atualiza os dados da movimentação com os dados do produto vinculado
+        # Manter o preco_venda, preco_custo e quantidade da NFe original
+        cursor.execute("""
+            UPDATE movimentacoes 
+            SET 
+                produto_id = %(produto_id)s,
+                nome = %(nome)s,
+                codigo_barras = %(codigo_barras)s,
+                codigo_fornecedor = %(codigo_fornecedor)s,
+                descricao = %(descricao)s,
+                categoria = %(categoria)s,
+                marca = %(marca)s,
+                ncm = %(ncm)s,
+                unidade = %(unidade)s,
+                estoque_minimo = %(estoque_minimo)s,
+                fornecedor_id = %(fornecedor_id)s,
+                foto_url = %(foto_url)s,
+                observacoes = COALESCE(observacoes, '') || %(observacao)s
+            WHERE id = %(movimentacao_id)s
+        """, {
+            'produto_id': produto_id,
+            'nome': produto_existente.get('nome'),
+            'codigo_barras': produto_existente.get('codigo_barras'),
+            'codigo_fornecedor': produto_existente.get('codigo_fornecedor'),
+            'descricao': produto_existente.get('descricao'),
+            'categoria': produto_existente.get('categoria'),
+            'marca': produto_existente.get('marca'),
+            'ncm': produto_existente.get('ncm'),
+            'unidade': produto_existente.get('unidade'),
+            'estoque_minimo': produto_existente.get('estoque_minimo'),
+            'fornecedor_id': produto_existente.get('fornecedor_id'),
+            'foto_url': produto_existente.get('foto_url'),
+            'observacao': f'\n[Vinculado ao produto ID {produto_id} por usuário {usuario_id} em {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]',
+            'movimentacao_id': movimentacao_id
+        })
+        
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            return True, f"Movimentação ID {movimentacao_id} vinculada e atualizada com sucesso com os dados do Produto ID {produto_id}."
+        else:
+            # Isso pode acontecer se a movimentação não for encontrada no WHERE
+            return False, "Não foi possível vincular e atualizar a movimentação."
+            
+    except Exception as e:
+        conn.rollback()
+        import traceback
+        traceback.print_exc()
+        return False, f"Erro ao vincular produto: {str(e)}"
+    finally:
+        conn.close()
 
 def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id):
     """Reverte o estoque de uma movimentação aprovada e a deleta."""

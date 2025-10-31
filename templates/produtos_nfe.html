@@ -155,6 +155,11 @@
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     {% if produto.status == 'pendente' %}
+                                        <button class="btn btn-primary"
+                                                onclick="vincularProduto({{ produto.id }}, '{{ produto.nome }}', '{{ produto.codigo_fornecedor }}')"
+                                                title="Vincular a um produto existente">
+                                            <i class="fas fa-link"></i>
+                                        </button>
                                         <button class="btn btn-warning" 
                                                 onclick="editarProduto({{ produto.id }})" 
                                                 title="Editar">
@@ -353,6 +358,48 @@
 }
 </style>
 
+<!-- Modal Vincular Produto -->
+<div class="modal fade" id="modalVincularProduto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-link me-2"></i>Vincular Produto da NFe
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Vincule o produto da NFe a um produto já existente no seu estoque.</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Produto da NFe:</h6>
+                        <p id="vincular-produto-nfe-nome"></p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="vincular-search" class="form-label"><strong>Buscar Produto no Estoque:</strong></label>
+                    <input type="text" id="vincular-search" class="form-control" placeholder="Digite o nome, código ou marca do produto...">
+                </div>
+                <div id="vincular-search-results" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Resultados da busca aparecerão aqui -->
+                </div>
+                <form id="formVincularProduto" method="POST">
+                    <input type="hidden" id="vincular-movimentacao-id" name="movimentacao_id">
+                    <input type="hidden" id="vincular-produto-id" name="produto_id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmarVinculo()">
+                    <i class="fas fa-save me-1"></i> Confirmar Vínculo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Calculadora de preços (opcional - apenas se usuário quiser usar)
 function calcularPreco(tipo) {
@@ -537,6 +584,175 @@ function previewImage(input, previewId) {
         preview.style.display = 'none';
         preview.src = '';
     }
+}
+
+// --- Funções para Vincular Produto ---
+
+let vincularSearchInput = null;
+let searchTimeout = null;
+
+function vincularProduto(movimentacaoId, nomeProdutoNFe, codigoFornecedor) {
+    console.log('vincularProduto called with:', movimentacaoId, nomeProdutoNFe, codigoFornecedor);
+    try {
+        document.getElementById('vincular-movimentacao-id').value = movimentacaoId;
+        document.getElementById('vincular-produto-nfe-nome').textContent = `Nome: ${nomeProdutoNFe} (Cód. Forn: ${codigoFornecedor || 'N/A'})`;
+        document.getElementById('vincular-search').value = '';
+        document.getElementById('vincular-search-results').innerHTML = '';
+
+        const modalEl = document.getElementById('modalVincularProduto');
+        const modal = new bootstrap.Modal(modalEl);
+        
+        // Remover listener antigo para evitar duplicação
+        if (vincularSearchInput) {
+            vincularSearchInput.removeEventListener('input', handleVincularSearch);
+        }
+
+        // Adicionar listener de busca
+        vincularSearchInput = document.getElementById('vincular-search');
+        vincularSearchInput.addEventListener('input', handleVincularSearch);
+        
+        modal.show();
+
+        // Pre-fill search with product name to give user a starting point
+        if (nomeProdutoNFe) {
+            vincularSearchInput.value = nomeProdutoNFe;
+            buscarProdutosParaVincular();
+        }
+    } catch (e) {
+        console.error('Error in vincularProduto:', e);
+        alert('Ocorreu um erro ao abrir o modal de vinculação. Verifique o console para mais detalhes.');
+    }
+}
+
+function handleVincularSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(buscarProdutosParaVincular, 300); // Debounce search
+}
+
+function buscarProdutosParaVincular() {
+    const searchTerm = document.getElementById('vincular-search').value;
+    const resultsContainer = document.getElementById('vincular-search-results');
+
+    if (searchTerm.length < 2) {
+        resultsContainer.innerHTML = '<p class="text-muted">Digite ao menos 2 caracteres para buscar.</p>';
+        return;
+    }
+
+    fetch(`/produtos/buscar?termo=${encodeURIComponent(searchTerm)}`)
+        .then(response => response.json())
+        .then(produtos => {
+            resultsContainer.innerHTML = '';
+            if (produtos.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-center">Nenhum produto encontrado.</p>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Marca</th>
+                        <th>Códigos</th>
+                        <th>Estoque</th>
+                        <th>Preço Venda</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            `;
+            const tbody = table.querySelector('tbody');
+
+            produtos.forEach(produto => {
+                const tr = document.createElement('tr');
+                // Escapar o nome do produto para evitar problemas com aspas
+                const escapedNome = produto.nome.replace(/'/g, "\'");
+                
+                tr.innerHTML = `
+                    <td>${produto.nome}</td>
+                    <td>${produto.marca || '-'}</td>
+                    <td>
+                        <small>
+                        ${produto.codigo_barras ? `EAN: ${produto.codigo_barras}<br>` : ''}
+                        ${produto.codigo_fornecedor ? `Forn: ${produto.codigo_fornecedor}` : ''}
+                        </small>
+                    </td>
+                    <td>${produto.quantidade}</td>
+                    <td>R$ ${produto.preco_venda.toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="selecionarProdutoParaVincular(event, ${produto.id}, '${escapedNome}')">
+                            <i class="fas fa-check"></i> Selecionar
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            resultsContainer.appendChild(table);
+        })
+        .catch(error => {
+            console.error('Erro ao buscar produtos:', error);
+            resultsContainer.innerHTML = '<p class="text-danger">Erro ao buscar produtos. Tente novamente.</p>';
+        });
+}
+
+function selecionarProdutoParaVincular(event, produtoId, nomeProduto) {
+    document.getElementById('vincular-produto-id').value = produtoId;
+    
+    // Highlight selected row
+    const rows = document.querySelectorAll('#vincular-search-results tbody tr');
+    rows.forEach(row => row.classList.remove('table-primary'));
+    
+    const selectedButton = event.target.closest('button');
+    const selectedRow = selectedButton.closest('tr');
+    selectedRow.classList.add('table-primary');
+
+    // Optional: Add a visual confirmation
+    const resultsContainer = document.getElementById('vincular-search-results');
+    let confirmation = resultsContainer.querySelector('.alert-info');
+    if (!confirmation) {
+        confirmation = document.createElement('div');
+        confirmation.className = 'alert alert-info mt-2';
+        resultsContainer.insertAdjacentElement('afterbegin', confirmation);
+    }
+    confirmation.innerHTML = `<strong>Produto selecionado:</strong> ${nomeProduto} (ID: ${produtoId}). <br>Clique em "Confirmar Vínculo" para salvar.`;
+}
+
+function confirmarVinculo() {
+    const movimentacaoId = document.getElementById('vincular-movimentacao-id').value;
+    const produtoId = document.getElementById('vincular-produto-id').value;
+
+    if (!produtoId) {
+        alert('Por favor, selecione um produto da lista para vincular.');
+        return;
+    }
+
+    const form = document.getElementById('formVincularProduto');
+    form.action = `/movimentacoes/vincular/${movimentacaoId}/${produtoId}`;
+    
+    // Use fetch to submit the form via POST
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        // No body needed if we pass IDs in URL, but can be adapted
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao vincular produto:', error);
+        alert('Ocorreu um erro de comunicação. Tente novamente.');
+    });
 }
 </script>
 {% endblock %}

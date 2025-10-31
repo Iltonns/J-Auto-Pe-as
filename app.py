@@ -59,6 +59,7 @@ from Minha_autopecas_web.logica_banco import (
     editar_movimentacao, aprovar_movimentacao, rejeitar_movimentacao, cancelar_movimentacao,
     deletar_movimentacao, contar_movimentacoes_pendentes, importar_xml_para_movimentacoes,
     listar_nfes_agrupadas, listar_produtos_por_nfe, aprovar_nfe_completa, rejeitar_nfe_completa, cancelar_nfe_completa,
+    vincular_produto_nfe,
     # Funções para autocomplete de marcas e categorias
     obter_marcas_cadastradas, obter_categorias_cadastradas
 )
@@ -951,16 +952,48 @@ def produtos():
 @app.route('/produtos/buscar')
 @login_required
 def buscar_produto_route():
-    """API para buscar produtos"""
+    """API para buscar produtos para vinculação"""
     try:
         termo = request.args.get('termo', '').strip()
-        if not termo:
+        if len(termo) < 2:
             return jsonify([])
         
+        # Usar a função buscar_produto que é mais flexível
         produtos = buscar_produto(termo)
+        
+        # Renomear 'preco' para 'preco_venda' e converter tipos
+        for produto in produtos:
+            produto['preco_venda'] = float(produto.pop('preco', 0) or 0)
+            if 'preco_custo' in produto and produto['preco_custo'] is not None:
+                produto['preco_custo'] = float(produto['preco_custo'])
+            if 'quantidade' in produto and produto['quantidade'] is not None:
+                produto['quantidade'] = int(produto['quantidade'])
+
         return jsonify(produtos)
     except Exception as e:
-        return jsonify({'error': str(e)})
+        print(f"[ERRO] na busca de produtos para vincular: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/movimentacoes/vincular/<int:movimentacao_id>/<int:produto_id>', methods=['POST'])
+@login_required
+@required_permission('estoque')
+def vincular_movimentacao_route(movimentacao_id, produto_id):
+    """Vincula uma movimentação pendente a um produto existente"""
+    try:
+        # Importar a função aqui para evitar dependência circular
+        from Minha_autopecas_web.logica_banco import vincular_produto_nfe
+        
+        sucesso, mensagem = vincular_produto_nfe(movimentacao_id, produto_id, current_user.id)
+        
+        if sucesso:
+            return jsonify({'success': True, 'message': mensagem})
+        else:
+            return jsonify({'success': False, 'message': mensagem}), 400
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro interno no servidor: {str(e)}'}), 500
 
 @app.route('/api/produtos/buscar')
 @login_required
