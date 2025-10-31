@@ -8,7 +8,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from functools import wraps
 from io import BytesIO
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -3002,6 +3002,281 @@ def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecio
     buffer.seek(0)
     return buffer
 
+def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, status=None):
+    """Gera PDF do relatório de contas a receber"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Obter configurações da empresa
+    config_empresa = obter_configuracoes_empresa()
+    
+    # Cabeçalho da empresa
+    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
+    
+    # Configurar estilos
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2962ff')
+    )
+    
+    # Título do relatório
+    story.append(Paragraph("RELATÓRIO DE CONTAS A RECEBER", title_style))
+    
+    # Período
+    if data_inicio and data_fim:
+        periodo = f"Período: {data_inicio} a {data_fim}"
+        story.append(Paragraph(periodo, styles['Normal']))
+        story.append(Spacer(1, 10))
+
+    if status:
+        story.append(Paragraph(f"Status: {status.capitalize()}", styles['Normal']))
+        story.append(Spacer(1, 10))
+
+    # Resumo
+    if relatorio.get('estatisticas'):
+        estatisticas = relatorio['estatisticas']
+        resumo_data = [
+            ['Resumo', 'Valor'],
+            ['Total de Contas', str(estatisticas['total_contas'])],
+            ['Valor Total', f"R$ {estatisticas['total_valor']:.2f}"],
+            ['Valor Médio', f"R$ {estatisticas['valor_medio']:.2f}"],
+            ['Atrasadas', str(estatisticas['atrasadas'])]
+        ]
+        
+        resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
+        resumo_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(resumo_table)
+        story.append(Spacer(1, 20))
+
+    # Contas detalhadas
+    if relatorio['contas']:
+        story.append(Paragraph("Contas Detalhadas", styles['Heading3']))
+        story.append(Spacer(1, 12))
+        
+        contas_data = [['ID', 'Vencimento', 'Cliente', 'Descrição', 'Valor', 'Status']]
+        
+        for conta in relatorio['contas']:
+            contas_data.append([
+                str(conta['id']),
+                str(conta['data_vencimento']),
+                str(conta['cliente_nome'])[:30],
+                str(conta['descricao'])[:35],
+                f"R$ {conta['valor']:.2f}",
+                conta['status']
+            ])
+        
+        contas_table = Table(contas_data, colWidths=[0.5*inch, 1*inch, 2*inch, 2.5*inch, 1*inch, 0.8*inch])
+        contas_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+        ]))
+        
+        story.append(contas_table)
+    
+    # Adicionar rodapé
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        rodape = criar_rodape_empresa(doc, config_empresa)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(50, 30, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
+        canvas.restoreState()
+    
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    buffer.seek(0)
+    return buffer
+
+@app.route('/relatorios/contas-a-receber/pdf')
+@login_required
+def exportar_contas_a_receber_pdf():
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    filtro = request.args.get('filtro', 'todos')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    status = request.args.get('status', 'pendente')
+    
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
+    estatisticas = {
+        'total_contas': len(contas),
+        'total_valor': sum(c['valor'] for c in contas),
+        'valor_medio': sum(c['valor'] for c in contas) / len(contas) if contas else 0,
+        'atrasadas': len([c for c in contas if c['dias_restantes'] < 0])
+    }
+    relatorio = {'contas': contas, 'estatisticas': estatisticas}
+    
+    pdf_buffer = criar_pdf_contas_a_receber(relatorio, data_inicio, data_fim, status)
+    
+    response = make_response(pdf_buffer.getvalue())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'attachment; filename=relatorio_contas_a_receber.pdf'
+    
+    return response
+
+def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=None):
+    """Gera PDF do relatório de contas a pagar"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Obter configurações da empresa
+    config_empresa = obter_configuracoes_empresa()
+    
+    # Cabeçalho da empresa
+    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
+    
+    # Configurar estilos
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2962ff')
+    )
+    
+    # Título do relatório
+    story.append(Paragraph("RELATÓRIO DE CONTAS A PAGAR", title_style))
+    
+    # Período
+    if data_inicio and data_fim:
+        periodo = f"Período: {data_inicio} a {data_fim}"
+        story.append(Paragraph(periodo, styles['Normal']))
+        story.append(Spacer(1, 10))
+
+    if status:
+        story.append(Paragraph(f"Status: {status.capitalize()}", styles['Normal']))
+        story.append(Spacer(1, 10))
+
+    # Resumo
+    if relatorio.get('estatisticas'):
+        estatisticas = relatorio['estatisticas']
+        resumo_data = [
+            ['Resumo', 'Valor'],
+            ['Total de Contas', str(estatisticas['total_contas'])],
+            ['Valor Total', f"R$ {estatisticas['total_valor']:.2f}"],
+            ['Valor Médio', f"R$ {estatisticas['valor_medio']:.2f}"],
+            ['Atrasadas', str(estatisticas['atrasadas'])]
+        ]
+        
+        resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
+        resumo_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(resumo_table)
+        story.append(Spacer(1, 20))
+
+    # Contas detalhadas
+    if relatorio['contas']:
+        story.append(Paragraph("Contas Detalhadas", styles['Heading3']))
+        story.append(Spacer(1, 12))
+        
+        contas_data = [['ID', 'Vencimento', 'Fornecedor', 'Descrição', 'Categoria', 'Valor', 'Status']]
+        
+        for conta in relatorio['contas']:
+            contas_data.append([
+                str(conta['id']),
+                str(conta['data_vencimento']),
+                str(conta['fornecedor_nome'])[:25],
+                str(conta['descricao'])[:30],
+                str(conta['categoria']),
+                f"R$ {conta['valor']:.2f}",
+                conta['status']
+            ])
+        
+        contas_table = Table(contas_data, colWidths=[0.5*inch, 1*inch, 1.5*inch, 2*inch, 1*inch, 1*inch, 0.8*inch])
+        contas_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+        ]))
+        
+        story.append(contas_table)
+    
+    # Adicionar rodapé
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        rodape = criar_rodape_empresa(doc, config_empresa)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(50, 30, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
+        canvas.restoreState()
+    
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    buffer.seek(0)
+    return buffer
+
+@app.route('/relatorios/contas-a-pagar/pdf')
+@login_required
+def exportar_contas_a_pagar_pdf():
+    if not verificar_permissao(current_user.id, 'relatorios'):
+        flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    filtro = request.args.get('filtro', 'todos')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    status = request.args.get('status', 'pendente')
+    
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
+    estatisticas = {
+        'total_contas': len(contas),
+        'total_valor': sum(c['valor'] for c in contas),
+        'valor_medio': sum(c['valor'] for c in contas) / len(contas) if contas else 0,
+        'atrasadas': len([c for c in contas if c['dias_restantes'] < 0])
+    }
+    relatorio = {'contas': contas, 'estatisticas': estatisticas}
+    
+    pdf_buffer = criar_pdf_contas_a_pagar(relatorio, data_inicio, data_fim, status)
+    
+    response = make_response(pdf_buffer.getvalue())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'attachment; filename=relatorio_contas_a_pagar.pdf'
+    
+    return response
+
 def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None, limite=10):
     """Gera PDF do relatório de produtos mais vendidos"""
     buffer = BytesIO()
@@ -3076,62 +3351,54 @@ def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None,
     return buffer
 
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 def criar_pdf_estoque(relatorio):
     """Gera PDF do relatório de estoque com layout padronizado."""
     buffer = BytesIO()
-    # Usar A4 e margens reduzidas (similar ao financeiro)
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=40, rightMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
     styles = getSampleStyleSheet()
     story = []
-    
+
     # Obter configurações da empresa
     config_empresa = obter_configuracoes_empresa()
-    
+
     # Cabeçalho da empresa
     story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-    
-    # Configurar estilos (Usando a cor Primary/Dark Blue para padronizar com Financeiro)
+
+    # Configurar estilos
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading2'],
         fontSize=16,
         spaceAfter=20,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#1a237e') # Dark Blue - Primary Color
+        textColor=colors.HexColor('#2962ff')  # Azul padrão
     )
-    
+
     subtitle_style = ParagraphStyle(
         'SubtitleStyle',
         parent=styles['Heading3'],
         fontSize=12,
         spaceAfter=10,
-        textColor=colors.HexColor('#1a237e'), # Dark Blue
+        textColor=colors.HexColor('#2962ff'),
         fontName='Helvetica-Bold'
     )
-    
+
     # Título do relatório
     story.append(Paragraph("RELATÓRIO COMPLETO DE ESTOQUE", title_style))
-    
+
     # Verificar se há erro no relatório
     if relatorio.get('erro'):
         story.append(Paragraph(f"Erro ao gerar relatório: {relatorio['erro']}", styles['Normal']))
         doc.build(story)
         buffer.seek(0)
         return buffer
-    
+
     # Resumo Geral
     resumo = relatorio.get('resumo', {})
     
     story.append(Paragraph("RESUMO DE INDICADORES", subtitle_style))
     
-    # Prepara a tabela de resumo
     resumo_data = [
         ['Indicador', 'Valor'],
         ['Total de Produtos Cadastrados', str(resumo.get('total_produtos', 0))],
@@ -3141,29 +3408,25 @@ def criar_pdf_estoque(relatorio):
         ['Valor Total do Estoque (Custo)', f"R$ {resumo.get('valor_total_estoque_custo', 0):,.2f}"]
     ]
     
-    # Estilo de Tabela de Resumo (Padronizado para Dark Blue Header)
     resumo_table = Table(resumo_data, colWidths=[3*inch, 2.5*inch])
     resumo_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')), # Dark Blue Header
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f0f4ff')), # Light Blue Background
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     
     story.append(resumo_table)
     story.append(Spacer(1, 20))
-    
+
     # Tabela Detalhada de Produtos
     if relatorio.get('produtos'):
         story.append(Paragraph("PRODUTOS DETALHADOS", subtitle_style))
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 12))
         
         produtos_data = [
             ['Código', 'Produto', 'Qtd', 'Mínimo', 'Custo', 'Venda', 'Valor Estoque', 'Status']
@@ -3171,49 +3434,29 @@ def criar_pdf_estoque(relatorio):
         
         for produto in relatorio['produtos']:
             status_text = produto.get('status', 'N/A')
-            status_color = colors.HexColor('#2e7d32') # Green (Estoque OK)
-            if status_text == 'Sem Estoque':
-                status_color = colors.HexColor('#d32f2f') # Red
-            elif status_text == 'Estoque Baixo':
-                status_color = colors.HexColor('#f57c00') # Orange (Warning)
-
-            # Usar Paragraph para formatar texto e cor na célula
-            # Combina nome e categoria (opcionalmente) na mesma célula para eficiência
-            produto_detail_html = f"<b>{str(produto.get('nome', ''))[:20]}</b>"
-            if produto.get('categoria'):
-                # Reduz o tamanho da fonte para a categoria
-                produto_detail_html += f"<br/><font size='5'>Cat: {str(produto.get('categoria', ''))[:15]}</font>"
-
-            status_paragrafo = Paragraph(f"<font color='{status_color.rgb()}'><b>{status_text}</b></font>", styles['Normal'])
-            produto_paragrafo = Paragraph(produto_detail_html, styles['Normal'])
             
             produtos_data.append([
                 str(produto.get('codigo', produto.get('codigo_barras', '-')))[:15],
-                produto_paragrafo,
+                str(produto.get('nome', ''))[:30],
                 str(produto.get('estoque', 0)),
                 str(produto.get('estoque_minimo', 1)),
                 f"R$ {produto.get('preco_custo', 0):.2f}",
                 f"R$ {produto.get('preco', 0):.2f}",
                 f"R$ {produto.get('valor_estoque', 0):.2f}",
-                status_paragrafo
+                status_text
             ])
         
-        # Estilo da Tabela Detalhada (Padronizado para Dark Blue Header)
-        produtos_table = Table(produtos_data, colWidths=[0.8*inch, 1.8*inch, 0.4*inch, 0.5*inch, 0.8*inch, 0.8*inch, 1*inch, 0.8*inch])
+        produtos_table = Table(produtos_data, colWidths=[0.8*inch, 2.2*inch, 0.4*inch, 0.5*inch, 0.8*inch, 0.8*inch, 1*inch, 0.8*inch])
         produtos_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')), # Dark Blue Header
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (1, 1), (1, -1), 'LEFT'), # Nome do Produto à esquerda
-            ('ALIGN', (4, 1), (-2, -1), 'RIGHT'), # Colunas de valores à direita
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 7),
-            ('FONTSIZE', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f0f4ff')), # Light Blue Background
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
         ]))
         
@@ -3223,9 +3466,9 @@ def criar_pdf_estoque(relatorio):
     def add_page_number(canvas, doc):
         canvas.saveState()
         rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 7)
-        canvas.drawString(40, 25, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 40, 25, f"Página {canvas.getPageNumber()}")
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(50, 30, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
         canvas.restoreState()
     
     doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
@@ -3298,6 +3541,113 @@ def exportar_estoque_pdf():
     response.headers['Content-Disposition'] = 'attachment; filename=relatorio_estoque.pdf'
     
     return response
+
+def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
+    """Gera PDF do relatório financeiro com layout padronizado."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Obter configurações da empresa
+    config_empresa = obter_configuracoes_empresa()
+
+    # Cabeçalho da empresa
+    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
+
+    # Configurar estilos
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2962ff')
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'SubtitleStyle',
+        parent=styles['Heading3'],
+        fontSize=12,
+        spaceAfter=10,
+        textColor=colors.HexColor('#2962ff'),
+        fontName='Helvetica-Bold'
+    )
+
+    # Título do relatório
+    story.append(Paragraph("RELATÓRIO FINANCEIRO", title_style))
+
+    # Período
+    if data_inicio and data_fim:
+        periodo = f"Período: {data_inicio} a {data_fim}"
+        story.append(Paragraph(periodo, styles['Normal']))
+        story.append(Spacer(1, 10))
+
+    # Resumo
+    resumo = relatorio.get('resumo', {})
+    resumo_data = [
+        ['Resumo Financeiro', 'Valor'],
+        ['Total de Vendas', f"R$ {resumo.get('total_vendas', 0):.2f}"],
+        ['Total Recebido', f"R$ {resumo.get('total_recebido', 0):.2f}"],
+        ['Total a Receber', f"R$ {resumo.get('total_a_receber', 0):.2f}"],
+        ['Total Pago', f"R$ {resumo.get('total_pago', 0):.2f}"],
+        ['Total a Pagar', f"R$ {resumo.get('total_a_pagar', 0):.2f}"],
+        ['Saldo Líquido (Recebido - Pago)', f"R$ {resumo.get('saldo_liquido', 0):.2f}"]
+    ]
+    
+    resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
+    resumo_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(resumo_table)
+    story.append(Spacer(1, 20))
+
+    # Vendas por Forma de Pagamento
+    if relatorio.get('vendas_forma_pagamento'):
+        story.append(Paragraph("Vendas por Forma de Pagamento", subtitle_style))
+        vendas_data = [['Forma de Pagamento', 'Quantidade', 'Valor Total']]
+        for venda in relatorio['vendas_forma_pagamento']:
+            vendas_data.append([
+                venda['forma_pagamento'],
+                str(venda['quantidade']),
+                f"R$ {venda['valor']:.2f}"
+            ])
+        
+        vendas_table = Table(vendas_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
+        vendas_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
+        ]))
+        story.append(vendas_table)
+        story.append(Spacer(1, 20))
+
+    # Adicionar rodapé
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        rodape = criar_rodape_empresa(doc, config_empresa)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(50, 30, rodape)
+        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
+        canvas.restoreState()
+    
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    buffer.seek(0)
+    return buffer
 
 @app.route('/relatorios/financeiro/pdf')
 @login_required

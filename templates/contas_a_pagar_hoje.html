@@ -100,7 +100,7 @@
     }
     
     .table th {
-        background-color: #1a237e !important;
+        background-color: #007bff !important;
         color: white !important;
         font-weight: bold !important;
     }
@@ -148,7 +148,7 @@
     }
     
     .stats-for-print .stat-box {
-        border: 2px solid #1a237e;
+        border: 2px solid #007bff;
         padding: 15px;
         margin: 5px;
         border-radius: 8px;
@@ -164,7 +164,7 @@
     .stats-for-print .stat-value {
         font-size: 18px;
         font-weight: bold;
-        color: #1a237e;
+        color: #007bff;
     }
     
     .stats-for-print .stat-value.total {
@@ -231,13 +231,13 @@
                 {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                     <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
                 {% else %}
-                    <div style="width: 150px; height: 80px; background: #1a237e; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    <div style="width: 150px; height: 80px; background: #007bff; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <i class="fas fa-building fa-3x"></i>
                     </div>
                 {% endif %}
             </div>
             <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
-                <h2 style="color: #1a237e; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                <h2 style="color: #007bff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
                     {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
                 </h2>
                 <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
@@ -250,8 +250,8 @@
                 <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ contas|length if contas else 0 }}</p>
             </div>
         </div>
-        <hr style="margin: 15px 0; border: none; border-top: 3px solid #1a237e;">
-        <h3 style="text-align: center; color: #1a237e; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE CONTAS A PAGAR</h3>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #007bff;">
+        <h3 style="text-align: center; color: #007bff; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE CONTAS A PAGAR</h3>
         <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
             <p style="margin: 0; font-size: 10px; text-align: center;">
                 <strong>Período de Análise:</strong> {{ filtro_atual.upper() }} | 
@@ -315,13 +315,13 @@
     
     <!-- Cabeçalho da Empresa (Visível na Tela) -->
     <div class="card mb-4 no-print">
-        <div class="card-body" style="background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); color: white;">
+        <div class="card-body" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white;">
             <div class="row align-items-center">
                 <div class="col-md-2 text-center">
                     {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                         <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
                     {% else %}
-                        <div style="width: 100px; height: 100px; background: white; color: #d32f2f; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                        <div style="width: 100px; height: 100px; background: white; color: #007bff; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
                             <i class="fas fa-building fa-3x"></i>
                         </div>
                     {% endif %}
@@ -360,12 +360,12 @@
                     <p class="text-muted mb-0">Gestão completa das suas obrigações financeiras</p>
                 </div>
                 <div class="no-print">
-                    <button class="btn me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #1a237e; color: white; border: none;">
+                    <button class="btn me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #007bff; color: white; border: none;">
                         <i class="fas fa-plus me-2"></i>Nova Conta
                     </button>
-                    <button class="btn btn-success me-2" onclick="exportarPDF()">
+                    <a href="{{ url_for('exportar_contas_a_pagar_pdf', filtro=filtro_atual, data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim'), status=status_atual) }}" class="btn btn-danger me-2" target="_blank">
                         <i class="fas fa-file-pdf me-2"></i>Exportar PDF
-                    </button>
+                    </a>
                     <button class="btn btn-outline-secondary" onclick="imprimirRelatorio()">
                         <i class="fas fa-print me-2"></i>Imprimir
                     </button>
@@ -1047,116 +1047,6 @@ function imprimirRelatorio() {
     window.print();
 }
 
-// Função para exportar PDF com verificação de biblioteca
-function exportarPDF() {
-    // Verificar se a biblioteca html2pdf está carregada
-    if (typeof html2pdf === 'undefined') {
-        alert('Erro: Biblioteca de geração de PDF não está carregada. Por favor, recarregue a página e tente novamente.');
-        console.error('html2pdf não está definido. Verifique se o CDN está acessível.');
-        return;
-    }
-    
-    try {
-        // Mostrar indicador de carregamento
-        const btn = event.target.closest('button');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
-        
-        // Criar um elemento temporário para o conteúdo
-        const element = document.getElementById('contentToPrint');
-        if (!element) {
-            alert('Erro: Conteúdo para exportação não encontrado.');
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            return;
-        }
-        
-        // Clonar o elemento para não afetar a página
-        const clone = element.cloneNode(true);
-        
-        // Remover elementos com classe no-print do clone
-        const noPrintElements = clone.querySelectorAll('.no-print');
-        noPrintElements.forEach(el => el.remove());
-        
-        // Remover botões de ação da tabela
-        const actionButtons = clone.querySelectorAll('.btn-group');
-        actionButtons.forEach(el => el.remove());
-        
-        // Tornar visíveis o cabeçalho e estatísticas no PDF
-        const printHeader = clone.querySelector('.print-header');
-        if (printHeader) {
-            printHeader.style.display = 'block';
-        }
-        
-        const statsForPrint = clone.querySelector('.stats-for-print');
-        if (statsForPrint) {
-            statsForPrint.style.display = 'block';
-        }
-        
-        // Tornar visíveis as colunas extras e informações adicionais
-        const printOnlyElements = clone.querySelectorAll('.print-only');
-        printOnlyElements.forEach(el => {
-            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
-        });
-        
-        // Configurações do PDF
-        const opt = {
-            margin: [10, 10, 15, 10],
-            filename: 'contas_a_pagar_' + new Date().toISOString().split('T')[0] + '.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-                scale: 2,
-                useCORS: true,
-                logging: false
-            },
-            jsPDF: { 
-                unit: 'mm', 
-                format: 'a4', 
-                orientation: 'portrait'
-            },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-        
-        // Adicionar rodapé
-        const footer = document.createElement('div');
-        footer.className = 'print-footer';
-        footer.style.cssText = 'margin-top: 20px; padding-top: 10px; border-top: 1px solid #dee2e6; text-align: center; font-size: 10px;';
-        footer.innerHTML = `
-            <p style="margin: 0;">Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
-            <p style="margin: 0;">Sistema de Autopeças - Gestão Financeira</p>
-        `;
-        clone.appendChild(footer);
-        
-        // Gerar PDF
-        html2pdf().set(opt).from(clone).save()
-            .then(() => {
-                console.log('PDF gerado com sucesso!');
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                
-                // Mostrar mensagem de sucesso
-                const toast = document.createElement('div');
-                toast.className = 'alert alert-success position-fixed top-0 end-0 m-3';
-                toast.style.zIndex = '9999';
-                toast.innerHTML = '<i class="fas fa-check-circle me-2"></i>PDF gerado com sucesso!';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
-            })
-            .catch(error => {
-                console.error('Erro ao gerar PDF:', error);
-                alert('Erro ao gerar PDF: ' + error.message + '\n\nPor favor, tente novamente ou use a função de impressão.');
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            });
-    } catch (error) {
-        console.error('Erro ao gerar PDF:', error);
-        alert('Erro ao gerar PDF: ' + error.message + '\n\nPor favor, tente novamente.');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    }
-}
+
 </script>
 {% endblock %}

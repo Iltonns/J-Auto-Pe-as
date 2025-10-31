@@ -1606,38 +1606,68 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
                           marca=None, fornecedor_id=None, ncm=None, unidade='UN',
                           xml_nfe_chave=None, xml_nfe_numero=None, xml_nfe_data=None,
                           xml_produto_codigo=None, xml_conteudo=None, usuario_id=None, observacoes=None):
-    """Adiciona uma nova movimentação pendente de aprovação"""
+    """Adiciona uma nova movimentação e a aprova automaticamente se o produto já existir."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Calcula a margem de lucro automaticamente com base no preço de venda e custo
-    if preco_custo and preco_custo > 0 and preco_venda > preco_custo:
-        margem_lucro = ((preco_venda - preco_custo) / preco_custo) * 100
-        print(f"[MARGEM ADD] Calculada: Custo={preco_custo}, Venda={preco_venda}, Margem={margem_lucro:.2f}%")
-    else:
-        margem_lucro = 0
-        print(f"[MARGEM ADD] Zerada: Custo={preco_custo}, Venda={preco_venda}")
-    
-    cursor.execute('''
-        INSERT INTO movimentacoes (
-            tipo_movimentacao, origem, status, nome, codigo_barras, codigo_fornecedor,
-            descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
-            margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
-            xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
-            usuario_criacao, observacoes
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id
-    ''', (tipo_movimentacao, origem, 'pendente', nome, codigo_barras, codigo_fornecedor,
-          descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
-          margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
-          xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
-          usuario_id, observacoes))
-    
-    movimentacao_id = cursor.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return movimentacao_id
+
+    try:
+        # 1. Verificar se o produto já existe (PRIORIDADE: Código do Fornecedor)
+        produto_existente_id = None
+        if codigo_fornecedor:
+            cursor.execute("SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE", (codigo_fornecedor,))
+            result = cursor.fetchone()
+            if result:
+                produto_existente_id = result[0]
+
+        if not produto_existente_id and codigo_barras:
+            cursor.execute("SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE", (codigo_barras,))
+            result = cursor.fetchone()
+            if result:
+                produto_existente_id = result[0]
+
+        # Determinar o status inicial
+        status_inicial = 'aprovada' if produto_existente_id else 'pendente'
+
+        # 2. Calcular a margem de lucro
+        if preco_custo and preco_custo > 0 and preco_venda > preco_custo:
+            margem_lucro = ((preco_venda - preco_custo) / preco_custo) * 100
+        else:
+            margem_lucro = 0
+
+        # 3. Inserir a movimentação
+        cursor.execute('''
+            INSERT INTO movimentacoes (
+                tipo_movimentacao, origem, status, nome, codigo_barras, codigo_fornecedor,
+                descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
+                margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
+                xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
+                usuario_criacao, observacoes, produto_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (tipo_movimentacao, origem, status_inicial, nome, codigo_barras, codigo_fornecedor,
+              descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
+              margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
+              xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
+              usuario_id, observacoes, produto_existente_id))
+        
+        movimentacao_id = cursor.fetchone()[0]
+
+        # 4. Se o produto já existe, aprovar a movimentação imediatamente
+        if status_inicial == 'aprovada':
+            print(f"[AUTO-APROVACAO] Movimentação {movimentacao_id} para produto existente ID {produto_existente_id}. Aprovando...")
+            # Chamar a lógica de aprovação diretamente
+            aprovar_movimentacao(movimentacao_id, usuario_id, conn, cursor)
+
+        conn.commit()
+        return movimentacao_id
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro em adicionar_movimentacao: {e}")
+        raise
+    finally:
+        conn.close()
 
 def listar_movimentacoes(status=None, tipo_movimentacao=None):
     """Lista todas as movimentações, opcionalmente filtrando por status e tipo"""
@@ -1753,11 +1783,15 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     print(f"[DEBUG] Edição concluída com sucesso! Foto final: {foto_url}, Margem final: {margem_lucro:.2f}%")
     return True
 
-def aprovar_movimentacao(movimentacao_id, usuario_id):
-    """Aprova uma movimentação e cria/atualiza o produto no estoque"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
+def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None):
+    """Aprova uma movimentação e cria/atualiza o produto no estoque."""
+    # Gerenciar conexão e cursor
+    local_conn = False
+    if conn is None or cursor is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        local_conn = True
+
     try:
         # Buscar dados da movimentação
         cursor.execute('SELECT * FROM movimentacoes WHERE id = %s', (movimentacao_id,))
@@ -1765,108 +1799,86 @@ def aprovar_movimentacao(movimentacao_id, usuario_id):
         
         if not mov:
             raise ValueError("Movimentação não encontrada")
-        
-        # Ordem das colunas: id, tipo_movimentacao, origem, status, nome...
-        if mov[3] != 'pendente':  # status está no índice 3
-            raise ValueError("Apenas movimentações pendentes podem ser aprovadas")
-        
-        # Extrair dados da movimentação
-        # Índices baseados na ordem das colunas da tabela
-        nome = mov[4]  # nome
-        codigo_barras = mov[5]  # codigo_barras
-        codigo_fornecedor = mov[6]  # codigo_fornecedor
-        descricao = mov[7]  # descricao
-        categoria = mov[8]  # categoria
-        marca = mov[9]  # marca
-        ncm = mov[10]  # ncm
-        unidade = mov[11]  # unidade
-        quantidade = mov[12]  # quantidade
-        preco_custo = mov[13]  # preco_custo
-        margem_lucro = mov[14]  # margem_lucro
-        preco_venda = mov[15]  # preco_venda
-        estoque_minimo = mov[16]  # estoque_minimo
-        fornecedor_id = mov[17]  # fornecedor_id
-        foto_url = mov[19]  # foto_url
-        
-        print(f"[DEBUG APROVAÇÃO] Movimentação ID {movimentacao_id}: {nome}")
-        print(f"[DEBUG APROVAÇÃO] Foto URL da movimentação: {foto_url}")
-        
-        # Verificar se produto já existe (por código de barras ou código do fornecedor)
-        produto_id = None
-        if codigo_barras:
-            cursor.execute('SELECT id, estoque FROM produtos WHERE codigo_barras = %s', (codigo_barras,))
-            result = cursor.fetchone()
-            if result:
-                produto_id = result[0]
-                estoque_atual = result[1]
-        
-        if not produto_id and codigo_fornecedor:
-            cursor.execute('SELECT id, estoque FROM produtos WHERE codigo_fornecedor = %s', (codigo_fornecedor,))
-            result = cursor.fetchone()
-            if result:
-                produto_id = result[0]
-                estoque_atual = result[1]
-        
+
+        # Extrair dados da movimentação (usando índices de coluna)
+        mov_id, tipo_mov, origem, status, nome, cod_barras, cod_forn, desc, cat, marca, ncm, unid, qtd, p_custo, m_lucro, p_venda, est_min, forn_id, produto_id_mov, foto, xml_chave, xml_num, xml_data, xml_prod_cod, xml_cont, user_c, user_a, data_c, data_a, obs, motivo_r = mov
+
+        if status != 'pendente' and status != 'aprovada': # Permitir re-aprovação
+            raise ValueError(f"Apenas movimentações pendentes ou já aprovadas podem ser processadas. Status atual: {status}")
+
+        # Verificar se produto já existe (PRIORIDADE: Código do Fornecedor)
+        produto_id = produto_id_mov
+        if not produto_id:
+            if cod_forn:
+                cursor.execute('SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE', (cod_forn,))
+                res = cursor.fetchone()
+                if res: produto_id = res[0]
+            if not produto_id and cod_barras:
+                cursor.execute('SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE', (cod_barras,))
+                res = cursor.fetchone()
+                if res: produto_id = res[0]
+
+        # Atualizar ou criar produto
         if produto_id:
-            # Produto existe - atualizar estoque e informações
-            # Se houver foto na movimentação, atualizar. Caso contrário, manter a foto atual do produto.
-            print(f"[DEBUG APROVAÇÃO] Produto {produto_id} já existe. Atualizando...")
-            if foto_url:
-                # Há uma nova foto - atualizar tudo incluindo a foto
-                print(f"[DEBUG APROVAÇÃO] Atualizando produto COM NOVA FOTO: {foto_url}")
-                cursor.execute('''
-                    UPDATE produtos 
-                    SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
-                        margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
-                        fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s,
-                        foto_url = %s
-                    WHERE id = %s
-                ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
-                      categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, foto_url, produto_id))
+            # Produto existe - ATUALIZAR
+            print(f"[APROVACAO] Produto {produto_id} existe. Atualizando...")
+            update_fields = []
+            params = []
+
+            # Adicionar campos para atualização se tiverem valor
+            if nome: update_fields.append("nome = %s"); params.append(nome)
+            if p_venda: update_fields.append("preco = %s"); params.append(p_venda)
+            if p_custo: update_fields.append("preco_custo = %s"); params.append(p_custo)
+            if m_lucro: update_fields.append("margem_lucro = %s"); params.append(m_lucro)
+            if desc: update_fields.append("descricao = %s"); params.append(desc)
+            if cat: update_fields.append("categoria = %s"); params.append(cat)
+            if marca: update_fields.append("marca = %s"); params.append(marca)
+            if forn_id: update_fields.append("fornecedor_id = %s"); params.append(forn_id)
+            if est_min: update_fields.append("estoque_minimo = %s"); params.append(est_min)
+            if ncm: update_fields.append("ncm = %s"); params.append(ncm)
+            if unid: update_fields.append("unidade = %s"); params.append(unid)
+            if foto: update_fields.append("foto_url = %s"); params.append(foto)
+
+            if update_fields:
+                query = f"UPDATE produtos SET estoque = estoque + %s, { ', '.join(update_fields) } WHERE id = %s"
+                params.insert(0, qtd)
+                params.append(produto_id)
+                cursor.execute(query, tuple(params))
             else:
-                # Não há foto na movimentação - atualizar sem modificar a foto do produto
-                print(f"[DEBUG APROVAÇÃO] Atualizando produto SEM ALTERAR FOTO (foto_url é None/vazio)")
-                cursor.execute('''
-                    UPDATE produtos 
-                    SET estoque = estoque + %s, nome = %s, preco = %s, preco_custo = %s, 
-                        margem_lucro = %s, descricao = %s, categoria = %s, marca = %s, 
-                        fornecedor_id = %s, estoque_minimo = %s, ncm = %s, unidade = %s
-                    WHERE id = %s
-                ''', (quantidade, nome, preco_venda, preco_custo, margem_lucro, descricao, 
-                      categoria, marca, fornecedor_id, estoque_minimo, ncm, unidade, produto_id))
+                # Se nenhum campo for atualizado, apenas o estoque
+                cursor.execute("UPDATE produtos SET estoque = estoque + %s WHERE id = %s", (qtd, produto_id))
         else:
-            # Produto não existe - criar novo
-            print(f"[DEBUG APROVAÇÃO] Criando NOVO produto com foto: {foto_url}")
+            # Produto não existe - CRIAR
+            print(f"[APROVACAO] Criando novo produto.")
             cursor.execute('''
-                INSERT INTO produtos (
-                    nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                    codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
-                    ncm, unidade, ativo
-                )
+                INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                                    codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
+                                    ncm, unidade, ativo)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
                 RETURNING id
-            ''', (nome, preco_venda, quantidade, estoque_minimo, codigo_barras, descricao, categoria,
-                  codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
-                  ncm, unidade))
+            ''', (nome, p_venda, qtd, est_min, cod_barras, desc, cat, cod_forn, p_custo, m_lucro, foto, marca, forn_id, ncm, unid))
             produto_id = cursor.fetchone()[0]
-            print(f"[DEBUG APROVAÇÃO] Produto criado com ID: {produto_id}")
-        
+
         # Atualizar status da movimentação
         cursor.execute('''
             UPDATE movimentacoes 
-            SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP,
-                produto_id = %s
+            SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP, produto_id = %s
             WHERE id = %s
         ''', (usuario_id, produto_id, movimentacao_id))
+
+        if local_conn:
+            conn.commit()
         
-        conn.commit()
-        conn.close()
         return produto_id
-        
+
     except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise e
+        if local_conn:
+            conn.rollback()
+        print(f"Erro em aprovar_movimentacao: {e}")
+        raise
+    finally:
+        if local_conn:
+            conn.close()
 
 def cancelar_movimentacao(movimentacao_id, usuario_id, motivo_cancelamento):
     """Cancela uma movimentação (permite deletar depois)"""
@@ -1910,6 +1922,50 @@ def deletar_movimentacao(movimentacao_id):
     conn.commit()
     conn.close()
     return True
+
+def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id):
+    """Reverte o estoque de uma movimentação aprovada e a deleta."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Buscar dados da movimentação
+        cursor.execute('SELECT produto_id, quantidade, status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+        mov = cursor.fetchone()
+
+        if not mov:
+            raise ValueError(f"Movimentação com ID {movimentacao_id} não encontrada.")
+
+        produto_id, quantidade, status = mov
+
+        if status != 'aprovada':
+            raise ValueError(f"Esta função só pode ser usada para movimentações aprovadas. Status atual: {status}")
+
+        if not produto_id:
+            # Se não há produto_id, a movimentação, embora aprovada, não afetou o estoque.
+            # Apenas deletar a movimentação.
+            print(f"[REVERSAO] Movimentação {movimentacao_id} não tem produto associado. Apenas deletando.")
+            cursor.execute("DELETE FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+            conn.commit()
+            return True, f"Movimentação {movimentacao_id} deletada (não havia estoque para reverter)."
+
+        # Reverter o estoque do produto
+        print(f"[REVERSAO] Revertendo {quantidade} unidade(s) do produto ID {produto_id}.")
+        cursor.execute("UPDATE produtos SET estoque = estoque - %s WHERE id = %s", (quantidade, produto_id))
+
+        # Deletar a movimentação
+        cursor.execute("DELETE FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+        print(f"[REVERSAO] Movimentação {movimentacao_id} deletada.")
+
+        conn.commit()
+        return True, f"Movimentação {movimentacao_id} revertida e deletada com sucesso."
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro em reverter_e_deletar_movimentacao_aprovada: {e}")
+        raise
+    finally:
+        conn.close()
 
 def contar_movimentacoes_pendentes():
     """Conta o número de movimentações pendentes"""

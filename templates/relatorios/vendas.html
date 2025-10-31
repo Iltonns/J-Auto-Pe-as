@@ -344,9 +344,9 @@
                         <button class="btn btn-sm btn-success" onclick="exportarCSV()">
                             <i class="fas fa-file-csv"></i> Exportar CSV
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="exportarPDFMelhorado()">
+                        <a href="{{ url_for('exportar_vendas_pdf', data_inicio=data_inicio, data_fim=data_fim, cliente_id=cliente_id) }}" class="btn btn-sm btn-danger" target="_blank">
                             <i class="fas fa-file-pdf"></i> Exportar PDF
-                        </button>
+                        </a>
                         <button class="btn btn-sm btn-secondary" onclick="window.print()">
                             <i class="fas fa-print"></i> Imprimir
                         </button>
@@ -503,71 +503,7 @@ function exportarCSV() {
     exportarCSVMelhorado('tabelaVendas', 'relatorio_vendas.csv');
 }
 
-function exportarPDFMelhorado() {
-    if (typeof html2pdf === 'undefined') {
-        alert('Aguarde o carregamento da biblioteca PDF...');
-        setTimeout(exportarPDFMelhorado, 1000);
-        return;
-    }
-    
-    try {
-        const btn = event.target.closest('button') || event.target.closest('a');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando PDF...';
-        
-        const element = document.getElementById('contentToPrint');
-        if (!element) {
-            alert('Erro: Conteúdo não encontrado.');
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            return;
-        }
-        
-        const clone = element.cloneNode(true);
-        
-        // Remover elementos desnecessários
-        const noPrintElements = clone.querySelectorAll('.no-print, .export-buttons, button, .input-group, .form-select');
-        noPrintElements.forEach(el => el.remove());
-        
-        // Mostrar elementos de impressão
-        const printHeader = clone.querySelector('.print-header');
-        if (printHeader) printHeader.style.display = 'block';
-        
-        const statsForPrint = clone.querySelector('.stats-for-print');
-        if (statsForPrint) statsForPrint.style.display = 'block';
-        
-        const printOnlyElements = clone.querySelectorAll('.print-only');
-        printOnlyElements.forEach(el => {
-            el.style.display = el.tagName === 'TD' || el.tagName === 'TH' ? 'table-cell' : 'block';
-        });
-        
-        const opt = {
-            margin: [10, 10, 15, 10],
-            filename: 'relatorio_vendas_' + new Date().toISOString().split('T')[0] + '.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-        
-        html2pdf().set(opt).from(clone).save()
-            .then(() => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                alert('PDF gerado com sucesso!');
-            })
-            .catch(error => {
-                console.error('Erro ao gerar PDF:', error);
-                alert('Erro ao gerar PDF. Tente novamente.');
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            });
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao gerar PDF.');
-    }
-}
+
 
 // Inicializar paginação quando o documento estiver carregado
 document.addEventListener('DOMContentLoaded', function() {
