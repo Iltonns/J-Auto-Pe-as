@@ -11,7 +11,7 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from dotenv import load_dotenv
@@ -37,7 +37,7 @@ from Minha_autopecas_web.logica_banco import (
     popular_dados_exemplo,
     # Novas funções do caixa
     abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa,
-    listar_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros,
+    listar_movimentacoes_caixa, obter_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros,
     # Função de importação XML
     importar_produtos_de_xml,
     # Funções de relatórios
@@ -732,6 +732,33 @@ def limpar_sincronizacoes_caixa():
         flash(f"❌ {mensagem}", 'error')
     
     return redirect(url_for('caixa'))
+
+@app.route('/api/caixa/exportar/pdf')
+@login_required
+def exportar_caixa_pdf():
+    """Exportar relatório do caixa em PDF"""
+    try:
+        data = request.args.get('data')
+        if not data:
+            from datetime import date
+            data = date.today().strftime('%Y-%m-%d')
+        
+        # Obter dados do caixa
+        status_caixa = obter_status_caixa()
+        movimentacoes = obter_movimentacoes_caixa(data)
+        resumo_vendas = obter_vendas_do_dia()
+        
+        # Criar PDF
+        pdf_buffer = criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data)
+        
+        response = make_response(pdf_buffer.getvalue())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=relatorio_caixa_{data}.pdf'
+        
+        return response
+    except Exception as e:
+        flash(f'Erro ao exportar PDF do caixa: {str(e)}', 'error')
+        return redirect(url_for('caixa'))
 
 @app.route('/debug-vendas')
 @login_required
@@ -2930,216 +2957,214 @@ def criar_rodape_empresa(doc, config_empresa):
     return rodape_texto
 
 def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecionado=None):
-    """Gera PDF do relatório de vendas"""
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Obter configurações da empresa
-    config_empresa = obter_configuracoes_empresa()
-    
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-    
-    # Configurar estilos
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
+    """Gera PDF do relatório de vendas com layout MODERNO"""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis, 
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno,
+        formatar_moeda
     )
     
-    # Título do relatório
-    story.append(Paragraph("RELATÓRIO DE VENDAS", title_style))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
+    story = []
+    config_empresa = obter_configuracoes_empresa()
     
-    # Período
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    subtitulo = ""
     if data_inicio and data_fim:
-        periodo = f"Período: {data_inicio} a {data_fim}"
-        story.append(Paragraph(periodo, styles['Normal']))
-        story.append(Spacer(1, 10))
-    
+        subtitulo = f"Período: {data_inicio} a {data_fim}"
     if cliente_selecionado:
-        story.append(Paragraph(f"Cliente: {cliente_selecionado}", styles['Normal']))
-        story.append(Spacer(1, 10))
+        if subtitulo:
+            subtitulo += f" | Cliente: {cliente_selecionado}"
+        else:
+            subtitulo = f"Cliente: {cliente_selecionado}"
     
-    # Resumo
-    resumo_data = [
-        ['Resumo', 'Valor'],
-        ['Total de Vendas', str(relatorio['quantidade_vendas'])],
-        ['Valor Total', f"R$ {relatorio['total_geral']:.2f}"],
-        ['Ticket Médio', f"R$ {relatorio['ticket_medio']:.2f}"]
+    story.extend(criar_cabecalho_moderno("RELATÓRIO DE VENDAS", subtitulo=subtitulo))
+    
+    # PAINEL DE KPIs
+    kpis = [
+        {
+            'titulo': 'Total de Vendas',
+            'valor': str(relatorio.get('quantidade_vendas', 0)),
+            'subtitulo': 'transações',
+            'cor': CoresPDF.PRIMARIA
+        },
+        {
+            'titulo': 'Valor Total',
+            'valor': formatar_moeda(relatorio.get('total_geral', 0)),
+            'subtitulo': 'faturamento',
+            'cor': CoresPDF.SUCESSO
+        },
+        {
+            'titulo': 'Ticket Médio',
+            'valor': formatar_moeda(relatorio.get('ticket_medio', 0)),
+            'subtitulo': 'por venda',
+            'cor': CoresPDF.INFO
+        }
     ]
     
-    resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
-    resumo_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-    ]))
+    story.append(criar_painel_kpis(kpis))
+    story.append(Spacer(1, 25))
     
-    story.append(resumo_table)
-    story.append(Spacer(1, 20))
-    
-    # Vendas detalhadas
-    if relatorio['vendas']:
-        story.append(Paragraph("Vendas Detalhadas", styles['Heading3']))
-        story.append(Spacer(1, 12))
+    # VENDAS DETALHADAS - TODAS AS VENDAS
+    if relatorio.get('vendas'):
+        story.append(criar_secao_titulo(f"🛒 VENDAS DETALHADAS ({len(relatorio['vendas'])} vendas)"))
+        story.append(Spacer(1, 10))
         
-        vendas_data = [['ID', 'Data', 'Cliente', 'Vendedor', 'Itens', 'Pagamento', 'Total']]
+        # Dividir em páginas se necessário
+        vendas = relatorio['vendas']
+        vendas_por_pagina = 30
         
-        for venda in relatorio['vendas']:
+        for i in range(0, len(vendas), vendas_por_pagina):
+            vendas_pagina = vendas[i:i + vendas_por_pagina]
+            
+            vendas_data = [['ID', 'Data', 'Cliente', 'Vendedor', 'Itens', 'Pagamento', 'Total']]
+            
+            for venda in vendas_pagina:
+                vendas_data.append([
+                    str(venda['id']),
+                    str(venda['data_venda'])[:10],
+                    str(venda['cliente'])[:18],
+                    str(venda['vendedor'])[:14],
+                    str(venda['quantidade_itens']),
+                    str(venda['forma_pagamento'])[:10],
+                    formatar_moeda(venda['total'])
+                ])
+            
+            # Adicionar linha de total
             vendas_data.append([
-                str(venda['id']),
-                str(venda['data_venda']),
-                str(venda['cliente'])[:20],  # Limitar caracteres
-                str(venda['vendedor'])[:15],
-                str(venda['quantidade_itens']),
-                str(venda['forma_pagamento'])[:10],
-                f"R$ {venda['total']:.2f}"
+                '', '', '', '', '', 'TOTAL:',
+                formatar_moeda(sum(v['total'] for v in vendas_pagina))
             ])
-        
-        vendas_table = Table(vendas_data, colWidths=[0.7*inch, 1*inch, 1.5*inch, 1.2*inch, 0.8*inch, 1*inch, 1*inch])
-        vendas_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
-        
-        story.append(vendas_table)
+            
+            vendas_table = criar_tabela_moderna(
+                vendas_data,
+                [0.6*inch, 0.9*inch, 1.5*inch, 1.2*inch, 0.6*inch, 1*inch, 1*inch],
+                destacar_total=True,
+                cores_alternadas=True
+            )
+            story.append(vendas_table)
+            
+            if i + vendas_por_pagina < len(vendas):
+                story.append(PageBreak())
+                story.append(Spacer(1, 10))
     
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
+    # Rodapé moderno
+    def add_page_elements(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
+    
+    doc.build(story, onFirstPage=add_page_elements, onLaterPages=add_page_elements)
+    buffer.seek(0)
+    return buffer
     
     doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
     buffer.seek(0)
     return buffer
 
 def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, status=None):
-    """Gera PDF do relatório de contas a receber"""
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Obter configurações da empresa
-    config_empresa = obter_configuracoes_empresa()
-    
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-    
-    # Configurar estilos
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
+    """Gera PDF do relatório de contas a receber com layout MODERNO"""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis,
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno, formatar_moeda
     )
     
-    # Título do relatório
-    story.append(Paragraph("RELATÓRIO DE CONTAS A RECEBER", title_style))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
+    story = []
+    config_empresa = obter_configuracoes_empresa()
     
-    # Período
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    subtitulo = ""
     if data_inicio and data_fim:
-        periodo = f"Período: {data_inicio} a {data_fim}"
-        story.append(Paragraph(periodo, styles['Normal']))
-        story.append(Spacer(1, 10))
-
+        subtitulo = f"Período: {data_inicio} a {data_fim}"
     if status:
-        story.append(Paragraph(f"Status: {status.capitalize()}", styles['Normal']))
-        story.append(Spacer(1, 10))
+        if subtitulo:
+            subtitulo += f" | Status: {status.capitalize()}"
+        else:
+            subtitulo = f"Status: {status.capitalize()}"
+    
+    story.extend(criar_cabecalho_moderno("CONTAS A RECEBER", subtitulo=subtitulo))
 
-    # Resumo
+    # PAINEL DE KPIs
     if relatorio.get('estatisticas'):
         estatisticas = relatorio['estatisticas']
-        resumo_data = [
-            ['Resumo', 'Valor'],
-            ['Total de Contas', str(estatisticas['total_contas'])],
-            ['Valor Total', f"R$ {estatisticas['total_valor']:.2f}"],
-            ['Valor Médio', f"R$ {estatisticas['valor_medio']:.2f}"],
-            ['Atrasadas', str(estatisticas['atrasadas'])]
+        kpis = [
+            {
+                'titulo': 'Total de Contas',
+                'valor': str(estatisticas.get('total_contas', 0)),
+                'subtitulo': 'contas',
+                'cor': CoresPDF.PRIMARIA
+            },
+            {
+                'titulo': 'Valor Total',
+                'valor': formatar_moeda(estatisticas.get('total_valor', 0)),
+                'subtitulo': 'a receber',
+                'cor': CoresPDF.SUCESSO
+            },
+            {
+                'titulo': 'Valor Médio',
+                'valor': formatar_moeda(estatisticas.get('valor_medio', 0)),
+                'subtitulo': 'por conta',
+                'cor': CoresPDF.INFO
+            },
+            {
+                'titulo': 'Atrasadas',
+                'valor': str(estatisticas.get('atrasadas', 0)),
+                'subtitulo': 'contas',
+                'cor': CoresPDF.ERRO
+            }
         ]
-        
-        resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
-        resumo_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        
-        story.append(resumo_table)
-        story.append(Spacer(1, 20))
+        story.append(criar_painel_kpis(kpis))
+        story.append(Spacer(1, 25))
 
-    # Contas detalhadas
-    if relatorio['contas']:
-        story.append(Paragraph("Contas Detalhadas", styles['Heading3']))
-        story.append(Spacer(1, 12))
+    # CONTAS DETALHADAS
+    if relatorio.get('contas'):
+        story.append(criar_secao_titulo(f"📋 CONTAS DETALHADAS ({len(relatorio['contas'])} registros)"))
+        story.append(Spacer(1, 10))
         
         contas_data = [['ID', 'Vencimento', 'Cliente', 'Descrição', 'Valor', 'Status']]
         
         for conta in relatorio['contas']:
+            # Ícone de status
+            status_icon = ''
+            if conta['status'] == 'pago':
+                status_icon = '✅ Pago'
+            elif conta['status'] == 'pendente':
+                status_icon = '⏳ Pendente'
+            elif conta['status'] == 'atrasado':
+                status_icon = '🔴 Atrasado'
+            else:
+                status_icon = conta['status']
+            
             contas_data.append([
                 str(conta['id']),
-                str(conta['data_vencimento']),
-                str(conta['cliente_nome'])[:30],
-                str(conta['descricao'])[:35],
-                f"R$ {conta['valor']:.2f}",
-                conta['status']
+                str(conta['data_vencimento'])[:10],
+                str(conta['cliente_nome'])[:25],
+                str(conta['descricao'])[:30],
+                formatar_moeda(conta['valor']),
+                status_icon
             ])
         
-        contas_table = Table(contas_data, colWidths=[0.5*inch, 1*inch, 2*inch, 2.5*inch, 1*inch, 0.8*inch])
-        contas_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
-        
+        contas_table = criar_tabela_moderna(
+            contas_data,
+            [0.5*inch, 1*inch, 1.8*inch, 2.2*inch, 1*inch, 1*inch],
+            cores_alternadas=True
+        )
         story.append(contas_table)
     
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
+    # RODAPÉ MODERNO
+    def add_page_footer(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
     
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    doc.build(story, onFirstPage=add_page_footer, onLaterPages=add_page_footer)
     buffer.seek(0)
     return buffer
 
@@ -3173,111 +3198,106 @@ def exportar_contas_a_receber_pdf():
     return response
 
 def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=None):
-    """Gera PDF do relatório de contas a pagar"""
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Obter configurações da empresa
-    config_empresa = obter_configuracoes_empresa()
-    
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-    
-    # Configurar estilos
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
+    """Gera PDF do relatório de contas a pagar com layout MODERNO"""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis,
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno, formatar_moeda
     )
     
-    # Título do relatório
-    story.append(Paragraph("RELATÓRIO DE CONTAS A PAGAR", title_style))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
+    story = []
+    config_empresa = obter_configuracoes_empresa()
     
-    # Período
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    subtitulo = ""
     if data_inicio and data_fim:
-        periodo = f"Período: {data_inicio} a {data_fim}"
-        story.append(Paragraph(periodo, styles['Normal']))
-        story.append(Spacer(1, 10))
-
+        subtitulo = f"Período: {data_inicio} a {data_fim}"
     if status:
-        story.append(Paragraph(f"Status: {status.capitalize()}", styles['Normal']))
-        story.append(Spacer(1, 10))
+        if subtitulo:
+            subtitulo += f" | Status: {status.capitalize()}"
+        else:
+            subtitulo = f"Status: {status.capitalize()}"
+    
+    story.extend(criar_cabecalho_moderno("CONTAS A PAGAR", subtitulo=subtitulo))
 
-    # Resumo
+    # PAINEL DE KPIs
     if relatorio.get('estatisticas'):
         estatisticas = relatorio['estatisticas']
-        resumo_data = [
-            ['Resumo', 'Valor'],
-            ['Total de Contas', str(estatisticas['total_contas'])],
-            ['Valor Total', f"R$ {estatisticas['total_valor']:.2f}"],
-            ['Valor Médio', f"R$ {estatisticas['valor_medio']:.2f}"],
-            ['Atrasadas', str(estatisticas['atrasadas'])]
+        kpis = [
+            {
+                'titulo': 'Total de Contas',
+                'valor': str(estatisticas.get('total_contas', 0)),
+                'subtitulo': 'contas',
+                'cor': CoresPDF.PRIMARIA
+            },
+            {
+                'titulo': 'Valor Total',
+                'valor': formatar_moeda(estatisticas.get('total_valor', 0)),
+                'subtitulo': 'a pagar',
+                'cor': CoresPDF.AVISO
+            },
+            {
+                'titulo': 'Valor Médio',
+                'valor': formatar_moeda(estatisticas.get('valor_medio', 0)),
+                'subtitulo': 'por conta',
+                'cor': CoresPDF.INFO
+            },
+            {
+                'titulo': 'Atrasadas',
+                'valor': str(estatisticas.get('atrasadas', 0)),
+                'subtitulo': 'contas',
+                'cor': CoresPDF.ERRO
+            }
         ]
-        
-        resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
-        resumo_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        
-        story.append(resumo_table)
-        story.append(Spacer(1, 20))
+        story.append(criar_painel_kpis(kpis))
+        story.append(Spacer(1, 25))
 
-    # Contas detalhadas
-    if relatorio['contas']:
-        story.append(Paragraph("Contas Detalhadas", styles['Heading3']))
-        story.append(Spacer(1, 12))
+    # CONTAS DETALHADAS
+    if relatorio.get('contas'):
+        story.append(criar_secao_titulo(f"📋 CONTAS DETALHADAS ({len(relatorio['contas'])} registros)"))
+        story.append(Spacer(1, 10))
         
         contas_data = [['ID', 'Vencimento', 'Fornecedor', 'Descrição', 'Categoria', 'Valor', 'Status']]
         
         for conta in relatorio['contas']:
+            # Ícone de status
+            status_icon = ''
+            if conta['status'] == 'pago':
+                status_icon = '✅ Pago'
+            elif conta['status'] == 'pendente':
+                status_icon = '⏳ Pendente'
+            elif conta['status'] == 'atrasado':
+                status_icon = '🔴 Atrasado'
+            else:
+                status_icon = conta['status']
+            
             contas_data.append([
                 str(conta['id']),
-                str(conta['data_vencimento']),
-                str(conta['fornecedor_nome'])[:25],
-                str(conta['descricao'])[:30],
-                str(conta['categoria']),
-                f"R$ {conta['valor']:.2f}",
-                conta['status']
+                str(conta['data_vencimento'])[:10],
+                str(conta['fornecedor_nome'])[:22],
+                str(conta['descricao'])[:25],
+                str(conta['categoria'])[:15],
+                formatar_moeda(conta['valor']),
+                status_icon
             ])
         
-        contas_table = Table(contas_data, colWidths=[0.5*inch, 1*inch, 1.5*inch, 2*inch, 1*inch, 1*inch, 0.8*inch])
-        contas_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
-        
+        contas_table = criar_tabela_moderna(
+            contas_data,
+            [0.5*inch, 0.9*inch, 1.5*inch, 1.8*inch, 0.9*inch, 0.9*inch, 0.9*inch],
+            cores_alternadas=True
+        )
         story.append(contas_table)
     
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
+    # RODAPÉ MODERNO
+    def add_page_footer(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
     
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    doc.build(story, onFirstPage=add_page_footer, onLaterPages=add_page_footer)
     buffer.seek(0)
     return buffer
 
@@ -3311,200 +3331,251 @@ def exportar_contas_a_pagar_pdf():
     return response
 
 def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None, limite=10):
-    """Gera PDF do relatório de produtos mais vendidos"""
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Obter configurações da empresa
-    config_empresa = obter_configuracoes_empresa()
-    
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-    
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
+    """Gera PDF do relatório de produtos mais vendidos com layout MODERNO"""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis, 
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno,
+        formatar_moeda
     )
     
-    story.append(Paragraph("RELATÓRIO DE PRODUTOS MAIS VENDIDOS", title_style))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
+    story = []
+    config_empresa = obter_configuracoes_empresa()
     
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    subtitulo = ""
     if data_inicio and data_fim:
-        periodo = f"Período: {data_inicio} a {data_fim}"
-        story.append(Paragraph(periodo, styles['Normal']))
+        subtitulo = f"Período: {data_inicio} a {data_fim}"
+    
+    story.extend(criar_cabecalho_moderno(
+        "PRODUTOS MAIS VENDIDOS",
+        subtitulo=subtitulo
+    ))
+    
+    # PAINEL DE KPIs - Mostrar top 3
+    if relatorio.get('produtos') and len(relatorio['produtos']) >= 3:
+        top_3 = relatorio['produtos'][:3]
+        kpis = []
+        medalhas = ['🥇', '🥈', '🥉']
+        cores = [CoresPDF.SUCESSO, CoresPDF.INFO, CoresPDF.AVISO]
+        
+        for i, produto in enumerate(top_3):
+            kpis.append({
+                'titulo': f"{medalhas[i]} {i+1}º Lugar",
+                'valor': str(produto['quantidade_vendida']) + ' un.',
+                'subtitulo': str(produto['nome'])[:20],
+                'cor': cores[i]
+            })
+        
+        # Se houver valor total, adicionar
+        if relatorio.get('total_vendido'):
+            kpis.append({
+                'titulo': 'Total Vendido',
+                'valor': formatar_moeda(relatorio['total_vendido']),
+                'subtitulo': f'{limite} produtos',
+                'cor': CoresPDF.PRIMARIA
+            })
+        
+        story.append(criar_painel_kpis(kpis[:4]))  # Máximo 4 KPIs
+        story.append(Spacer(1, 25))
+    
+    # RANKING COMPLETO
+    if relatorio.get('produtos'):
+        story.append(criar_secao_titulo(f"📊 RANKING COMPLETO (Top {limite})"))
         story.append(Spacer(1, 10))
-    
-    story.append(Paragraph(f"Limitado aos {limite} produtos mais vendidos", styles['Normal']))
-    story.append(Spacer(1, 20))
-    
-    if relatorio['produtos']:
-        produtos_data = [['Posição', 'Produto', 'Código', 'Quantidade Vendida', 'Valor Total']]
+        
+        produtos_data = [['🏆', 'Produto', 'Código', 'Qtd Vendida', 'Valor Total', '% Total']]
+        
+        # Calcular total para porcentagem
+        total_quantidade = sum(p['quantidade_vendida'] for p in relatorio['produtos'])
+        total_valor = sum(p['valor_total'] for p in relatorio['produtos'])
         
         for i, produto in enumerate(relatorio['produtos'], 1):
+            # Ícones para top 3
+            if i == 1:
+                posicao = '🥇'
+            elif i == 2:
+                posicao = '🥈'
+            elif i == 3:
+                posicao = '🥉'
+            else:
+                posicao = f"{i}º"
+            
+            # Calcular porcentagem
+            percent = (produto['valor_total'] / total_valor * 100) if total_valor > 0 else 0
+            
             produtos_data.append([
-                str(i),
-                str(produto['nome'])[:30],
-                str(produto['codigo']),
+                posicao,
+                str(produto['nome'])[:28],
+                str(produto['codigo'])[:12],
                 str(produto['quantidade_vendida']),
-                f"R$ {produto['valor_total']:.2f}"
+                formatar_moeda(produto['valor_total']),
+                f"{percent:.1f}%"
             ])
         
-        produtos_table = Table(produtos_data, colWidths=[0.8*inch, 2.5*inch, 1.2*inch, 1.5*inch, 1.5*inch])
-        produtos_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
+        # Linha de total
+        produtos_data.append([
+            '', 'TOTAL', '', str(total_quantidade), formatar_moeda(total_valor), '100%'
+        ])
         
+        produtos_table = criar_tabela_moderna(
+            produtos_data,
+            [0.7*inch, 2.3*inch, 1*inch, 1*inch, 1.2*inch, 0.8*inch],
+            destacar_total=True,
+            cores_alternadas=True
+        )
         story.append(produtos_table)
     
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
+    # Rodapé moderno
+    def add_page_elements(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
     
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    doc.build(story, onFirstPage=add_page_elements, onLaterPages=add_page_elements)
     buffer.seek(0)
     return buffer
 
 
 
 def criar_pdf_estoque(relatorio):
-    """Gera PDF do relatório de estoque com layout padronizado."""
+    """Gera PDF do relatório de estoque com layout MODERNO e cards."""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis, 
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno,
+        formatar_moeda
+    )
+    
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
     story = []
-
-    # Obter configurações da empresa
     config_empresa = obter_configuracoes_empresa()
-
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-
-    # Configurar estilos
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')  # Azul padrão
-    )
-
-    subtitle_style = ParagraphStyle(
-        'SubtitleStyle',
-        parent=styles['Heading3'],
-        fontSize=12,
-        spaceAfter=10,
-        textColor=colors.HexColor('#2962ff'),
-        fontName='Helvetica-Bold'
-    )
-
-    # Título do relatório
-    story.append(Paragraph("RELATÓRIO COMPLETO DE ESTOQUE", title_style))
 
     # Verificar se há erro no relatório
     if relatorio.get('erro'):
-        story.append(Paragraph(f"Erro ao gerar relatório: {relatorio['erro']}", styles['Normal']))
+        story.append(Paragraph(f"Erro ao gerar relatório: {relatorio['erro']}", 
+                              ParagraphStyle('Normal', fontSize=12)))
         doc.build(story)
         buffer.seek(0)
         return buffer
 
-    # Resumo Geral
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    story.extend(criar_cabecalho_moderno("RELATÓRIO DE ESTOQUE"))
+
+    # PAINEL DE KPIs COM CARDS
     resumo = relatorio.get('resumo', {})
-    
-    story.append(Paragraph("RESUMO DE INDICADORES", subtitle_style))
-    
-    resumo_data = [
-        ['Indicador', 'Valor'],
-        ['Total de Produtos Cadastrados', str(resumo.get('total_produtos', 0))],
-        ['Produtos Sem Estoque (0 un.)', str(resumo.get('produtos_sem_estoque', 0))],
-        ['Produtos em Estoque Baixo', str(resumo.get('produtos_estoque_baixo', 0))],
-        ['Valor Total do Estoque (Venda)', f"R$ {resumo.get('valor_total_estoque', 0):,.2f}"],
-        ['Valor Total do Estoque (Custo)', f"R$ {resumo.get('valor_total_estoque_custo', 0):,.2f}"]
+    kpis = [
+        {
+            'titulo': 'Total de Produtos',
+            'valor': str(resumo.get('total_produtos', 0)),
+            'subtitulo': 'cadastrados',
+            'cor': CoresPDF.PRIMARIA
+        },
+        {
+            'titulo': 'Sem Estoque',
+            'valor': str(resumo.get('produtos_sem_estoque', 0)),
+            'subtitulo': 'produtos',
+            'cor': CoresPDF.ERRO
+        },
+        {
+            'titulo': 'Estoque Baixo',
+            'valor': str(resumo.get('produtos_estoque_baixo', 0)),
+            'subtitulo': 'produtos',
+            'cor': CoresPDF.AVISO
+        },
+        {
+            'titulo': 'Valor Total',
+            'valor': formatar_moeda(resumo.get('valor_total_estoque', 0)),
+            'subtitulo': 'em estoque',
+            'cor': CoresPDF.SUCESSO
+        }
     ]
     
-    resumo_table = Table(resumo_data, colWidths=[3*inch, 2.5*inch])
-    resumo_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-    ]))
-    
-    story.append(resumo_table)
-    story.append(Spacer(1, 20))
+    story.append(criar_painel_kpis(kpis))
+    story.append(Spacer(1, 25))
 
-    # Tabela Detalhada de Produtos
-    if relatorio.get('produtos'):
-        story.append(Paragraph("PRODUTOS DETALHADOS", subtitle_style))
-        story.append(Spacer(1, 12))
+    # ANÁLISE POR CATEGORIA
+    if relatorio.get('categorias'):
+        story.append(criar_secao_titulo("📊 ANÁLISE POR CATEGORIA"))
+        story.append(Spacer(1, 10))
         
-        produtos_data = [
-            ['Código', 'Produto', 'Qtd', 'Mínimo', 'Custo', 'Venda', 'Valor Estoque', 'Status']
-        ]
+        categorias_data = [['Categoria', 'Qtd Produtos', 'Total Estoque', 'Valor Total']]
         
-        for produto in relatorio['produtos']:
-            status_text = produto.get('status', 'N/A')
-            
-            produtos_data.append([
-                str(produto.get('codigo', produto.get('codigo_barras', '-')))[:15],
-                str(produto.get('nome', ''))[:30],
-                str(produto.get('estoque', 0)),
-                str(produto.get('estoque_minimo', 1)),
-                f"R$ {produto.get('preco_custo', 0):.2f}",
-                f"R$ {produto.get('preco', 0):.2f}",
-                f"R$ {produto.get('valor_estoque', 0):.2f}",
-                status_text
+        for cat in relatorio['categorias']:
+            categorias_data.append([
+                str(cat.get('nome', 'Sem categoria'))[:30],
+                str(cat.get('quantidade_produtos', 0)),
+                str(cat.get('total_estoque', 0)) + ' un.',
+                formatar_moeda(cat.get('valor_categoria', 0))
             ])
         
-        produtos_table = Table(produtos_data, colWidths=[0.8*inch, 2.2*inch, 0.4*inch, 0.5*inch, 0.8*inch, 0.8*inch, 1*inch, 0.8*inch])
-        produtos_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
+        categorias_table = criar_tabela_moderna(
+            categorias_data,
+            [2.5*inch, 1.5*inch, 1.5*inch, 2*inch],
+            cores_alternadas=True
+        )
+        story.append(categorias_table)
+        story.append(Spacer(1, 20))
+
+    # PRODUTOS DETALHADOS - TODOS OS PRODUTOS
+    if relatorio.get('produtos'):
+        story.append(criar_secao_titulo(f"📦 PRODUTOS DETALHADOS ({len(relatorio['produtos'])} itens)"))
+        story.append(Spacer(1, 10))
         
-        story.append(produtos_table)
+        # Dividir produtos em páginas se necessário
+        produtos = relatorio['produtos']
+        produtos_por_pagina = 35  # Máximo de produtos por página
+        
+        for i in range(0, len(produtos), produtos_por_pagina):
+            produtos_pagina = produtos[i:i + produtos_por_pagina]
+            
+            produtos_data = [['Código', 'Produto', 'Qtd', 'Mín.', 'P. Venda', 'Val. Est.', 'Status']]
+            
+            for produto in produtos_pagina:
+                status = produto.get('status', 'N/A')
+                
+                # Formatar status com cor
+                if status == 'Sem Estoque':
+                    status_fmt = '🔴 ' + status
+                elif status == 'Estoque Baixo':
+                    status_fmt = '🟡 ' + status
+                else:
+                    status_fmt = '🟢 OK'
+                
+                produtos_data.append([
+                    str(produto.get('codigo', produto.get('codigo_barras', '-')))[:12],
+                    str(produto.get('nome', ''))[:28],
+                    str(produto.get('estoque', 0)),
+                    str(produto.get('estoque_minimo', 1)),
+                    formatar_moeda(produto.get('preco', 0)),
+                    formatar_moeda(produto.get('valor_estoque', 0)),
+                    status_fmt
+                ])
+            
+            produtos_table = criar_tabela_moderna(
+                produtos_data,
+                [0.8*inch, 2*inch, 0.5*inch, 0.5*inch, 0.9*inch, 1*inch, 1.3*inch],
+                cores_alternadas=True
+            )
+            story.append(produtos_table)
+            
+            # Adicionar quebra de página se houver mais produtos
+            if i + produtos_por_pagina < len(produtos):
+                story.append(PageBreak())
+                story.append(Spacer(1, 10))
+
+    # Rodapé personalizado
+    def add_page_elements(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
     
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
-    
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    doc.build(story, onFirstPage=add_page_elements, onLaterPages=add_page_elements)
     buffer.seek(0)
     return buffer
 
@@ -3575,110 +3646,253 @@ def exportar_estoque_pdf():
     
     return response
 
-def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
-    """Gera PDF do relatório financeiro com layout padronizado."""
+def criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data):
+    """Gera PDF do relatório de caixa com layout MODERNO."""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis, 
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno,
+        criar_card_resumo, formatar_moeda
+    )
+    from datetime import datetime
+    
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=60, bottomMargin=60)
-    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
     story = []
-
-    # Obter configurações da empresa
     config_empresa = obter_configuracoes_empresa()
 
-    # Cabeçalho da empresa
-    story.extend(criar_cabecalho_empresa(doc, styles, config_empresa))
-
-    # Configurar estilos
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2962ff')
-    )
+    # Formatar data
+    data_formatada = datetime.strptime(data, '%Y-%m-%d').strftime('%d/%m/%Y')
     
-    subtitle_style = ParagraphStyle(
-        'SubtitleStyle',
-        parent=styles['Heading3'],
-        fontSize=12,
-        spaceAfter=10,
-        textColor=colors.HexColor('#2962ff'),
-        fontName='Helvetica-Bold'
-    )
-
-    # Título do relatório
-    story.append(Paragraph("RELATÓRIO FINANCEIRO", title_style))
-
-    # Período
-    if data_inicio and data_fim:
-        periodo = f"Período: {data_inicio} a {data_fim}"
-        story.append(Paragraph(periodo, styles['Normal']))
-        story.append(Spacer(1, 10))
-
-    # Resumo
-    resumo = relatorio.get('resumo', {})
-    resumo_data = [
-        ['Resumo Financeiro', 'Valor'],
-        ['Total de Vendas', f"R$ {resumo.get('total_vendas', 0):.2f}"],
-        ['Total Recebido', f"R$ {resumo.get('total_recebido', 0):.2f}"],
-        ['Total a Receber', f"R$ {resumo.get('total_a_receber', 0):.2f}"],
-        ['Total Pago', f"R$ {resumo.get('total_pago', 0):.2f}"],
-        ['Total a Pagar', f"R$ {resumo.get('total_a_pagar', 0):.2f}"],
-        ['Saldo Líquido (Recebido - Pago)', f"R$ {resumo.get('saldo_liquido', 0):.2f}"]
-    ]
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
     
-    resumo_table = Table(resumo_data, colWidths=[3*inch, 2*inch])
-    resumo_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-    ]))
-    
-    story.append(resumo_table)
-    story.append(Spacer(1, 20))
+    # TÍTULO DO RELATÓRIO
+    story.extend(criar_cabecalho_moderno(
+        f"RELATÓRIO DE CAIXA",
+        subtitulo=f"Data: {data_formatada}"
+    ))
 
-    # Vendas por Forma de Pagamento
-    if relatorio.get('vendas_forma_pagamento'):
-        story.append(Paragraph("Vendas por Forma de Pagamento", subtitle_style))
-        vendas_data = [['Forma de Pagamento', 'Quantidade', 'Valor Total']]
-        for venda in relatorio['vendas_forma_pagamento']:
-            vendas_data.append([
-                venda['forma_pagamento'],
-                str(venda['quantidade']),
-                f"R$ {venda['valor']:.2f}"
-            ])
-        
-        vendas_table = Table(vendas_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
-        vendas_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2962ff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f5f7fa')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
-        story.append(vendas_table)
+    # PAINEL DE KPIs DO CAIXA
+    if status_caixa:
+        kpis = [
+            {
+                'titulo': 'Saldo Inicial',
+                'valor': formatar_moeda(status_caixa['saldo_inicial']),
+                'subtitulo': status_caixa['data_abertura'].strftime('%H:%M') if status_caixa['data_abertura'] else '-',
+                'cor': CoresPDF.INFO
+            },
+            {
+                'titulo': 'Entradas',
+                'valor': formatar_moeda(status_caixa['total_entradas']),
+                'subtitulo': f"{status_caixa['total_movimentacoes']} movimentações",
+                'cor': CoresPDF.SUCESSO
+            },
+            {
+                'titulo': 'Saídas',
+                'valor': formatar_moeda(status_caixa['total_saidas']),
+                'subtitulo': 'retiradas',
+                'cor': CoresPDF.ERRO
+            },
+            {
+                'titulo': 'Saldo Atual',
+                'valor': formatar_moeda(status_caixa['saldo_atual']),
+                'subtitulo': 'no caixa',
+                'cor': CoresPDF.PRIMARIA
+            }
+        ]
+        story.append(criar_painel_kpis(kpis))
         story.append(Spacer(1, 20))
 
-    # Adicionar rodapé
-    def add_page_number(canvas, doc):
-        canvas.saveState()
-        rodape = criar_rodape_empresa(doc, config_empresa)
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(50, 30, rodape)
-        canvas.drawRightString(doc.pagesize[0] - 50, 30, f"Página {canvas.getPageNumber()}")
-        canvas.restoreState()
+    # VENDAS DO DIA
+    if resumo_vendas and resumo_vendas.get('total_vendas', 0) > 0:
+        itens = [
+            ('Total de Vendas:', str(resumo_vendas.get('total_vendas', 0)) + ' vendas'),
+            ('Valor das Vendas:', formatar_moeda(resumo_vendas.get('valor_vendas', 0))),
+            ('Itens Vendidos:', str(resumo_vendas.get('itens_vendidos', 0)) + ' unidades')
+        ]
+        story.append(criar_card_resumo('💰 Vendas do Dia', itens, CoresPDF.SUCESSO))
+        story.append(Spacer(1, 20))
+
+    # MOVIMENTAÇÕES DETALHADAS
+    if movimentacoes:
+        story.append(criar_secao_titulo(f"📝 MOVIMENTAÇÕES ({len(movimentacoes)} registros)"))
+        story.append(Spacer(1, 10))
+        
+        mov_data = [['Hora', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Usuário']]
+        
+        for mov in movimentacoes:
+            hora = mov['data_movimentacao'].strftime('%H:%M') if mov['data_movimentacao'] else '-'
+            tipo = '⬆️ Entrada' if mov['tipo'] == 'entrada' else '⬇️ Saída'
+            valor = formatar_moeda(mov['valor'])
+            if mov['tipo'] == 'saida':
+                valor = f"-{valor}"
+            else:
+                valor = f"+{valor}"
+            
+            mov_data.append([
+                hora,
+                tipo,
+                mov['categoria'][:12],
+                mov['descricao'][:28],
+                valor,
+                mov['usuario_nome'][:14] if mov['usuario_nome'] else '-'
+            ])
+        
+        mov_table = criar_tabela_moderna(
+            mov_data,
+            [0.7*inch, 1*inch, 1*inch, 2*inch, 0.9*inch, 1.2*inch],
+            cores_alternadas=True
+        )
+        story.append(mov_table)
+        story.append(Spacer(1, 20))
+
+    # RESUMO FINANCEIRO FINAL
+    if status_caixa:
+        saldo_dia = status_caixa['total_entradas'] - status_caixa['total_saidas']
+        itens = [
+            ('Saldo Inicial:', formatar_moeda(status_caixa['saldo_inicial'])),
+            ('(+) Total de Entradas:', formatar_moeda(status_caixa['total_entradas'])),
+            ('(-) Total de Saídas:', formatar_moeda(status_caixa['total_saidas'])),
+            ('(=) Saldo do Dia:', formatar_moeda(saldo_dia)),
+            ('Saldo Atual:', formatar_moeda(status_caixa['saldo_atual']))
+        ]
+        story.append(criar_card_resumo('📊 Resumo Financeiro', itens, CoresPDF.PRIMARIA))
+
+    # Rodapé moderno
+    def add_page_elements(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
+
+    doc.build(story, onFirstPage=add_page_elements, onLaterPages=add_page_elements)
+    buffer.seek(0)
+    return buffer
+
+def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
+    """Gera PDF do relatório financeiro com layout MODERNO."""
+    from pdf_layout_moderno import (
+        CoresPDF, criar_cabecalho_empresa_moderno, criar_cabecalho_moderno, criar_painel_kpis, 
+        criar_tabela_moderna, criar_secao_titulo, criar_rodape_moderno,
+        criar_card_resumo, formatar_moeda, formatar_porcentagem
+    )
     
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
+                           leftMargin=40, rightMargin=40)
+    story = []
+    config_empresa = obter_configuracoes_empresa()
+
+    # CABEÇALHO DA EMPRESA (Logo e informações)
+    story.extend(criar_cabecalho_empresa_moderno(config_empresa))
+    
+    # TÍTULO DO RELATÓRIO
+    subtitulo = ""
+    if data_inicio and data_fim:
+        subtitulo = f"Período: {data_inicio} a {data_fim}"
+    
+    story.extend(criar_cabecalho_moderno("RELATÓRIO FINANCEIRO", subtitulo=subtitulo))
+
+    # PAINEL DE KPIs FINANCEIROS
+    resumo = relatorio.get('resumo', {})
+    saldo_liquido = resumo.get('saldo_liquido', 0)
+    cor_saldo = CoresPDF.SUCESSO if saldo_liquido >= 0 else CoresPDF.ERRO
+    
+    kpis = [
+        {
+            'titulo': 'Total Vendas',
+            'valor': formatar_moeda(resumo.get('total_vendas', 0)),
+            'subtitulo': 'faturamento',
+            'cor': CoresPDF.PRIMARIA
+        },
+        {
+            'titulo': 'Total Recebido',
+            'valor': formatar_moeda(resumo.get('total_recebido', 0)),
+            'subtitulo': 'recebimentos',
+            'cor': CoresPDF.SUCESSO
+        },
+        {
+            'titulo': 'Total Pago',
+            'valor': formatar_moeda(resumo.get('total_pago', 0)),
+            'subtitulo': 'pagamentos',
+            'cor': CoresPDF.ERRO
+        },
+        {
+            'titulo': 'Saldo Líquido',
+            'valor': formatar_moeda(saldo_liquido),
+            'subtitulo': 'resultado',
+            'cor': cor_saldo
+        }
+    ]
+    
+    story.append(criar_painel_kpis(kpis))
+    story.append(Spacer(1, 25))
+
+    # CARD DE CONTAS A RECEBER E PAGAR
+    row_cards = []
+    
+    # Card Contas a Receber
+    itens_receber = [
+        ('Total a Receber:', formatar_moeda(resumo.get('total_a_receber', 0)))
+    ]
+    card_receber = criar_card_resumo('📥 Contas a Receber', itens_receber, CoresPDF.INFO)
+    row_cards.append(card_receber)
+    
+    # Card Contas a Pagar
+    itens_pagar = [
+        ('Total a Pagar:', formatar_moeda(resumo.get('total_a_pagar', 0)))
+    ]
+    card_pagar = criar_card_resumo('📤 Contas a Pagar', itens_pagar, CoresPDF.AVISO)
+    row_cards.append(card_pagar)
+    
+    # Criar linha com os 2 cards
+    cards_table = Table([row_cards], colWidths=[3.75*inch, 3.75*inch])
+    cards_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    story.append(cards_table)
+    story.append(Spacer(1, 20))
+
+    # VENDAS POR FORMA DE PAGAMENTO
+    if relatorio.get('vendas_forma_pagamento'):
+        story.append(criar_secao_titulo("💳 VENDAS POR FORMA DE PAGAMENTO"))
+        story.append(Spacer(1, 10))
+        
+        vendas_data = [['Forma de Pagamento', 'Quantidade', 'Valor Total', '% do Total']]
+        
+        total_vendas = sum(v['valor'] for v in relatorio['vendas_forma_pagamento'])
+        
+        for venda in relatorio['vendas_forma_pagamento']:
+            percentual = (venda['valor'] / total_vendas * 100) if total_vendas > 0 else 0
+            vendas_data.append([
+                venda['forma_pagamento'],
+                str(venda['quantidade']) + ' vendas',
+                formatar_moeda(venda['valor']),
+                formatar_porcentagem(percentual)
+            ])
+        
+        # Linha de total
+        vendas_data.append([
+            'TOTAL',
+            str(sum(v['quantidade'] for v in relatorio['vendas_forma_pagamento'])) + ' vendas',
+            formatar_moeda(total_vendas),
+            '100%'
+        ])
+        
+        vendas_table = criar_tabela_moderna(
+            vendas_data,
+            [2.5*inch, 1.5*inch, 1.7*inch, 1.3*inch],
+            destacar_total=True,
+            cores_alternadas=True
+        )
+        story.append(vendas_table)
+
+    # Rodapé moderno
+    def add_page_elements(canvas, doc):
+        criar_rodape_moderno(canvas, doc, config_empresa, canvas.getPageNumber())
+    
+    doc.build(story, onFirstPage=add_page_elements, onLaterPages=add_page_elements)
     buffer.seek(0)
     return buffer
 

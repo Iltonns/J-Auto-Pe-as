@@ -1094,6 +1094,55 @@ def listar_movimentacoes_caixa(limit=50):
     conn.close()
     return movimentacoes
 
+def obter_movimentacoes_caixa(data):
+    """Obtém as movimentações do caixa para uma data específica"""
+    from datetime import datetime, timedelta
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Converter string de data para objeto datetime
+        if isinstance(data, str):
+            data_obj = datetime.strptime(data, '%Y-%m-%d')
+        else:
+            data_obj = data
+        
+        # Definir início e fim do dia
+        data_inicio = data_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+        data_fim = data_inicio + timedelta(days=1)
+        
+        cursor.execute('''
+            SELECT cm.*, u.nome_completo, u.username
+            FROM caixa_movimentacoes cm
+            JOIN usuarios u ON cm.usuario_id = u.id
+            WHERE cm.data_movimentacao >= %s AND cm.data_movimentacao < %s
+            ORDER BY cm.data_movimentacao DESC
+        ''', (data_inicio, data_fim))
+        
+        movimentacoes = []
+        for row in cursor.fetchall():
+            movimentacoes.append({
+                'id': row[0],
+                'tipo': row[1],
+                'categoria': row[2],
+                'descricao': row[3],
+                'valor': row[4],
+                'data_movimentacao': row[5],
+                'usuario_id': row[6],
+                'venda_id': row[7],
+                'conta_pagar_id': row[8],
+                'conta_receber_id': row[9],
+                'observacoes': row[10],
+                'usuario_nome': row[11] if row[11] else row[12]
+            })
+        
+        return movimentacoes
+    except Exception as e:
+        print(f"Erro ao obter movimentações do caixa: {e}")
+        return []
+    finally:
+        conn.close()
+
 def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", auto_criar_conta=True):
     """Cria um lançamento financeiro (receita ou despesa) e automaticamente cria a conta correspondente"""
     conn = get_db_connection()
