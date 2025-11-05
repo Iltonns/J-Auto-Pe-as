@@ -73,30 +73,6 @@
     margin-bottom: 30px;
 }
 
-@media (max-width: 1600px) {
-    .stats-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-@media (max-width: 1200px) {
-    .stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (max-width: 992px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 576px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
 .stat-card {
     background: white;
     border-radius: 15px;
@@ -447,7 +423,6 @@
 </div>
 
 <!-- Estatísticas Principais -->
-<!-- Primeira Linha - 5 Cards -->
 <div class="stats-grid">
     <!-- Card 1: Peças Cadastradas -->
     {% if has_permission('estoque') %}
@@ -543,10 +518,7 @@
         </div>
     </div>
     {% endif %}
-</div>
 
-<!-- Segunda Linha - 5 Cards -->
-<div class="stats-grid">
     <!-- Card 6: Contas a Receber Hoje -->
     {% if has_permission('financeiro') %}
     <div class="stat-card success">
