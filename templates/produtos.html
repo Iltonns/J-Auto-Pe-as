@@ -452,6 +452,39 @@
         border-color: var(--accent-orange);
         box-shadow: 0 0 0 0.2rem rgba(255, 152, 0, 0.25);
     }
+    
+    /* Estilos para filtros */
+    #categoriaFilter:focus, #statusFilter:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .filtro-ativo .alert {
+        border-left: 4px solid #17a2b8;
+        font-size: 0.9rem;
+    }
+    
+    .dropdown-menu {
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    
+    .dropdown-item:hover {
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        margin: 0 4px;
+    }
+    
+    /* Indicar filtros ativos */
+    .form-select.filtro-aplicado {
+        border-color: #17a2b8;
+        background-color: #e7f3ff;
+    }
+    
+    .input-group .form-control.filtro-aplicado {
+        border-color: #17a2b8;
+        background-color: #e7f3ff;
+    }
 </style>
 {% endblock %}
 
@@ -490,7 +523,7 @@
 
     <!-- Filtros e Busca -->
     <div class="row mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="input-group">
                 <span class="input-group-text">
                     <i class="fas fa-search"></i>
@@ -502,7 +535,7 @@
             </div>
             <small class="text-muted">💡 Busque por múltiplos termos: PIVO%GOL encontra todos os pivôs do Gol</small>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <select id="categoriaFilter" class="form-select">
                 <option value="">Todas as categorias</option>
                 <option value="Motor">Motor</option>
@@ -522,6 +555,39 @@
                 <option value="estoque_baixo">Estoque Baixo (≤ 1 unidade)</option>
                 <option value="indisponivel">Indisponível</option>
             </select>
+        </div>
+        <div class="col-md-3">
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" onclick="resetarFiltros()" title="Limpar todos os filtros">
+                    <i class="fas fa-eraser me-1"></i>Limpar Filtros
+                </button>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-filter me-1"></i>Filtros Rápidos
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('disponivel', '')">
+                            <i class="fas fa-check-circle text-success me-2"></i>Apenas Disponíveis
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('estoque_baixo', '')">
+                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>Estoque Baixo
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('indisponivel', '')">
+                            <i class="fas fa-times-circle text-danger me-2"></i>Indisponíveis
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('', 'Motor')">
+                            <i class="fas fa-cog me-2"></i>Categoria: Motor
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('', 'Freios')">
+                            <i class="fas fa-stop-circle me-2"></i>Categoria: Freios
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="aplicarFiltroRapido('', 'Suspensão')">
+                            <i class="fas fa-car-side me-2"></i>Categoria: Suspensão
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1710,27 +1776,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const statusFilter = document.getElementById('statusFilter');
         
         function aplicarFiltros() {
-            const categoria = categoriaFilter.value.toLowerCase();
-            const status = statusFilter.value.toLowerCase();
+            const categoria = categoriaFilter.value.toLowerCase().trim();
+            const status = statusFilter.value.toLowerCase().trim();
             
             // Reset da página para primeira
             paginationProdutos.currentPage = 1;
             
-            // Filtrar linhas baseado nos critérios
-            paginationProdutos.allRows.forEach(row => {
+            // Começar com todas as linhas e aplicar filtros
+            paginationProdutos.filteredRows = paginationProdutos.allRows.filter(row => {
                 const $row = $(row);
-                const categoriaTexto = $row.find('td:nth-child(5)').text().toLowerCase();
-                const statusTexto = $row.find('td:nth-child(10)').text().toLowerCase();
+                const categoriaTexto = $row.find('td:nth-child(5)').text().toLowerCase().trim();
+                const statusTexto = $row.find('td:nth-child(11)').text().toLowerCase().trim(); // Coluna correta do status
                 
                 let mostrar = true;
                 
                 // Filtro por categoria
-                if (categoria && !categoriaTexto.includes(categoria)) {
-                    mostrar = false;
+                if (categoria && categoria !== '') {
+                    if (!categoriaTexto.includes(categoria)) {
+                        mostrar = false;
+                    }
                 }
                 
                 // Filtro por status
-                if (status) {
+                if (status && status !== '') {
                     if (status === 'disponivel' && !statusTexto.includes('disponível')) {
                         mostrar = false;
                     } else if (status === 'estoque_baixo' && !statusTexto.includes('baixo')) {
@@ -1740,25 +1808,152 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // Adicionar ou remover da lista filtrada
-                if (mostrar) {
-                    if (!paginationProdutos.filteredRows.includes(row)) {
-                        paginationProdutos.filteredRows.push(row);
-                    }
-                } else {
-                    const index = paginationProdutos.filteredRows.indexOf(row);
-                    if (index > -1) {
-                        paginationProdutos.filteredRows.splice(index, 1);
-                    }
-                }
+                return mostrar;
             });
             
+            // Aplicar também o filtro de busca se houver texto na busca
+            const searchTerm = document.getElementById('buscaProdutos').value.trim();
+            if (searchTerm) {
+                paginationProdutos.performSearch();
+            } else {
+                paginationProdutos.updatePagination();
+            }
+        }
+        
+        // Função para resetar filtros
+        function resetarFiltros() {
+            categoriaFilter.value = '';
+            statusFilter.value = '';
+            document.getElementById('buscaProdutos').value = '';
+            
+            paginationProdutos.filteredRows = [...paginationProdutos.allRows];
+            paginationProdutos.currentPage = 1;
             paginationProdutos.updatePagination();
+            
+            // Remover indicadores de filtros ativos
+            atualizarIndicadorFiltros();
         }
         
         // Eventos dos filtros
-        categoriaFilter.addEventListener('change', aplicarFiltros);
-        statusFilter.addEventListener('change', aplicarFiltros);
+        categoriaFilter.addEventListener('change', function() {
+            aplicarFiltros();
+            atualizarIndicadorFiltros();
+        });
+        statusFilter.addEventListener('change', function() {
+            aplicarFiltros();
+            atualizarIndicadorFiltros();
+        });
+        
+        // Função para atualizar indicador de filtros ativos
+        function atualizarIndicadorFiltros() {
+            const categoria = categoriaFilter.value;
+            const status = statusFilter.value;
+            const busca = document.getElementById('buscaProdutos').value.trim();
+            
+            // Atualizar classes visuais nos controles
+            categoriaFilter.classList.toggle('filtro-aplicado', !!categoria);
+            statusFilter.classList.toggle('filtro-aplicado', !!status);
+            document.getElementById('buscaProdutos').classList.toggle('filtro-aplicado', !!busca);
+            
+            // Remover indicadores existentes
+            document.querySelectorAll('.filtro-ativo').forEach(el => el.remove());
+            
+            // Adicionar indicadores para filtros ativos
+            const container = document.querySelector('.row.mb-4');
+            if (categoria || status || busca) {
+                let indicadoresHtml = '<div class="col-12 filtro-ativo"><div class="alert alert-info py-2 px-3 mb-2"><i class="fas fa-filter me-2"></i><strong>Filtros ativos:</strong> ';
+                
+                const filtrosAtivos = [];
+                if (busca) filtrosAtivos.push(`Busca: "${busca}"`);
+                if (categoria) filtrosAtivos.push(`Categoria: ${categoria}`);
+                if (status) {
+                    const statusTexto = status === 'disponivel' ? 'Disponível' : 
+                                       status === 'estoque_baixo' ? 'Estoque Baixo' : 'Indisponível';
+                    filtrosAtivos.push(`Status: ${statusTexto}`);
+                }
+                
+                indicadoresHtml += filtrosAtivos.join(' | ') + 
+                    ' <button class="btn btn-sm btn-outline-secondary ms-2" onclick="resetarFiltros()"><i class="fas fa-times me-1"></i>Limpar</button></div></div>';
+                
+                container.insertAdjacentHTML('afterend', indicadoresHtml);
+            }
+        }
+        
+        // Atualizar indicador na busca também
+        document.getElementById('buscaProdutos').addEventListener('input', function() {
+            setTimeout(atualizarIndicadorFiltros, 100);
+        });
+        
+        // Modificar a busca para considerar os filtros
+        const originalPerformSearch = paginationProdutos.performSearch;
+        paginationProdutos.performSearch = function() {
+            const searchTerm = this.$search.val().trim();
+            
+            // Começar com todas as linhas
+            let rowsParaFiltrar = [...this.allRows];
+            
+            // Aplicar filtros de categoria e status primeiro
+            const categoria = categoriaFilter.value.toLowerCase().trim();
+            const status = statusFilter.value.toLowerCase().trim();
+            
+            if (categoria || status) {
+                rowsParaFiltrar = rowsParaFiltrar.filter(row => {
+                    const $row = $(row);
+                    const categoriaTexto = $row.find('td:nth-child(5)').text().toLowerCase().trim();
+                    const statusTexto = $row.find('td:nth-child(11)').text().toLowerCase().trim();
+                    
+                    let mostrar = true;
+                    
+                    if (categoria && !categoriaTexto.includes(categoria)) {
+                        mostrar = false;
+                    }
+                    
+                    if (status) {
+                        if (status === 'disponivel' && !statusTexto.includes('disponível')) {
+                            mostrar = false;
+                        } else if (status === 'estoque_baixo' && !statusTexto.includes('baixo')) {
+                            mostrar = false;
+                        } else if (status === 'indisponivel' && !statusTexto.includes('indisponível')) {
+                            mostrar = false;
+                        }
+                    }
+                    
+                    return mostrar;
+                });
+            }
+            
+            // Aplicar busca por texto nas linhas já filtradas
+            if (!searchTerm) {
+                this.filteredRows = rowsParaFiltrar;
+            } else {
+                const termoLimpo = searchTerm.replace(/%/g, ' ').trim();
+                const termos = termoLimpo.split(/\s+/).filter(t => t.length > 0).map(t => t.toLowerCase());
+                
+                this.filteredRows = rowsParaFiltrar.filter(row => {
+                    const $row = $(row);
+                    const text = $row.text().toLowerCase();
+                    
+                    return termos.length === 0 || termos.every(termo => text.includes(termo));
+                });
+            }
+            
+            this.currentPage = 1;
+            this.updatePagination();
+        };
+        
+        // Tornar função resetarFiltros global
+        window.resetarFiltros = resetarFiltros;
+        
+        // Função para aplicar filtros rápidos
+        window.aplicarFiltroRapido = function(status, categoria) {
+            if (status) {
+                statusFilter.value = status;
+            }
+            if (categoria) {
+                categoriaFilter.value = categoria;
+            }
+            aplicarFiltros();
+        };
     }
 });
 

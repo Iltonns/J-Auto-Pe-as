@@ -68,25 +68,50 @@
 /* Cards Estatísticas Modernos */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap: 20px;
     margin-bottom: 30px;
 }
 
+@media (max-width: 1600px) {
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 992px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .stat-card {
     background: white;
-    border-radius: 20px;
-    padding: 25px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
     border: none;
     position: relative;
     overflow: hidden;
     transition: all 0.3s ease;
+    min-height: 120px;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
 }
 
 .stat-card::before {
@@ -95,7 +120,7 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 3px;
     background: var(--gradient-primary);
 }
 
@@ -108,17 +133,17 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
 }
 
 .stat-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 15px;
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.8rem;
+    font-size: 1.4rem;
     color: white;
     background: var(--gradient-primary);
 }
@@ -129,7 +154,7 @@
 .stat-icon.danger { background: linear-gradient(135deg, #c62828, #f44336); }
 
 .stat-content h3 {
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 700;
     color: #2c3e50;
     margin: 0 0 5px 0;
@@ -137,16 +162,16 @@
 }
 
 .stat-content p {
-    font-size: 1rem;
+    font-size: 0.85rem;
     color: #7f8c8d;
-    margin: 0 0 15px 0;
+    margin: 0 0 10px 0;
     font-weight: 500;
 }
 
 .stat-footer {
     display: flex;
     align-items: center;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: #95a5a6;
 }
 
@@ -422,6 +447,7 @@
 </div>
 
 <!-- Estatísticas Principais -->
+<!-- Primeira Linha - 5 Cards -->
 <div class="stats-grid">
     <!-- Card 1: Peças Cadastradas -->
     {% if has_permission('estoque') %}
@@ -486,7 +512,7 @@
         <div class="stat-header">
             <div class="stat-content">
                 <h3>{{ estatisticas.produtos_estoque_baixo or 0 }}</h3>
-                <p title="Produtos com estoque menor ou igual ao estoque mínimo, mas com estoque atual > 0">Estoque Baixo</p>
+                <p>Estoque Baixo</p>
             </div>
             <div class="stat-icon warning">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -499,21 +525,43 @@
     </div>
     {% endif %}
 
-    <!-- Card 5: Fornecedores -->
-    {% if has_permission('estoque') %}
-    <div class="stat-card info">
+    <!-- Card 5: Contas a Pagar Hoje -->
+    {% if has_permission('financeiro') %}
+    <div class="stat-card danger">
         <div class="stat-header">
             <div class="stat-content">
-                <h3>{{ estatisticas.total_fornecedores or 0 }}</h3>
-                <p>Fornecedores</p>
+                <h3>{{ estatisticas.contas_pagar_hoje or 0 }}</h3>
+                <p>Contas a Pagar Hoje</p>
             </div>
-            <div class="stat-icon info">
-                <i class="fas fa-truck"></i>
+            <div class="stat-icon danger">
+                <i class="fas fa-credit-card"></i>
             </div>
         </div>
         <div class="stat-footer">
-            <i class="fas fa-handshake"></i>
-            Base de Fornecedores
+            <i class="fas fa-exclamation-circle"></i>
+            Vencimento Hoje
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Segunda Linha - 5 Cards -->
+<div class="stats-grid">
+    <!-- Card 6: Contas a Receber Hoje -->
+    {% if has_permission('financeiro') %}
+    <div class="stat-card success">
+        <div class="stat-header">
+            <div class="stat-content">
+                <h3>{{ estatisticas.contas_receber_hoje or 0 }}</h3>
+                <p>Contas a Receber Hoje</p>
+            </div>
+            <div class="stat-icon success">
+                <i class="fas fa-coins"></i>
+            </div>
+        </div>
+        <div class="stat-footer">
+            <i class="fas fa-calendar-check"></i>
+            Vencimento Hoje
         </div>
     </div>
     {% endif %}
@@ -537,13 +585,32 @@
     </div>
     {% endif %}
 
-    <!-- Card 8: Sem Estoque -->
+    <!-- Card 8: Fornecedores -->
+    {% if has_permission('estoque') %}
+    <div class="stat-card info">
+        <div class="stat-header">
+            <div class="stat-content">
+                <h3>{{ estatisticas.total_fornecedores or 0 }}</h3>
+                <p>Fornecedores</p>
+            </div>
+            <div class="stat-icon info">
+                <i class="fas fa-truck"></i>
+            </div>
+        </div>
+        <div class="stat-footer">
+            <i class="fas fa-handshake"></i>
+            Base de Fornecedores
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Card 9: Sem Estoque -->
     {% if has_permission('estoque') %}
     <div class="stat-card danger">
         <div class="stat-header">
             <div class="stat-content">
                 <h3>{{ estatisticas.produtos_sem_estoque or 0 }}</h3>
-                <p title="Produtos com estoque igual a 0 unidade">Sem Estoque</p>
+                <p>Sem Estoque</p>
             </div>
             <div class="stat-icon danger">
                 <i class="fas fa-box-open"></i>
@@ -556,7 +623,7 @@
     </div>
     {% endif %}
 
-    <!-- Card 9: Orçamentos Pendentes -->
+    <!-- Card 10: Orçamentos Pendentes -->
     {% if has_permission('vendas') %}
     <div class="stat-card warning">
         <div class="stat-header">

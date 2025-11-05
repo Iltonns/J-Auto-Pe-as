@@ -3250,88 +3250,103 @@ def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
     """Obtém estatísticas para o dashboard"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    
+    # Usar conexões separadas para evitar conflitos de transação
+    def executar_consulta_segura(query, default=0):
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(query)
+            resultado = cursor.fetchone()[0] or default
+            conn.close()
+            return resultado
+        except Exception as e:
+            return default
     
     # Total de produtos
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
-    total_produtos = cursor.fetchone()[0]
+    total_produtos = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
     
     # Total de clientes
-    cursor.execute("SELECT COUNT(*) FROM clientes")
-    total_clientes = cursor.fetchone()[0]
+    total_clientes = executar_consulta_segura("SELECT COUNT(*) FROM clientes")
     
     # Total de fornecedores
-    cursor.execute("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
-    total_fornecedores = cursor.fetchone()[0]
+    total_fornecedores = executar_consulta_segura("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
     
     # Valor do estoque
-    cursor.execute("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
-    valor_estoque = cursor.fetchone()[0] or 0
+    valor_estoque = executar_consulta_segura("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
     
-    # Produtos com estoque baixo (estoque menor ou igual a 1)
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo")
-    produtos_estoque_baixo = cursor.fetchone()[0]
+    # Produtos com estoque baixo
+    produtos_estoque_baixo = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo")
 
-    # Produtos sem estoque (estoque igual a 0)
-    cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
-    produtos_sem_estoque = cursor.fetchone()[0]
+    # Produtos sem estoque
+    produtos_sem_estoque = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
     
-    # Vendas do mês
-    cursor.execute('''
-        SELECT COUNT(*), SUM(total) 
-        FROM vendas 
-        WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
-    ''')
-    vendas_mes = cursor.fetchone()
+    # Vendas do mês e do dia - usando uma conexão para ambas
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Vendas do mês
+        cursor.execute('''
+            SELECT COUNT(*), SUM(total) 
+            FROM vendas 
+            WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
+        ''')
+        vendas_mes = cursor.fetchone()
+        
+        # Vendas do dia
+        cursor.execute('''
+            SELECT COUNT(*), SUM(total) 
+            FROM vendas 
+            WHERE data_venda::date = CURRENT_DATE
+        ''')
+        vendas_dia = cursor.fetchone()
+        
+        conn.close()
+    except:
+        vendas_mes = (0, 0)
+        vendas_dia = (0, 0)
     
-    # Vendas do dia
-    cursor.execute('''
-        SELECT COUNT(*), SUM(total) 
-        FROM vendas 
-        WHERE data_venda::date = CURRENT_DATE
-    ''')
-    vendas_dia = cursor.fetchone()
-    
-    # Contas a receber em atraso
-    cursor.execute('''
+    # Contas em atraso
+    valor_atraso_receber = executar_consulta_segura('''
         SELECT SUM(valor) 
         FROM contas_receber 
         WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
     ''')
-    valor_atraso_receber = cursor.fetchone()[0] or 0
     
-    # Contas a pagar em atraso
-    cursor.execute('''
+    valor_atraso_pagar = executar_consulta_segura('''
         SELECT SUM(valor) 
         FROM contas_pagar 
         WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
     ''')
-    valor_atraso_pagar = cursor.fetchone()[0] or 0
     
     # Movimentações pendentes (verificar se a tabela existe)
-    try:
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM movimentacoes_produtos 
-            WHERE status = 'pendente'
-        ''')
-        movimentacoes_pendentes = cursor.fetchone()[0] or 0
-    except:
-        movimentacoes_pendentes = 0
+    movimentacoes_pendentes = executar_consulta_segura('''
+        SELECT COUNT(*) 
+        FROM movimentacoes_produtos 
+        WHERE status = 'pendente'
+    ''')
     
-    # Orçamentos pendentes (verificar se a tabela existe)
-    try:
-        cursor.execute('''
-            SELECT COUNT(*) 
-            FROM orcamentos 
-            WHERE status = 'pendente'
-        ''')
-        orcamentos_pendentes = cursor.fetchone()[0] or 0
-    except:
-        orcamentos_pendentes = 0
+    # Orçamentos pendentes
+    orcamentos_pendentes = executar_consulta_segura('''
+        SELECT COUNT(*) 
+        FROM orcamentos 
+        WHERE status = 'pendente'
+    ''')
     
-    conn.close()
+    # Contas a pagar hoje
+    contas_pagar_hoje = executar_consulta_segura('''
+        SELECT COUNT(*) 
+        FROM contas_pagar 
+        WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
+    ''')
+    
+    # Contas a receber hoje
+    contas_receber_hoje = executar_consulta_segura('''
+        SELECT COUNT(*) 
+        FROM contas_receber 
+        WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
+    ''')
     
     return {
         'total_produtos': total_produtos,
@@ -3347,7 +3362,9 @@ def obter_estatisticas_dashboard():
         'valor_atraso_receber': valor_atraso_receber,
         'valor_atraso_pagar': valor_atraso_pagar,
         'movimentacoes_pendentes': movimentacoes_pendentes,
-        'orcamentos_pendentes': orcamentos_pendentes
+        'orcamentos_pendentes': orcamentos_pendentes,
+        'contas_pagar_hoje': contas_pagar_hoje,
+        'contas_receber_hoje': contas_receber_hoje
     }
 
 def produtos_estoque_baixo():
@@ -4782,7 +4799,20 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
             contas_receber_resumo.append({'status': row[0], 'quantidade': row[1], 'valor': row[2]})
 
         # Contas a pagar RESUMO (listagem resumida)
-        query_pagar_resumo = query_receber_resumo.replace('contas_receber', 'contas_pagar')
+        query_pagar_resumo = '''
+            SELECT 
+                status,
+                COUNT(*) as quantidade,
+                SUM(valor) as valor_total
+            FROM contas_pagar
+            WHERE 1=1
+        '''
+        if data_inicio:
+            query_pagar_resumo += " AND (DATE(data_vencimento) >= %s OR DATE(data_pagamento) >= %s)"
+        if data_fim:
+            query_pagar_resumo += " AND (DATE(data_vencimento) <= %s OR DATE(data_pagamento) <= %s)"
+        
+        query_pagar_resumo += " GROUP BY status"
         
         cursor.execute(query_pagar_resumo, params_vencimento_recebimento)
         contas_pagar_resumo = []
