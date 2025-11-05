@@ -17,6 +17,14 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL não encontrada! Configure o arquivo .env com suas credenciais do Neon.")
 
+def normalizar_cnpj(cnpj):
+    """Remove todos os caracteres não numéricos do CNPJ para comparação"""
+    if not cnpj:
+        return None
+    # Remove pontos, barras, hífens e espaços
+    import re
+    return re.sub(r'[^0-9]', '', str(cnpj))
+
 def get_db_connection():
     """Cria uma conexão com o banco PostgreSQL Neon"""
     try:
@@ -3770,23 +3778,25 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                 
                 # Buscar ou criar fornecedor
                 if cnpj_fornecedor and nome_fornecedor:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-                    
-                    # Verificar se fornecedor já existe pelo CNPJ
-                    cursor.execute('SELECT id FROM fornecedores WHERE cnpj = %s', (cnpj_fornecedor,))
-                    fornecedor_existente = cursor.fetchone()
+                    # Buscar fornecedor existente pelo CNPJ normalizado
+                    fornecedor_existente = buscar_fornecedor_por_cnpj(cnpj_fornecedor)
                     
                     if fornecedor_existente:
                         # Atualizar fornecedor existente
-                        fornecedor_id = fornecedor_existente[0]
+                        fornecedor_id = fornecedor_existente['id']
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
                         cursor.execute('''
                             UPDATE fornecedores 
                             SET nome = %s, telefone = %s, endereco = %s, cidade = %s, estado = %s, cep = %s
                             WHERE id = %s
                         ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id))
+                        conn.commit()
+                        conn.close()
                     else:
                         # Criar novo fornecedor
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
                         cursor.execute('''
                             INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -3794,9 +3804,8 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
                         ''', (nome_fornecedor, cnpj_fornecedor, telefone, endereco_completo, cidade, estado, cep, 
                               f"Importado de NF-e. Nome Fantasia: {nome_fantasia}" if nome_fantasia else "Importado de NF-e"))
                         fornecedor_id = cursor.fetchone()[0]
-                    
-                    conn.commit()
-                    conn.close()
+                        conn.commit()
+                        conn.close()
                     
             except Exception as e:
                 erros.append(f"Erro ao processar fornecedor: {str(e)}")
@@ -4991,6 +5000,46 @@ def buscar_fornecedor(fornecedor_id):
     finally:
         conn.close()
 
+def buscar_fornecedor_por_cnpj(cnpj):
+    """Busca um fornecedor pelo CNPJ (normalizado)"""
+    if not cnpj:
+        return None
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cnpj_normalizado = normalizar_cnpj(cnpj)
+        
+        # Buscar todos os fornecedores e comparar CNPJ normalizado
+        cursor.execute('SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes, ativo, created_at FROM fornecedores WHERE cnpj IS NOT NULL')
+        fornecedores = cursor.fetchall()
+        
+        for row in fornecedores:
+            if normalizar_cnpj(row[2]) == cnpj_normalizado:
+                return {
+                    'id': row[0],
+                    'nome': row[1],
+                    'cnpj': row[2],
+                    'telefone': row[3],
+                    'email': row[4],
+                    'endereco': row[5],
+                    'cidade': row[6],
+                    'estado': row[7],
+                    'cep': row[8],
+                    'contato_pessoa': row[9],
+                    'observacoes': row[10],
+                    'ativo': row[11],
+                    'created_at': row[12]
+                }
+        
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar fornecedor por CNPJ: {e}")
+        return None
+    finally:
+        conn.close()
+
 def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=None, 
                         cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
     """Adiciona um novo fornecedor"""
@@ -4998,6 +5047,16 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
     cursor = conn.cursor()
     
     try:
+        # Verificar se já existe fornecedor com o mesmo CNPJ (normalizado)
+        if cnpj:
+            cnpj_normalizado = normalizar_cnpj(cnpj)
+            cursor.execute('SELECT id, cnpj FROM fornecedores WHERE cnpj IS NOT NULL')
+            fornecedores_existentes = cursor.fetchall()
+            
+            for forn_id, forn_cnpj in fornecedores_existentes:
+                if normalizar_cnpj(forn_cnpj) == cnpj_normalizado:
+                    raise ValueError(f"Já existe um fornecedor cadastrado com este CNPJ: {forn_cnpj}")
+        
         cursor.execute('''
             INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
                                     estado, cep, contato_pessoa, observacoes)
@@ -5022,6 +5081,16 @@ def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None,
     cursor = conn.cursor()
     
     try:
+        # Verificar se já existe outro fornecedor com o mesmo CNPJ (normalizado)
+        if cnpj:
+            cnpj_normalizado = normalizar_cnpj(cnpj)
+            cursor.execute('SELECT id, cnpj FROM fornecedores WHERE cnpj IS NOT NULL AND id != %s', (fornecedor_id,))
+            fornecedores_existentes = cursor.fetchall()
+            
+            for forn_id, forn_cnpj in fornecedores_existentes:
+                if normalizar_cnpj(forn_cnpj) == cnpj_normalizado:
+                    raise ValueError(f"Já existe outro fornecedor cadastrado com este CNPJ: {forn_cnpj}")
+        
         cursor.execute('''
             UPDATE fornecedores 
             SET nome = %s, cnpj = %s, telefone = %s, email = %s, endereco = %s, 
