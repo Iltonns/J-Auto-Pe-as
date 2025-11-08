@@ -7,6 +7,7 @@ import os
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+from math import ceil
 
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -1373,10 +1374,20 @@ def deletar_cliente(id):
     conn.close()
 
 # FUNÇÕES DE PRODUTOS
-def listar_produtos():
-    """Lista todos os produtos ativos"""
+def listar_produtos(page=1, per_page=10):
+    """Lista produtos ativos com paginação"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Contar o número total de produtos ativos
+    cursor.execute('SELECT COUNT(*) FROM produtos WHERE ativo = TRUE')
+    total_produtos = cursor.fetchone()[0]
+    
+    # Calcular o total de páginas
+    total_pages = ceil(total_produtos / per_page)
+    
+    # Calcular o offset
+    offset = (page - 1) * per_page
     
     cursor.execute('''
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
@@ -1384,7 +1395,8 @@ def listar_produtos():
         FROM produtos
         WHERE ativo = TRUE
         ORDER BY nome
-    ''')
+        LIMIT %s OFFSET %s
+    ''', (per_page, offset))
     
     produtos = []
     for row in cursor.fetchall():
@@ -1408,7 +1420,8 @@ def listar_produtos():
         })
     
     conn.close()
-    return produtos
+    
+    return {'produtos': produtos, 'total_pages': total_pages, 'current_page': page}
 
 def buscar_produto(termo_busca):
     """Busca produto por nome, código de barras, código do fornecedor, marca ou ID

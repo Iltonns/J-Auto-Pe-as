@@ -963,17 +963,31 @@ def produtos_fornecedor(id):
 @app.route('/produtos')
 @login_required
 def produtos():
-    """Exibe a página de gerenciamento de produtos"""
+    """Exibe a página de gerenciamento de produtos com paginação"""
     try:
-        produtos_lista = listar_produtos()
+        page = request.args.get('page', 1, type=int)
+        per_page = 10  # Define quantos produtos por página
+        
+        # Modificar a chamada para listar_produtos para aceitar paginação
+        produtos_data = listar_produtos(page=page, per_page=per_page)
+        
         fornecedores_lista = obter_fornecedores_para_select()
-        # Novo: Obter estatísticas para o card
         estatisticas = obter_estatisticas_dashboard()
-        return render_template('produtos.html', produtos=produtos_lista, fornecedores=fornecedores_lista, estatisticas=estatisticas)
+        
+        return render_template('produtos.html', 
+                             produtos=produtos_data['produtos'], 
+                             fornecedores=fornecedores_lista, 
+                             estatisticas=estatisticas,
+                             total_pages=produtos_data['total_pages'],
+                             current_page=produtos_data['current_page'])
     except Exception as e:
         flash(f'Erro ao carregar produtos: {str(e)}', 'error')
-        # Passar estatísticas de fallback em caso de erro
-        return render_template('produtos.html', produtos=[], fornecedores=[], estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0})
+        return render_template('produtos.html', 
+                             produtos=[], 
+                             fornecedores=[], 
+                             estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0},
+                             total_pages=0,
+                             current_page=1)
     
     
 @app.route('/produtos/buscar')

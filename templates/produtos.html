@@ -510,41 +510,36 @@
         </div>
     </div>
 
-    <!-- Controles de Paginação -->
-    <div id="controlesPaginacaoProdutos">
-        <div class="row mb-3 align-items-center">
-            <div class="col-md-6">
-                <div class="d-flex align-items-center">
-                    <label for="itensPorPaginaProdutos" class="form-label me-2 mb-0">Mostrar:</label>
-                    <select class="form-select w-auto" id="itensPorPaginaProdutos" style="min-width: 80px;">
-                        <option value="10">10</option>
-                        <option value="20" selected>20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="all">Todos</option>
-                    </select>
-                    <span class="ms-2 text-muted">itens por página</span>
-                </div>
-            </div>
-            <div class="col-md-6 text-end">
-                <div class="d-flex align-items-center justify-content-end">
-                    <span class="badge bg-primary me-2">
-                        <i class="fas fa-list"></i> 
-                        Mostrando <span id="itensVisiveisProdutos">0</span> de <span id="totalItensProdutos">0</span> itens
-                    </span>
-                    <div class="btn-group" role="group" id="controlesNavegacaoProdutos">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnteriorProdutos" disabled>
-                            <i class="fas fa-chevron-left"></i> Anterior
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximoProdutos">
-                            Próximo <i class="fas fa-chevron-right"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="infoPaginacaoProdutos" class="mt-1"></div>
-            </div>
+        <!-- Controles de Paginação -->
+        <div class="card-footer bg-light">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if current_page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('produtos', page=current_page-1) }}">Anterior</a>
+                        </li>
+                    {% endif %}
+
+                    {% for page_num in range(1, total_pages + 1) %}
+                        {% if page_num == current_page %}
+                            <li class="page-item active">
+                                <a class="page-link" href="#">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('produtos', page=page_num) }}">{{ page_num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if current_page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('produtos', page=current_page+1) }}">Próximo</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
         </div>
-    </div>
 
     <!-- Estatísticas Rápidas -->
     <div class="row mb-4">
@@ -1326,47 +1321,6 @@ function limparBusca() {
         window.paginationProdutos.performSearch();
     }
 }
-    
-    rows.forEach(row => {
-        const nome = row.cells[2].textContent.toLowerCase();
-        const marca = row.cells[3].textContent.toLowerCase();
-        const categoria = row.cells[4].textContent.toLowerCase();
-        const codigo = row.cells[7].textContent.toLowerCase();
-        const status = row.cells[9].textContent.toLowerCase(); // Corrigido: coluna Status é índice 9
-        
-        let showRow = true;
-        
-        // Filtro de busca (busca em nome, marca, categoria e código)
-        if (searchTerm && !nome.includes(searchTerm) && !marca.includes(searchTerm) && !categoria.includes(searchTerm) && !codigo.includes(searchTerm)) {
-            showRow = false;
-        }
-        
-        // Filtro de categoria
-        if (categoriaFilter && !categoria.includes(categoriaFilter.toLowerCase())) {
-            showRow = false;
-        }
-        
-        // Filtro de status
-        if (statusFilter) {
-            const statusSpan = row.cells[9].querySelector('span'); // Corrigido: coluna Status é índice 9
-            const statusClass = statusSpan ? statusSpan.className : '';
-            
-            let matchesFilter = false;
-            if (statusFilter === 'disponivel' && statusClass.includes('status-disponivel')) {
-                matchesFilter = true;
-            } else if (statusFilter === 'estoque_baixo' && statusClass.includes('status-baixo')) {
-                matchesFilter = true;
-            } else if (statusFilter === 'indisponivel' && statusClass.includes('status-indisponivel')) {
-                matchesFilter = true;
-            }
-            
-            if (!matchesFilter) showRow = false;
-        }
-        
-        row.style.display = showRow ? '' : 'none';
-    });
-}
-*/
 
 // Calculadora de preços
 function calcularPreco(tipo) {
