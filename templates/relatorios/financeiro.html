@@ -132,7 +132,9 @@
                 {% else %}
                 <p style="margin: 3px 0; font-size: 11px;"><strong>Período:</strong> Todas as datas</p>
                 {% endif %}
-                <p style="margin: 3px 0; font-size: 11px;"><strong>Saldo Líquido:</strong> R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}</p>
+                {% set valor_recebido_header = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                {% set novo_saldo_liquido_header = valor_recebido_header - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                <p style="margin: 3px 0; font-size: 11px;"><strong>Saldo Líquido:</strong> R$ {{ "%.2f"|format(novo_saldo_liquido_header) }}</p>
             </div>
         </div>
         <hr style="margin: 15px 0; border: none; border-top: 3px solid #007bff;">
@@ -142,7 +144,9 @@
                 <strong>Vendas:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_vendas) if relatorio.resumo else "0,00" }} | 
                 <strong>A Receber:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_receber) if relatorio.resumo else "0,00" }} | 
                 <strong>A Pagar:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) if relatorio.resumo else "0,00" }} | 
-                <strong>Saldo:</strong> R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}
+                {% set valor_recebido_resumo = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                {% set novo_saldo_liquido_resumo = valor_recebido_resumo - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                <strong>Saldo:</strong> R$ {{ "%.2f"|format(novo_saldo_liquido_resumo) }}
             </p>
         </div>
     </div>
@@ -181,7 +185,7 @@
                         <i class="fas fa-check-circle"></i> RECEBIDO
                     </div>
                     <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #007bff;">
-                        R$ {{ "%.2f"|format(relatorio.resumo.total_recebido|default(0)) if relatorio.resumo else "0,00" }}
+                        R$ {{ "%.2f"|format((relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber)|default(0)) if relatorio.resumo else "0,00" }}
                     </div>
                 </div>
             </div>
@@ -201,17 +205,19 @@
                         <i class="fas fa-money-bill-wave"></i> PAGO
                     </div>
                     <div class="stat-value" style="font-size: 16px; font-weight: bold; color: #dc3545;">
-                        R$ {{ "%.2f"|format(relatorio.resumo.total_pago|default(0)) if relatorio.resumo else "0,00" }}
+                        R$ -{{ "%.2f"|format(relatorio.resumo.total_pago|default(0)) if relatorio.resumo else "0,00" }}
                     </div>
                 </div>
             </div>
             <div class="col-2" style="width: 16.66%; padding: 5px;">
-                <div class="stat-box" style="border: 3px solid {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %}; padding: 10px; border-radius: 8px; background: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#e8f5e9{% else %}#f8d7da{% endif %}; text-align: center;">
+                {% set valor_recebido_print = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                {% set novo_saldo_liquido_print = valor_recebido_print - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                <div class="stat-box" style="border: 3px solid {% if novo_saldo_liquido_print >= 0 %}#28a745{% else %}#dc3545{% endif %}; padding: 10px; border-radius: 8px; background: {% if novo_saldo_liquido_print >= 0 %}#e8f5e9{% else %}#f8d7da{% endif %}; text-align: center;">
                     <div class="stat-label" style="font-size: 9px; color: #666; font-weight: bold; margin-bottom: 5px;">
                         <i class="fas fa-balance-scale"></i> SALDO
                     </div>
-                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %};">
-                        R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}
+                    <div class="stat-value" style="font-size: 16px; font-weight: bold; color: {% if novo_saldo_liquido_print >= 0 %}#28a745{% else %}#dc3545{% endif %};">
+                        R$ {{ "%.2f"|format(novo_saldo_liquido_print) }}
                     </div>
                 </div>
             </div>
@@ -325,7 +331,7 @@
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_recebido if relatorio.resumo.total_recebido else 0) }}</h4>
+                                    <h4>R$ {{ "%.2f"|format((relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0) }}</h4>
                                     <p class="mb-0">Valor Recebido</p>
                                 </div>
                                 <div class="align-self-center">
@@ -355,7 +361,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
                             <div>
-                                <h4>R$ {{ "%.2f"|format(relatorio.resumo.total_pago) }}</h4>
+                                <h4>R$ -{{ "%.2f"|format(relatorio.resumo.total_pago) }}</h4>
                                 <p class="mb-0">Total Pago</p>
                             </div>
                             <div class="align-self-center">
@@ -366,11 +372,13 @@
                 </div>
             </div>
                 <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-                    <div class="card {% if relatorio.resumo.saldo_liquido >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    {% set valor_recebido = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                    {% set novo_saldo_liquido = valor_recebido - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                    <div class="card {% if novo_saldo_liquido >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) }}</h4>
+                                    <h4>R$ {{ "%.2f"|format(novo_saldo_liquido) }}</h4>
                                     <p class="mb-0">Saldo Líquido</p>
                                 </div>
                                 <div class="align-self-center">
@@ -836,7 +844,9 @@
                         <p style="margin: 3px 0;"><strong>• Total a Pagar:</strong> R$ {{ "%.2f"|format(relatorio.resumo.total_a_pagar) if relatorio.resumo else "0,00" }}</p>
                     </div>
                     <div>
-                        <p style="margin: 3px 0;"><strong>• Saldo Líquido:</strong> <span style="color: {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}#28a745{% else %}#dc3545{% endif %};">R$ {{ "%.2f"|format(relatorio.resumo.saldo_liquido) if relatorio.resumo else "0,00" }}</span></p>
+                        {% set valor_recebido_info = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                        {% set novo_saldo_liquido_info = valor_recebido_info - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                        <p style="margin: 3px 0;"><strong>• Saldo Líquido:</strong> <span style="color: {% if novo_saldo_liquido_info >= 0 %}#28a745{% else %}#dc3545{% endif %};">R$ {{ "%.2f"|format(novo_saldo_liquido_info) }}</span></p>
                         <p style="margin: 3px 0;"><strong>• Formas de Pagamento:</strong> {{ relatorio.vendas_forma_pagamento|length if relatorio.vendas_forma_pagamento else 0 }}</p>
                         <p style="margin: 3px 0;"><strong>• Contas Detalhadas:</strong> {{ (relatorio.contas_receber_detalhadas|length + relatorio.contas_pagar_detalhadas|length) if (relatorio.contas_receber_detalhadas and relatorio.contas_pagar_detalhadas) else 0 }}</p>
                         <p style="margin: 3px 0;"><strong>• Data de Geração:</strong> {{ now().strftime('%d/%m/%Y %H:%M:%S') if now else '' }}</p>
@@ -847,7 +857,9 @@
             <div style="margin-top: 15px; padding: 10px; border-top: 2px solid #dee2e6; font-size: 8px; color: #666;">
                 <p style="margin: 0; text-align: center;">
                     <strong>Situação Financeira:</strong> 
-                    {% if relatorio.resumo and relatorio.resumo.saldo_liquido >= 0 %}
+                    {% set valor_recebido_situacao = (relatorio.resumo.total_vendas + relatorio.resumo.total_a_receber) if relatorio.resumo else 0 %}
+                    {% set novo_saldo_liquido_situacao = valor_recebido_situacao - relatorio.resumo.total_pago if relatorio.resumo else 0 %}
+                    {% if novo_saldo_liquido_situacao >= 0 %}
                         <span style="color: #28a745;">● POSITIVA</span> (Mais recebimentos que pagamentos)
                     {% else %}
                         <span style="color: #dc3545;">● ATENÇÃO</span> (Mais pagamentos que recebimentos)
