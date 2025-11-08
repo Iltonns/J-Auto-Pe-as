@@ -511,7 +511,40 @@
     </div>
 
     <!-- Controles de Paginação -->
-    <div id="controlesPaginacaoProdutos"></div>
+    <div id="controlesPaginacaoProdutos">
+        <div class="row mb-3 align-items-center">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center">
+                    <label for="itensPorPaginaProdutos" class="form-label me-2 mb-0">Mostrar:</label>
+                    <select class="form-select w-auto" id="itensPorPaginaProdutos" style="min-width: 80px;">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">Todos</option>
+                    </select>
+                    <span class="ms-2 text-muted">itens por página</span>
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <div class="d-flex align-items-center justify-content-end">
+                    <span class="badge bg-primary me-2">
+                        <i class="fas fa-list"></i> 
+                        Mostrando <span id="itensVisiveisProdutos">0</span> de <span id="totalItensProdutos">0</span> itens
+                    </span>
+                    <div class="btn-group" role="group" id="controlesNavegacaoProdutos">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnteriorProdutos" disabled>
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximoProdutos">
+                            Próximo <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="infoPaginacaoProdutos" class="mt-1"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Estatísticas Rápidas -->
     <div class="row mb-4">
@@ -1650,70 +1683,103 @@ document.querySelector('input[name="arquivo_xml"]').addEventListener('change', f
     }
 });
 
-// Inicialização da Paginação de Produtos
-document.addEventListener('DOMContentLoaded', function() {
-    // Verificar se existem produtos na tabela
-    const produtos = document.querySelectorAll('#tabelaProdutos tbody tr');
+// Inicialização da Paginação de Produtos  
+$(window).on('load', function() {
+    console.log('Página completamente carregada, inicializando paginação...');
     
-    if (produtos.length > 0) {
-        // Criar controles principais de paginação (antes da tabela)
-        createPaginationControls('controlesPaginacaoProdutos', {
-            searchId: 'buscaProdutos',
-            itemsPerPageId: 'itensPorPaginaProdutos',
-            visibleCountId: 'itensVisiveisProdutos',
-            totalCountId: 'totalItensProdutos',
-            prevBtnId: 'btnAnteriorProdutos',
-            nextBtnId: 'btnProximoProdutos',
-            paginationControlsId: 'controlesNavegacaoProdutos',
-            pageInfoId: 'infoPaginacaoProdutos',
-            showSearch: false, // A busca já está implementada acima
-            showItemsPerPage: true
-        });
-
-        // Criar controles secundários no rodapé (navegação simplificada)
-        document.getElementById('controlesPaginacaoRodapeProdutos').innerHTML = `
-            <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Mostrando <span id="itensVisiveisRodape">0</span> de <span id="totalItensRodape">0</span> produtos
-                </small>
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnteriorRodape" disabled>
-                        <i class="fas fa-chevron-left"></i> Anterior
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximoRodape">
-                        Próximo <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Inicializar sistema de paginação
-        window.paginationProdutos = new TablePagination({
-            tableId: 'tabelaProdutos',
-            searchId: 'buscaProdutos',
-            itemsPerPageId: 'itensPorPaginaProdutos',
-            visibleCountId: 'itensVisiveisProdutos',
-            totalCountId: 'totalItensProdutos',
-            prevBtnId: 'btnAnteriorProdutos',
-            nextBtnId: 'btnProximoProdutos',
-            paginationControlsId: 'controlesNavegacaoProdutos',
-            pageInfoId: 'infoPaginacaoProdutos',
-            defaultItemsPerPage: 20,
-            searchFields: ['nome', 'marca', 'categoria', 'codigo', 'status']
-        });
-
-        // Sincronizar controles do rodapé com a paginação principal
-        syncFooterControls();
+    // Aguardar para garantir que tudo esteja renderizado
+    setTimeout(function() {
+        console.log('=== INICIANDO PAGINAÇÃO ===');
         
-        console.log('Paginação de produtos inicializada com', produtos.length, 'produtos');
-    } else {
-        console.log('Nenhum produto encontrado para paginação');
-        // Ocultar controles se não há produtos
-        document.getElementById('controlesPaginacaoProdutos').style.display = 'none';
-        document.getElementById('controlesPaginacaoRodapeProdutos').innerHTML = 
-            '<div class="text-center text-muted py-2"><i class="fas fa-box-open me-2"></i>Nenhum produto cadastrado</div>';
-    }
+        // Verificar elementos básicos usando JavaScript nativo
+        const tabela = document.getElementById('tabelaProdutos');
+        const tbody = tabela ? tabela.querySelector('tbody') : null;
+        const linhas = tbody ? tbody.querySelectorAll('tr') : [];
+        
+        console.log('Tabela encontrada:', !!tabela);
+        console.log('Tbody encontrado:', !!tbody);
+        console.log('Total de linhas:', linhas.length);
+        
+        if (!tabela || !tbody || linhas.length === 0) {
+            console.error('Elementos da tabela não encontrados ou sem dados!');
+            return;
+        }
+        
+        // Verificar dependências
+        if (typeof TablePagination === 'undefined') {
+            console.error('Classe TablePagination não encontrada!');
+            return;
+        }
+        
+        // Criar controles do rodapé
+        const rodape = document.getElementById('controlesPaginacaoRodapeProdutos');
+        if (rodape) {
+            rodape.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Mostrando <span id="itensVisiveisRodape">0</span> de <span id="totalItensRodape">0</span> produtos
+                    </small>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnteriorRodape" disabled>
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximoRodape">
+                            Próximo <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        
+        // Inicializar TablePagination
+        try {
+            console.log('Criando instância da TablePagination...');
+            window.paginationProdutos = new TablePagination({
+                tableId: 'tabelaProdutos',
+                searchId: 'buscaProdutos',
+                itemsPerPageId: 'itensPorPaginaProdutos',
+                visibleCountId: 'itensVisiveisProdutos',
+                totalCountId: 'totalItensProdutos',
+                prevBtnId: 'btnAnteriorProdutos',
+                nextBtnId: 'btnProximoProdutos',
+                paginationControlsId: 'controlesNavegacaoProdutos',
+                pageInfoId: 'infoPaginacaoProdutos',
+                defaultItemsPerPage: 20,
+                searchFields: ['nome', 'marca', 'categoria', 'codigo', 'status']
+            });
+            
+            console.log('✅ Paginação inicializada com sucesso!');
+            console.log('Produtos carregados:', window.paginationProdutos.allRows.length);
+            console.log('Produtos filtrados:', window.paginationProdutos.filteredRows.length);
+            
+            // Forçar primeira atualização e testar funcionalidade
+            setTimeout(function() {
+                if (window.paginationProdutos && typeof window.paginationProdutos.updatePagination === 'function') {
+                    console.log('Forçando primeira atualização da paginação...');
+                    window.paginationProdutos.updatePagination();
+                    
+                    // Testar se as linhas estão sendo ocultadas/mostradas
+                    const todasLinhas = $('#tabelaProdutos tbody tr');
+                    const linhasVisiveis = $('#tabelaProdutos tbody tr:visible');
+                    console.log('Total de linhas na tabela:', todasLinhas.length);
+                    console.log('Linhas visíveis após paginação:', linhasVisiveis.length);
+                    
+                    // Se todas as linhas ainda estão visíveis, forçar ocultação manual
+                    if (linhasVisiveis.length === todasLinhas.length && todasLinhas.length > 20) {
+                        console.log('⚠️ Paginação não funcionou, aplicando correção manual...');
+                        todasLinhas.hide();
+                        todasLinhas.slice(0, 20).show();
+                        $('#itensVisiveisProdutos').text('20');
+                        $('#totalItensProdutos').text(todasLinhas.length);
+                    }
+                }
+            }, 100);
+            
+        } catch (error) {
+            console.error('❌ Erro ao inicializar paginação:', error);
+        }
 
     // Função para sincronizar controles do rodapé
     function syncFooterControls() {
@@ -1752,6 +1818,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setInterval(observeChanges, 500);
         }
     }
+    }, 1000);
 });
 
 // ========== GESTÃO DE FORNECEDORES ==========
