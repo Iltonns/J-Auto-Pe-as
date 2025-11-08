@@ -686,6 +686,11 @@
                 </table>
             </div>
         </div>
+        
+        <!-- Controles de Paginação - Pós Tabela -->
+        <div class="card-footer bg-light">
+            <div id="controlesPaginacaoRodapeProdutos"></div>
+        </div>
     </div>
 </div>
 
@@ -1285,7 +1290,7 @@
 function limparBusca() {
     document.getElementById('buscaProdutos').value = '';
     if (window.paginationProdutos) {
-        paginationProdutos.performSearch();
+        window.paginationProdutos.performSearch();
     }
 }
     
@@ -1647,24 +1652,44 @@ document.querySelector('input[name="arquivo_xml"]').addEventListener('change', f
 
 // Inicialização da Paginação de Produtos
 document.addEventListener('DOMContentLoaded', function() {
-    // Criar controles de paginação
-    createPaginationControls('controlesPaginacaoProdutos', {
-        searchId: 'buscaProdutos',
-        itemsPerPageId: 'itensPorPaginaProdutos',
-        visibleCountId: 'itensVisiveisProdutos',
-        totalCountId: 'totalItensProdutos',
-        prevBtnId: 'btnAnteriorProdutos',
-        nextBtnId: 'btnProximoProdutos',
-        paginationControlsId: 'controlesNavegacaoProdutos',
-        pageInfoId: 'infoPaginacaoProdutos',
-        searchPlaceholder: 'Buscar produtos por nome, marca, código, categoria...'
-    });
-
-    // Verificar se existem produtos para paginar
+    // Verificar se existem produtos na tabela
     const produtos = document.querySelectorAll('#tabelaProdutos tbody tr');
+    
     if (produtos.length > 0) {
+        // Criar controles principais de paginação (antes da tabela)
+        createPaginationControls('controlesPaginacaoProdutos', {
+            searchId: 'buscaProdutos',
+            itemsPerPageId: 'itensPorPaginaProdutos',
+            visibleCountId: 'itensVisiveisProdutos',
+            totalCountId: 'totalItensProdutos',
+            prevBtnId: 'btnAnteriorProdutos',
+            nextBtnId: 'btnProximoProdutos',
+            paginationControlsId: 'controlesNavegacaoProdutos',
+            pageInfoId: 'infoPaginacaoProdutos',
+            showSearch: false, // A busca já está implementada acima
+            showItemsPerPage: true
+        });
+
+        // Criar controles secundários no rodapé (navegação simplificada)
+        document.getElementById('controlesPaginacaoRodapeProdutos').innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Mostrando <span id="itensVisiveisRodape">0</span> de <span id="totalItensRodape">0</span> produtos
+                </small>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAnteriorRodape" disabled>
+                        <i class="fas fa-chevron-left"></i> Anterior
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnProximoRodape">
+                        Próximo <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+
         // Inicializar sistema de paginação
-        const paginationProdutos = new TablePagination({
+        window.paginationProdutos = new TablePagination({
             tableId: 'tabelaProdutos',
             searchId: 'buscaProdutos',
             itemsPerPageId: 'itensPorPaginaProdutos',
@@ -1678,8 +1703,54 @@ document.addEventListener('DOMContentLoaded', function() {
             searchFields: ['nome', 'marca', 'categoria', 'codigo', 'status']
         });
 
-        // Sistema de busca simplificado - só mantém a busca de texto
-        // A função limparBusca() já foi definida acima
+        // Sincronizar controles do rodapé com a paginação principal
+        syncFooterControls();
+        
+        console.log('Paginação de produtos inicializada com', produtos.length, 'produtos');
+    } else {
+        console.log('Nenhum produto encontrado para paginação');
+        // Ocultar controles se não há produtos
+        document.getElementById('controlesPaginacaoProdutos').style.display = 'none';
+        document.getElementById('controlesPaginacaoRodapeProdutos').innerHTML = 
+            '<div class="text-center text-muted py-2"><i class="fas fa-box-open me-2"></i>Nenhum produto cadastrado</div>';
+    }
+
+    // Função para sincronizar controles do rodapé
+    function syncFooterControls() {
+        const btnAnteriorRodape = document.getElementById('btnAnteriorRodape');
+        const btnProximoRodape = document.getElementById('btnProximoRodape');
+        const itensVisiveisRodape = document.getElementById('itensVisiveisRodape');
+        const totalItensRodape = document.getElementById('totalItensRodape');
+
+        if (btnAnteriorRodape && btnProximoRodape && window.paginationProdutos) {
+            // Sincronizar cliques
+            btnAnteriorRodape.addEventListener('click', () => {
+                document.getElementById('btnAnteriorProdutos').click();
+            });
+            
+            btnProximoRodape.addEventListener('click', () => {
+                document.getElementById('btnProximoProdutos').click();
+            });
+
+            // Sincronizar contadores (observar mudanças)
+            const observeChanges = () => {
+                const visibleCount = document.getElementById('itensVisiveisProdutos').textContent;
+                const totalCount = document.getElementById('totalItensProdutos').textContent;
+                
+                if (itensVisiveisRodape) itensVisiveisRodape.textContent = visibleCount;
+                if (totalItensRodape) totalItensRodape.textContent = totalCount;
+
+                // Sincronizar estado dos botões
+                const btnAnterior = document.getElementById('btnAnteriorProdutos');
+                const btnProximo = document.getElementById('btnProximoProdutos');
+                
+                btnAnteriorRodape.disabled = btnAnterior.disabled;
+                btnProximoRodape.disabled = btnProximo.disabled;
+            };
+
+            // Observar mudanças nos contadores
+            setInterval(observeChanges, 500);
+        }
     }
 });
 
