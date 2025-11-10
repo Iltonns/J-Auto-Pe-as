@@ -2763,9 +2763,9 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
         base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
-    # Ordenar por data_pagamento se estiver consultando contas pagas
+    # Ordenar por data_pagamento se estiver consultando contas pagas (DESC para mostrar mais recentes primeiro)
     campo_ordenacao = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
-    base_query += f" ORDER BY {campo_ordenacao}"
+    base_query += f" ORDER BY {campo_ordenacao} DESC"
     
     cursor.execute(base_query, params)
     
@@ -3044,9 +3044,9 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
         base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
     
-    # Ordenar por data_recebimento se estiver consultando contas recebidas
+    # Ordenar por data_recebimento se estiver consultando contas recebidas (DESC para mostrar mais recentes primeiro)
     campo_ordenacao = 'cr.data_recebimento' if status == 'recebido' else 'cr.data_vencimento'
-    base_query += f" ORDER BY {campo_ordenacao}"
+    base_query += f" ORDER BY {campo_ordenacao} DESC"
     
     cursor.execute(base_query, params)
     
