@@ -1391,7 +1391,7 @@ def listar_produtos(page=1, per_page=10):
     
     cursor.execute('''
         SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
-               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca
+               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca, fornecedor_id
         FROM produtos
         WHERE ativo = TRUE
         ORDER BY nome
@@ -1416,7 +1416,8 @@ def listar_produtos(page=1, per_page=10):
             'ncm': row[12],
             'unidade': row[13] or 'UN',
             'foto_url': row[14],
-            'marca': row[15]
+            'marca': row[15],
+            'fornecedor_id': row[16]
         })
     
     conn.close()

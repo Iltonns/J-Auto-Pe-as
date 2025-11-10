@@ -494,52 +494,8 @@
         </div>
     </div>
 
-    <!-- Busca de Produtos -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="input-group">
-                <span class="input-group-text">
-                    <i class="fas fa-search"></i>
-                </span>
-                <input type="text" id="buscaProdutos" class="form-control" placeholder="Buscar produtos por nome, marca, código ou categoria...">
-                <button class="btn btn-outline-secondary" onclick="limparBusca()" title="Limpar busca">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <small class="text-muted">💡 Use espaços ou % para buscar múltiplos termos: "PIVO GOL" ou "PIVO%GOL"</small>
-        </div>
-    </div>
-
-        <!-- Controles de Paginação -->
-        <div class="card-footer bg-light">
-            <nav aria-label="Page navigation">
-                <ul class="pagination justify-content-center">
-                    {% if current_page > 1 %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('produtos', page=current_page-1) }}">Anterior</a>
-                        </li>
-                    {% endif %}
-
-                    {% for page_num in range(1, total_pages + 1) %}
-                        {% if page_num == current_page %}
-                            <li class="page-item active">
-                                <a class="page-link" href="#">{{ page_num }}</a>
-                            </li>
-                        {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="{{ url_for('produtos', page=page_num) }}">{{ page_num }}</a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if current_page < total_pages %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('produtos', page=current_page+1) }}">Próximo</a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
+    <!-- Controles de Paginação e Busca -->
+    <div id="controlesPaginacaoProdutos"></div>
 
     <!-- Estatísticas Rápidas -->
     <div class="row mb-4">
@@ -611,7 +567,7 @@
                     <tbody>
                         {% for produto in produtos %}
                         {% if produto.ativo %}
-                        <tr>
+                        <tr data-search="{{ produto.nome|lower }} {{ produto.marca|lower if produto.marca else '' }} {{ produto.categoria|lower if produto.categoria else '' }} {{ produto.codigo_barras|lower if produto.codigo_barras else '' }} {{ produto.codigo_fornecedor|lower if produto.codigo_fornecedor else '' }} {% if produto.estoque > produto.estoque_minimo %}disponivel{% elif produto.estoque > 0 %}estoque baixo{% else %}indisponivel{% endif %}">
                             <td>
                                 {% if produto.foto_url %}
                                     <img src="{{ produto.foto_url }}" alt="Foto do produto" class="product-photo" 
@@ -1637,35 +1593,121 @@ document.querySelector('input[name="arquivo_xml"]').addEventListener('change', f
     }
 });
 
-// Inicialização da Paginação de Produtos  
-$(window).on('load', function() {
-    console.log('Página completamente carregada, inicializando paginação...');
+// Inicialização da Paginação de Produtos seguindo o padrão do sistema
+$(document).ready(function() {
+    console.log('🔧 Inicializando paginação de produtos...');
     
-    // Aguardar para garantir que tudo esteja renderizado
-    setTimeout(function() {
-        console.log('=== INICIANDO PAGINAÇÃO ===');
+    // Verificar se a biblioteca de paginação está disponível
+    if (typeof TablePagination === 'undefined' || typeof createPaginationControls === 'undefined') {
+        console.error('❌ Biblioteca de paginação não encontrada!');
+        return;
+    }
+    
+    try {
+        // Criar controles de paginação
+        createPaginationControls('controlesPaginacaoProdutos', {
+            searchId: 'buscaProdutos',
+            searchPlaceholder: '🔍 Buscar por nome, marca, código, categoria ou status... (ex: "PIVO GOL" ou "FILTRO%AR")',
+            tableId: 'tabelaProdutos',
+            itemsPerPageId: 'itensPorPaginaProdutos',
+            visibleCountId: 'itensVisiveisProdutos',
+            totalCountId: 'totalItensProdutos',
+            prevBtnId: 'btnAnteriorProdutos',
+            nextBtnId: 'btnProximoProdutos',
+            paginationControlsId: 'controlesNavegacaoProdutos',
+            pageInfoId: 'infoPaginacaoProdutos'
+        });
         
-        // Verificar elementos básicos usando JavaScript nativo
-        const tabela = document.getElementById('tabelaProdutos');
-        const tbody = tabela ? tabela.querySelector('tbody') : null;
-        const linhas = tbody ? tbody.querySelectorAll('tr') : [];
+        console.log('✅ Controles de paginação criados');
         
-        console.log('Tabela encontrada:', !!tabela);
-        console.log('Tbody encontrado:', !!tbody);
-        console.log('Total de linhas:', linhas.length);
+        // Adicionar dica de uso da busca inteligente
+        setTimeout(function() {
+            const searchContainer = document.getElementById('buscaProdutos')?.parentElement?.parentElement;
+            if (searchContainer && !searchContainer.querySelector('.search-tip')) {
+                const tip = document.createElement('small');
+                tip.className = 'search-tip text-muted mt-1 d-block';
+                tip.innerHTML = '💡 <strong>Dica:</strong> Use espaços ou % para múltiplos termos. Exemplos: "PIVO GOL", "FILTRO%AR", "DISPONÍVEL BMW"';
+                searchContainer.appendChild(tip);
+            }
+        }, 200);
         
-        if (!tabela || !tbody || linhas.length === 0) {
-            console.error('Elementos da tabela não encontrados ou sem dados!');
-            return;
+        // Inicializar paginação
+        const paginationProdutos = new TablePagination({
+            tableId: 'tabelaProdutos',
+            searchId: 'buscaProdutos',
+            itemsPerPageId: 'itensPorPaginaProdutos',
+            visibleCountId: 'itensVisiveisProdutos',
+            totalCountId: 'totalItensProdutos',
+            prevBtnId: 'btnAnteriorProdutos',
+            nextBtnId: 'btnProximoProdutos',
+            paginationControlsId: 'controlesNavegacaoProdutos',
+            pageInfoId: 'infoPaginacaoProdutos',
+            defaultItemsPerPage: 20,
+            searchFields: ['nome', 'marca', 'categoria', 'codigo', 'descricao', 'status']
+        });
+        
+        console.log('✅ Instância de paginação criada');
+        
+        // Personalizar busca inteligente para produtos
+        if (paginationProdutos && typeof paginationProdutos.performSearch === 'function') {
+            paginationProdutos.performSearch = function() {
+                const searchTerm = this.$search.val().trim();
+                
+                if (!searchTerm) {
+                    this.filteredRows = [...this.allRows];
+                } else {
+                    // Busca inteligente usando data-search ou texto completo
+                    const termoLimpo = searchTerm.replace(/%/g, ' ').trim();
+                    const termos = termoLimpo.split(/\s+/).filter(t => t.length > 0).map(t => t.toLowerCase());
+                    
+                    this.filteredRows = this.allRows.filter(row => {
+                        const $row = $(row);
+                        
+                        // Tentar usar data-search primeiro (mais rápido e preciso)
+                        const dataSearch = $row.attr('data-search');
+                        if (dataSearch) {
+                            return termos.every(termo => dataSearch.includes(termo));
+                        }
+                        
+                        // Fallback: extrair dados específicos das células
+                        const nome = $row.find('td:nth-child(3)').text().toLowerCase().trim();
+                        const marca = $row.find('td:nth-child(4)').text().toLowerCase().trim();
+                        const categoria = $row.find('td:nth-child(5)').text().toLowerCase().trim();
+                        const codigoBarras = $row.find('td:nth-child(9)').text().toLowerCase().trim();
+                        const codigoFornecedor = $row.find('td:nth-child(10)').text().toLowerCase().trim();
+                        const status = $row.find('td:nth-child(11)').text().toLowerCase().trim();
+                        
+                        const textoCompleto = [nome, marca, categoria, codigoBarras, codigoFornecedor, status].join(' ');
+                        
+                        // TODOS os termos devem estar presentes (lógica AND)
+                        return termos.every(termo => textoCompleto.includes(termo));
+                    });
+                }
+                
+                this.currentPage = 1;
+                this.updatePagination();
+            };
+            
+            console.log('✅ Busca personalizada configurada');
         }
         
-        // Verificar dependências
-        if (typeof TablePagination === 'undefined') {
-            console.error('Classe TablePagination não encontrada!');
-            return;
+        // Salvar referência global para depuração
+        window.paginationProdutos = paginationProdutos;
+        
+        console.log('✅ Paginação de produtos inicializada com sucesso!');
+        console.log(`📊 Total de produtos carregados: ${paginationProdutos.allRows.length}`);
+        
+        // Verificar se há produtos na tabela
+        const totalLinhasTabela = $('#tabelaProdutos tbody tr').length;
+        console.log(`📋 Total de linhas na tabela: ${totalLinhasTabela}`);
+        
+        if (totalLinhasTabela === 0) {
+            console.warn('⚠️ Nenhum produto encontrado na tabela!');
+        } else if (paginationProdutos.allRows.length !== totalLinhasTabela) {
+            console.warn(`⚠️ Divergência: TablePagination tem ${paginationProdutos.allRows.length} produtos, mas a tabela tem ${totalLinhasTabela} linhas`);
         }
         
-        // Criar controles do rodapé
+        // Criar controles do rodapé (dentro do try-catch)
         const rodape = document.getElementById('controlesPaginacaoRodapeProdutos');
         if (rodape) {
             rodape.innerHTML = `
@@ -1684,96 +1726,74 @@ $(window).on('load', function() {
                     </div>
                 </div>
             `;
-        }
-
-        
-        // Inicializar TablePagination
-        try {
-            console.log('Criando instância da TablePagination...');
-            window.paginationProdutos = new TablePagination({
-                tableId: 'tabelaProdutos',
-                searchId: 'buscaProdutos',
-                itemsPerPageId: 'itensPorPaginaProdutos',
-                visibleCountId: 'itensVisiveisProdutos',
-                totalCountId: 'totalItensProdutos',
-                prevBtnId: 'btnAnteriorProdutos',
-                nextBtnId: 'btnProximoProdutos',
-                paginationControlsId: 'controlesNavegacaoProdutos',
-                pageInfoId: 'infoPaginacaoProdutos',
-                defaultItemsPerPage: 20,
-                searchFields: ['nome', 'marca', 'categoria', 'codigo', 'status']
-            });
             
-            console.log('✅ Paginação inicializada com sucesso!');
-            console.log('Produtos carregados:', window.paginationProdutos.allRows.length);
-            console.log('Produtos filtrados:', window.paginationProdutos.filteredRows.length);
+            // Sincronizar controles do rodapé com os controles principais
+            const btnAnteriorRodape = document.getElementById('btnAnteriorRodape');
+            const btnProximoRodape = document.getElementById('btnProximoRodape');
             
-            // Forçar primeira atualização e testar funcionalidade
-            setTimeout(function() {
-                if (window.paginationProdutos && typeof window.paginationProdutos.updatePagination === 'function') {
-                    console.log('Forçando primeira atualização da paginação...');
-                    window.paginationProdutos.updatePagination();
+            if (btnAnteriorRodape && btnProximoRodape) {
+                btnAnteriorRodape.addEventListener('click', () => {
+                    const btnAnterior = document.getElementById('btnAnteriorProdutos');
+                    if (btnAnterior) btnAnterior.click();
+                });
+                
+                btnProximoRodape.addEventListener('click', () => {
+                    const btnProximo = document.getElementById('btnProximoProdutos');
+                    if (btnProximo) btnProximo.click();
+                });
+                
+                // Sincronizar contadores e estado dos botões
+                const syncFooterControls = () => {
+                    const itensVisiveis = document.getElementById('itensVisiveisProdutos');
+                    const totalItens = document.getElementById('totalItensProdutos');
+                    const itensVisiveisRodape = document.getElementById('itensVisiveisRodape');
+                    const totalItensRodape = document.getElementById('totalItensRodape');
                     
-                    // Testar se as linhas estão sendo ocultadas/mostradas
-                    const todasLinhas = $('#tabelaProdutos tbody tr');
-                    const linhasVisiveis = $('#tabelaProdutos tbody tr:visible');
-                    console.log('Total de linhas na tabela:', todasLinhas.length);
-                    console.log('Linhas visíveis após paginação:', linhasVisiveis.length);
-                    
-                    // Se todas as linhas ainda estão visíveis, forçar ocultação manual
-                    if (linhasVisiveis.length === todasLinhas.length && todasLinhas.length > 20) {
-                        console.log('⚠️ Paginação não funcionou, aplicando correção manual...');
-                        todasLinhas.hide();
-                        todasLinhas.slice(0, 20).show();
-                        $('#itensVisiveisProdutos').text('20');
-                        $('#totalItensProdutos').text(todasLinhas.length);
+                    if (itensVisiveis && totalItens && itensVisiveisRodape && totalItensRodape) {
+                        itensVisiveisRodape.textContent = itensVisiveis.textContent;
+                        totalItensRodape.textContent = totalItens.textContent;
                     }
+                    
+                    // Sincronizar estado dos botões
+                    const btnAnterior = document.getElementById('btnAnteriorProdutos');
+                    const btnProximo = document.getElementById('btnProximoProdutos');
+                    
+                    if (btnAnterior && btnProximo) {
+                        btnAnteriorRodape.disabled = btnAnterior.disabled;
+                        btnProximoRodape.disabled = btnProximo.disabled;
+                    }
+                };
+                
+                // Observar mudanças nos contadores
+                const itensVisiveis = document.getElementById('itensVisiveisProdutos');
+                const totalItens = document.getElementById('totalItensProdutos');
+                
+                if (itensVisiveis && totalItens) {
+                    const observer = new MutationObserver(syncFooterControls);
+                    observer.observe(itensVisiveis, { childList: true, subtree: true });
+                    observer.observe(totalItens, { childList: true, subtree: true });
+                    
+                    // Sincronização inicial
+                    setTimeout(syncFooterControls, 500);
+                    console.log('✅ Sincronização do rodapé configurada');
                 }
-            }, 100);
-            
-        } catch (error) {
-            console.error('❌ Erro ao inicializar paginação:', error);
+            }
         }
-
-    // Função para sincronizar controles do rodapé
-    function syncFooterControls() {
-        const btnAnteriorRodape = document.getElementById('btnAnteriorRodape');
-        const btnProximoRodape = document.getElementById('btnProximoRodape');
-        const itensVisiveisRodape = document.getElementById('itensVisiveisRodape');
-        const totalItensRodape = document.getElementById('totalItensRodape');
-
-        if (btnAnteriorRodape && btnProximoRodape && window.paginationProdutos) {
-            // Sincronizar cliques
-            btnAnteriorRodape.addEventListener('click', () => {
-                document.getElementById('btnAnteriorProdutos').click();
-            });
-            
-            btnProximoRodape.addEventListener('click', () => {
-                document.getElementById('btnProximoProdutos').click();
-            });
-
-            // Sincronizar contadores (observar mudanças)
-            const observeChanges = () => {
-                const visibleCount = document.getElementById('itensVisiveisProdutos').textContent;
-                const totalCount = document.getElementById('totalItensProdutos').textContent;
-                
-                if (itensVisiveisRodape) itensVisiveisRodape.textContent = visibleCount;
-                if (totalItensRodape) totalItensRodape.textContent = totalCount;
-
-                // Sincronizar estado dos botões
-                const btnAnterior = document.getElementById('btnAnteriorProdutos');
-                const btnProximo = document.getElementById('btnProximoProdutos');
-                
-                btnAnteriorRodape.disabled = btnAnterior.disabled;
-                btnProximoRodape.disabled = btnProximo.disabled;
-            };
-
-            // Observar mudanças nos contadores
-            setInterval(observeChanges, 500);
-        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao inicializar paginação:', error);
+        console.error('Stack trace:', error.stack);
     }
-    }, 1000);
 });
+
+// Função para limpar busca (compatibilidade)
+function limparBusca() {
+    const campoBusca = document.getElementById('buscaProdutos');
+    if (campoBusca) {
+        campoBusca.value = '';
+        campoBusca.dispatchEvent(new Event('input'));
+    }
+}
 
 // ========== GESTÃO DE FORNECEDORES ==========
 

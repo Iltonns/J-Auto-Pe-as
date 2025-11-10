@@ -963,13 +963,11 @@ def produtos_fornecedor(id):
 @app.route('/produtos')
 @login_required
 def produtos():
-    """Exibe a página de gerenciamento de produtos com paginação"""
+    """Exibe a página de gerenciamento de produtos"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = 10  # Define quantos produtos por página
-        
-        # Modificar a chamada para listar_produtos para aceitar paginação
-        produtos_data = listar_produtos(page=page, per_page=per_page)
+        # Carregar TODOS os produtos para paginação JavaScript
+        # Remover paginação server-side para usar paginação client-side
+        produtos_data = listar_produtos(page=1, per_page=999999)  # Carregar todos
         
         fornecedores_lista = obter_fornecedores_para_select()
         estatisticas = obter_estatisticas_dashboard()
@@ -977,17 +975,13 @@ def produtos():
         return render_template('produtos.html', 
                              produtos=produtos_data['produtos'], 
                              fornecedores=fornecedores_lista, 
-                             estatisticas=estatisticas,
-                             total_pages=produtos_data['total_pages'],
-                             current_page=produtos_data['current_page'])
+                             estatisticas=estatisticas)
     except Exception as e:
         flash(f'Erro ao carregar produtos: {str(e)}', 'error')
         return render_template('produtos.html', 
                              produtos=[], 
                              fornecedores=[], 
-                             estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0},
-                             total_pages=0,
-                             current_page=1)
+                             estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0})
     
     
 @app.route('/produtos/buscar')
@@ -1049,7 +1043,8 @@ def api_buscar_produtos():
         
         # Se não houver termo, retornar lista completa
         if not termo:
-            produtos = listar_produtos()
+            produtos_data = listar_produtos(page=1, per_page=999999)
+            produtos = produtos_data['produtos']
         else:
             # Usar a função buscar_produto que já tem a lógica inteligente
             produtos = buscar_produto(termo)
@@ -1076,7 +1071,9 @@ def api_buscar_produtos():
 def api_buscar_produto_unico(termo):
     """Busca um produto específico pelo termo"""
     try:
-        produtos = listar_produtos()
+        # Carregar todos os produtos
+        produtos_data = listar_produtos(page=1, per_page=999999)
+        produtos = produtos_data['produtos']
         
         def converter_decimals(produto):
             """Converte campos Decimal para float"""
@@ -1113,9 +1110,10 @@ def api_buscar_produto_unico(termo):
             if termo_lower in produto['nome'].lower():
                 return jsonify(converter_decimals(produto))
         
-        return jsonify({'error': 'Produto não encontrado'})
+        return jsonify({'error': 'Produto não encontrado'}), 404
     except Exception as e:
-        return jsonify({'error': str(e)})
+        print(f"Erro ao buscar produto: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/produtos/adicionar', methods=['POST'])
 @login_required
@@ -1979,7 +1977,8 @@ def vendas():
     # Buscar vendas do dia para exibir na lista
     vendas_dados = obter_vendas_do_dia()
     vendas_hoje = vendas_dados.get('vendas', [])
-    produtos_lista = listar_produtos()
+    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos_lista = produtos_data['produtos']
     usuarios_lista = listar_usuarios()
     
     # Calcular estatísticas
@@ -2591,7 +2590,8 @@ def editar_conta_receber_route(id):
 @login_required
 def orcamentos():
     orcamentos_lista = listar_orcamentos()
-    produtos = listar_produtos()
+    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos = produtos_data['produtos']
     clientes = listar_clientes()
     return render_template('orcamentos.html', 
                          orcamentos=orcamentos_lista, 
@@ -2666,7 +2666,8 @@ def editar_orcamento_route(id):
         return redirect(url_for('visualizar_orcamento', id=id))
     
     # Obter dados necessários
-    produtos = listar_produtos()
+    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos = produtos_data['produtos']
     clientes = listar_clientes()
     
     return render_template('editar_orcamento.html', 
