@@ -8,6 +8,7 @@ from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from math import ceil
+import pytz
 
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -17,6 +18,17 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL não encontrada! Configure o arquivo .env com suas credenciais do Neon.")
+
+# Configuração do fuso horário brasileiro
+TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
+
+def agora_br():
+    """Retorna o datetime atual no horário de Brasília"""
+    return datetime.now(TIMEZONE_BR)
+
+def hoje_br():
+    """Retorna a data atual no horário de Brasília"""
+    return agora_br().date()
 
 def normalizar_cnpj(cnpj):
     """Remove todos os caracteres não numéricos do CNPJ para comparação"""
@@ -513,12 +525,12 @@ def popular_dados_exemplo():
             admin_id = admin_user[0]
             
             # Adicionar algumas vendas de exemplo
-            from datetime import datetime, timedelta
+            from datetime import timedelta
             import random
             
             # Vendas dos últimos 30 dias
             for i in range(20):
-                data_venda = datetime.now() - timedelta(days=random.randint(0, 30))
+                data_venda = agora_br() - timedelta(days=random.randint(0, 30))
                 cliente_id = random.randint(1, 3)
                 forma_pagamento = random.choice(['dinheiro', 'cartao_credito', 'cartao_debito', 'pix'])
                 
@@ -913,7 +925,7 @@ def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
             )
             VALUES (%s, %s, %s, %s)
             RETURNING id
-        ''', (datetime.now(), saldo_inicial, usuario_id, observacoes))
+        ''', (agora_br(), saldo_inicial, usuario_id, observacoes))
         
         sessao_id = cursor.fetchone()[0]
         conn.commit()
@@ -966,7 +978,7 @@ def fechar_caixa(usuario_id, observacoes=""):
                 observacoes_fechamento = %s,
                 status = 'fechado'
             WHERE id = %s
-        ''', (datetime.now(), saldo_final, total_entradas, total_saidas, usuario_id, observacoes, caixa_id))
+        ''', (agora_br(), saldo_final, total_entradas, total_saidas, usuario_id, observacoes, caixa_id))
         
         conn.commit()
         return True, f"Caixa fechado com sucesso. Saldo final: R$ {saldo_final:,.2f}"
@@ -2053,7 +2065,7 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
             'estoque_minimo': produto_existente.get('estoque_minimo'),
             'fornecedor_id': produto_existente.get('fornecedor_id'),
             'foto_url': produto_existente.get('foto_url'),
-            'observacao': f'\n[Vinculado ao produto ID {produto_id} por usuário {usuario_id} em {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]',
+            'observacao': f'\n[Vinculado ao produto ID {produto_id} por usuário {usuario_id} em {agora_br().strftime("%Y-%m-%d %H:%M:%S")}]',
             'movimentacao_id': movimentacao_id
         })
         
@@ -2516,8 +2528,7 @@ def limpar_sincronizacoes_incorretas():
     cursor = conn.cursor()
     
     try:
-        from datetime import date
-        hoje = date.today().strftime('%Y-%m-%d')
+        hoje = hoje_br().strftime('%Y-%m-%d')
         
         # Buscar movimentações de vendas que não são de hoje
         cursor.execute('''
@@ -2563,8 +2574,7 @@ def sincronizar_vendas_com_caixa():
             return False, "Não há caixa aberto"
         
         # Usar data específica do dia atual
-        from datetime import date
-        hoje = date.today().strftime('%Y-%m-%d')
+        hoje = hoje_br().strftime('%Y-%m-%d')
         
         # Buscar vendas especificamente do dia atual que não estão no caixa
         cursor.execute('''
@@ -2635,8 +2645,7 @@ def obter_vendas_do_dia():
     sincronizar_vendas_com_caixa()
     
     # Usar data específica do dia atual
-    from datetime import date
-    hoje = date.today().strftime('%Y-%m-%d')
+    hoje = hoje_br().strftime('%Y-%m-%d')
     
     print(f"DEBUG VENDAS: Buscando vendas para {hoje}")
     
@@ -2834,7 +2843,7 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
 def pagar_conta(conta_id, data_pagamento=None):
     """Marca uma conta como paga"""
     if not data_pagamento:
-        data_pagamento = date.today().isoformat()
+        data_pagamento = hoje_br().isoformat()
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3078,7 +3087,7 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
 def receber_conta(conta_id, data_recebimento=None):
     """Marca uma conta como recebida"""
     if not data_recebimento:
-        data_recebimento = date.today().isoformat()
+        data_recebimento = hoje_br().isoformat()
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3408,10 +3417,9 @@ def produtos_estoque_baixo():
 # FUNÇÕES DE ORÇAMENTOS
 def gerar_numero_orcamento():
     """Gera um número único para o orçamento"""
-    from datetime import datetime
     import random
-    agora = datetime.now()
-    numero = f"ORC{agora.strftime('%Y%m%d')}{random.randint(1000, 9999)}"
+    agora_orc = agora_br()
+    numero = f"ORC{agora_orc.strftime('%Y%m%d')}{random.randint(1000, 9999)}"
     return numero
 
 def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_id=None):
@@ -5522,7 +5530,7 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
         
         # Se não foi fornecida data de pagamento, usar data atual
         if novo_status == 'pago' and not data_pagamento:
-            data_pagamento = date.today().isoformat()
+            data_pagamento = hoje_br().isoformat()
         
         # Atualizar o status do lançamento
         cursor.execute('''

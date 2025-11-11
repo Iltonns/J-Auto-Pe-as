@@ -10,6 +10,17 @@ from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.pdfgen import canvas as pdf_canvas
+import pytz
+from datetime import datetime
+
+# Configuração do fuso horário brasileiro
+TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
+
+def agora_br():
+    """Retorna o datetime atual no horário de Brasília"""
+    return datetime.now(TIMEZONE_BR)
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.pdfgen import canvas as pdf_canvas
 
 
 # Paleta de cores moderna
@@ -284,10 +295,8 @@ def criar_cabecalho_moderno(titulo, subtitulo="", data_geracao=None):
     """
     Cria um cabeçalho moderno com gradiente visual (apenas título do relatório)
     """
-    from datetime import datetime
-    
     if not data_geracao:
-        data_geracao = datetime.now().strftime('%d/%m/%Y às %H:%M')
+        data_geracao = agora_br().strftime('%d/%m/%Y às %H:%M')
     
     # Estilo para o título
     titulo_style = ParagraphStyle(

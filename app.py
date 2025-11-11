@@ -15,9 +15,21 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from dotenv import load_dotenv
+import pytz
 
 # Carregar variáveis de ambiente
 load_dotenv()
+
+# Configuração do fuso horário brasileiro
+TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
+
+def agora_br():
+    """Retorna o datetime atual no horário de Brasília"""
+    return datetime.now(TIMEZONE_BR)
+
+def hoje_br():
+    """Retorna a data atual no horário de Brasília"""
+    return agora_br().date()
 
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
@@ -740,8 +752,7 @@ def exportar_caixa_pdf():
     try:
         data = request.args.get('data')
         if not data:
-            from datetime import date
-            data = date.today().strftime('%Y-%m-%d')
+            data = hoje_br().strftime('%Y-%m-%d')
         
         # Obter dados do caixa
         status_caixa = obter_status_caixa()
@@ -764,8 +775,7 @@ def exportar_caixa_pdf():
 @login_required
 def debug_vendas():
     """Rota para debugar dados de vendas"""
-    from datetime import date
-    hoje = date.today().strftime('%Y-%m-%d')
+    hoje = hoje_br().strftime('%Y-%m-%d')
     
     dados = obter_vendas_do_dia()
     
@@ -1972,7 +1982,6 @@ def importar_xml_movimentacoes_route():
 @app.route('/vendas')
 @login_required
 def vendas():
-    from datetime import datetime
     clientes_lista = listar_clientes()
     # Buscar vendas do dia para exibir na lista
     vendas_dados = obter_vendas_do_dia()
@@ -1987,7 +1996,7 @@ def vendas():
     ticket_medio = total_vendas_hoje / len(vendas_hoje) if vendas_hoje else 0
     
     # Data de hoje para filtros
-    data_hoje = datetime.now().strftime('%Y-%m-%d')
+    data_hoje = agora_br().strftime('%Y-%m-%d')
     
     return render_template('vendas.html', 
                          clientes=clientes_lista, 
@@ -2308,7 +2317,7 @@ def contas_a_pagar_hoje():
     
     contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
     fornecedores = obter_fornecedores_para_select()
-    hoje = date.today()
+    hoje = hoje_br()
     
     # Calcular estatísticas
     total_contas = len(contas)
@@ -2456,7 +2465,7 @@ def contas_a_receber_hoje():
     
     contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
     clientes = listar_clientes()
-    hoje = date.today()
+    hoje = hoje_br()
     
     # Calcular estatísticas
     total_contas = len(contas)
@@ -2968,7 +2977,7 @@ def criar_cabecalho_texto_apenas(styles, config_empresa):
 
 def criar_rodape_empresa(doc, config_empresa):
     """Cria rodapé com informações da empresa"""
-    rodape_texto = f"Relatório gerado pelo Sistema {config_empresa.get('nome_empresa', 'FG AUTO PEÇAS')} - {datetime.now().strftime('%d/%m/%Y às %H:%M')}"
+    rodape_texto = f"Relatório gerado pelo Sistema {config_empresa.get('nome_empresa', 'FG AUTO PEÇAS')} - {agora_br().strftime('%d/%m/%Y às %H:%M')}"
     return rodape_texto
 
 def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecionado=None):
@@ -3965,7 +3974,7 @@ def internal_error(error):
 def inject_globals():
     return {
         'moment': datetime,
-        'today': date.today()
+        'today': hoje_br()
     }
 
 if __name__ == '__main__':
