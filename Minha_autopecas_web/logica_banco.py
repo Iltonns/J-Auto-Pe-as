@@ -2773,8 +2773,12 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
         params.extend([data_inicio, data_fim])
     
     # Ordenar por data_pagamento se estiver consultando contas pagas (DESC para mostrar mais recentes primeiro)
-    campo_ordenacao = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
-    base_query += f" ORDER BY {campo_ordenacao} DESC"
+    # Para contas pendentes, ordenar por vencimento (ASC) com atrasadas primeiro
+    if status == 'pago':
+        base_query += " ORDER BY cp.data_pagamento DESC"
+    else:
+        # Ordenar: atrasadas primeiro (por data ASC), depois futuras (por data ASC)
+        base_query += " ORDER BY CASE WHEN cp.data_vencimento::date < CURRENT_DATE THEN 0 ELSE 1 END, cp.data_vencimento ASC"
     
     cursor.execute(base_query, params)
     
