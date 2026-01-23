@@ -58,6 +58,7 @@ from Minha_autopecas_web.logica_banco import (
     # Funções de fornecedores
     listar_fornecedores, buscar_fornecedor, adicionar_fornecedor, editar_fornecedor, 
     deletar_fornecedor, obter_fornecedores_para_select, contar_fornecedores, listar_produtos_por_fornecedor,
+    validar_fornecedor_duplicado, buscar_fornecedor_melhorado, adicionar_ou_atualizar_fornecedor_automatico,
     # Funções de sincronização financeira
     sincronizar_lancamentos_com_contas,
     # Novas funções para edição e controle de lançamentos financeiros
@@ -970,6 +971,100 @@ def deletar_fornecedor_route(id):
         flash(f'Erro ao excluir fornecedor: {str(e)}', 'error')
     
     return redirect(url_for('fornecedores'))
+
+@app.route('/fornecedores/validar-duplicacao', methods=['POST'])
+@login_required
+def validar_duplicacao_fornecedor():
+    """
+    Valida se um fornecedor já está cadastrado.
+    Usado antes de cadastrar/editar para evitar duplicações.
+    
+    Parâmetros POST:
+    - nome: nome do fornecedor
+    - cnpj: CNPJ do fornecedor
+    - email: email do fornecedor
+    - telefone: telefone do fornecedor
+    - fornecedor_id_excluir: ID do fornecedor sendo editado (opcional)
+    """
+    try:
+        nome = request.form.get('nome', '').strip() or None
+        cnpj = request.form.get('cnpj', '').strip() or None
+        email = request.form.get('email', '').strip() or None
+        telefone = request.form.get('telefone', '').strip() or None
+        fornecedor_id_excluir = request.form.get('fornecedor_id_excluir', type=int) or None
+        
+        # Validar se já existe
+        resultado = validar_fornecedor_duplicado(
+            nome=nome,
+            cnpj=cnpj,
+            email=email,
+            telefone=telefone,
+            fornecedor_id_excluir=fornecedor_id_excluir
+        )
+        
+        return jsonify({
+            'duplicado': resultado['duplicado'],
+            'critério': resultado['critério'],
+            'mensagem': resultado['mensagem'],
+            'fornecedor_existente': resultado['fornecedor_existente']
+        })
+    
+    except Exception as e:
+        print(f"Erro ao validar duplicação: {e}")
+        return jsonify({
+            'duplicado': False,
+            'critério': 'erro',
+            'mensagem': f'Erro ao validar: {str(e)}',
+            'fornecedor_existente': None
+        }), 500
+
+@app.route('/fornecedores/buscar', methods=['GET'])
+@login_required
+def buscar_fornecedor_ajax():
+    """
+    Busca um fornecedor por múltiplos critérios.
+    Retorna os dados do fornecedor se encontrado.
+    
+    Parâmetros GET:
+    - q: query de busca (pode ser nome, CNPJ ou email)
+    """
+    try:
+        query = request.args.get('q', '').strip()
+        
+        if not query or len(query) < 3:
+            return jsonify({
+                'encontrado': False,
+                'mensagem': 'Digite pelo menos 3 caracteres'
+            })
+        
+        # Tentar buscar por CNPJ primeiro
+        fornecedor = buscar_fornecedor_melhorado(cnpj=query)
+        
+        # Se não encontrar, tentar por email
+        if not fornecedor:
+            fornecedor = buscar_fornecedor_melhorado(email=query)
+        
+        # Se não encontrar, tentar por nome
+        if not fornecedor:
+            fornecedor = buscar_fornecedor_melhorado(nome=query)
+        
+        if fornecedor:
+            return jsonify({
+                'encontrado': True,
+                'fornecedor': fornecedor
+            })
+        else:
+            return jsonify({
+                'encontrado': False,
+                'mensagem': 'Fornecedor não encontrado'
+            })
+    
+    except Exception as e:
+        print(f"Erro ao buscar fornecedor: {e}")
+        return jsonify({
+            'encontrado': False,
+            'mensagem': f'Erro ao buscar: {str(e)}'
+        }), 500
 
 @app.route('/fornecedores/<int:id>/produtos')
 @login_required

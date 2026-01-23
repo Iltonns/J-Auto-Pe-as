@@ -89,13 +89,17 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('adicionar_fornecedor') }}">
+            <form method="POST" action="{{ url_for('adicionar_fornecedor') }}" id="formAdicionarFornecedor">
                 <div class="modal-body">
+                    <!-- Alerta de Validação -->
+                    <div id="alertaDuplicacaoAdicionar" class="alert d-none" role="alert"></div>
+                    
                     <div class="row">
                         <div class="col-md-8">
                             <div class="mb-3">
                                 <label for="nome" class="form-label">Nome da Empresa *</label>
                                 <input type="text" class="form-control automotive-form-control" id="nome" name="nome" required>
+                                <small id="feedbackNome" class="d-block mt-1"></small>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -103,6 +107,7 @@
                                 <label for="cnpj" class="form-label">CNPJ</label>
                                 <input type="text" class="form-control automotive-form-control" id="cnpj" name="cnpj" 
                                        placeholder="00.000.000/0000-00">
+                                <small id="feedbackCnpj" class="d-block mt-1"></small>
                             </div>
                         </div>
                     </div>
@@ -113,12 +118,14 @@
                                 <label for="telefone" class="form-label">Telefone</label>
                                 <input type="text" class="form-control automotive-form-control" id="telefone" name="telefone"
                                        placeholder="(00) 00000-0000">
+                                <small id="feedbackTelefone" class="d-block mt-1"></small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
                                 <input type="email" class="form-control automotive-form-control" id="email" name="email">
+                                <small id="feedbackEmail" class="d-block mt-1"></small>
                             </div>
                         </div>
                     </div>
@@ -212,17 +219,22 @@
             </div>
             <form method="POST" id="formEditarFornecedor">
                 <div class="modal-body">
+                    <!-- Alerta de Validação -->
+                    <div id="alertaDuplicacaoEditar" class="alert d-none" role="alert"></div>
+                    
                     <div class="row">
                         <div class="col-md-8">
                             <div class="mb-3">
                                 <label for="editNome" class="form-label">Nome da Empresa *</label>
                                 <input type="text" class="form-control automotive-form-control" id="editNome" name="nome" required>
+                                <small id="feedbackEditNome" class="d-block mt-1"></small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="editCnpj" class="form-label">CNPJ</label>
                                 <input type="text" class="form-control automotive-form-control" id="editCnpj" name="cnpj">
+                                <small id="feedbackEditCnpj" class="d-block mt-1"></small>
                             </div>
                         </div>
                     </div>
@@ -232,12 +244,14 @@
                             <div class="mb-3">
                                 <label for="editTelefone" class="form-label">Telefone</label>
                                 <input type="text" class="form-control automotive-form-control" id="editTelefone" name="telefone">
+                                <small id="feedbackEditTelefone" class="d-block mt-1"></small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="editEmail" class="form-label">Email</label>
                                 <input type="email" class="form-control automotive-form-control" id="editEmail" name="email">
+                                <small id="feedbackEditEmail" class="d-block mt-1"></small>
                             </div>
                         </div>
                     </div>
@@ -348,7 +362,163 @@
 </div>
 
 <script>
+// ========================================
+// VALIDAÇÃO DE FORNECEDORES EM TEMPO REAL
+// ========================================
+
+let debounceTimer = null;
+let currentFornecedorId = null;
+
+/**
+ * Valida se o fornecedor é duplicado
+ */
+function validarDuplicacaoFornecedor(nome, cnpj, email, telefone, fornecedorId = null, callback) {
+    const formData = new FormData();
+    formData.append('nome', nome);
+    formData.append('cnpj', cnpj);
+    formData.append('email', email);
+    formData.append('telefone', telefone);
+    if (fornecedorId) {
+        formData.append('fornecedor_id_excluir', fornecedorId);
+    }
+    
+    fetch('/fornecedores/validar-duplicacao', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (callback) {
+            callback(data);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao validar:', error);
+        if (callback) {
+            callback({
+                duplicado: false,
+                criterio: 'erro',
+                mensagem: 'Erro ao validar fornecedor'
+            });
+        }
+    });
+}
+
+/**
+ * Exibe feedback visual para campos duplicados
+ */
+function mostrarFeedbackDuplicacao(resultado, prefixo = '') {
+    const campo = prefixo ? `#${prefixo}${resultado.critério?.toLowerCase().replace(/[^a-z]/g, '')}` : null;
+    const feedbackNome = document.getElementById(prefixo ? `feedback${prefixo}Nome` : 'feedbackNome');
+    const feedbackCnpj = document.getElementById(prefixo ? `feedback${prefixo}Cnpj` : 'feedbackCnpj');
+    const feedbackEmail = document.getElementById(prefixo ? `feedback${prefixo}Email` : 'feedbackEmail');
+    const feedbackTelefone = document.getElementById(prefixo ? `feedback${prefixo}Telefone` : 'feedbackTelefone');
+    const alerta = document.getElementById(prefixo ? `alertaDuplicacao${prefixo === 'edit' ? 'Editar' : 'Adicionar'}` : 'alertaDuplicacaoAdicionar');
+    
+    // Limpar feedbacks anteriores
+    if (feedbackNome) feedbackNome.innerHTML = '';
+    if (feedbackCnpj) feedbackCnpj.innerHTML = '';
+    if (feedbackEmail) feedbackEmail.innerHTML = '';
+    if (feedbackTelefone) feedbackTelefone.innerHTML = '';
+    if (alerta) alerta.classList.add('d-none');
+    
+    if (resultado.duplicado) {
+        let mensagem = `<i class="fas fa-warning text-warning"></i> <strong>Duplicação Detectada!</strong><br/>`;
+        mensagem += resultado.mensagem;
+        
+        if (resultado.fornecedor_existente) {
+            mensagem += `<br/><br/><small>Fornecedor Existente: <strong>${resultado.fornecedor_existente.nome}</strong>`;
+            if (resultado.fornecedor_existente.cnpj) {
+                mensagem += `<br/>CNPJ: ${resultado.fornecedor_existente.cnpj}`;
+            }
+            if (resultado.fornecedor_existente.email) {
+                mensagem += `<br/>Email: ${resultado.fornecedor_existente.email}`;
+            }
+            if (resultado.fornecedor_existente.telefone) {
+                mensagem += `<br/>Telefone: ${resultado.fornecedor_existente.telefone}`;
+            }
+            mensagem += '</small>';
+        }
+        
+        if (alerta) {
+            alerta.className = 'alert alert-warning alert-dismissible fade show';
+            alerta.innerHTML = mensagem + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        }
+        
+        // Realçar campo problemático
+        if (resultado.critério === 'CNPJ' && feedbackCnpj) {
+            feedbackCnpj.innerHTML = '<small class="text-danger"><i class="fas fa-times-circle"></i> CNPJ já cadastrado</small>';
+            document.getElementById(prefixo ? 'editCnpj' : 'cnpj').classList.add('is-invalid');
+        }
+        if (resultado.critério === 'Email' && feedbackEmail) {
+            feedbackEmail.innerHTML = '<small class="text-danger"><i class="fas fa-times-circle"></i> Email já cadastrado</small>';
+            document.getElementById(prefixo ? 'editEmail' : 'email').classList.add('is-invalid');
+        }
+        if (resultado.critério === 'Nome (exato)' || resultado.critério === 'Nome (similar)') {
+            if (feedbackNome) {
+                feedbackNome.innerHTML = `<small class="text-danger"><i class="fas fa-times-circle"></i> ${resultado.critério}: ${resultado.mensagem}</small>`;
+            }
+            document.getElementById(prefixo ? 'editNome' : 'nome').classList.add('is-invalid');
+        }
+        if (resultado.critério === 'Telefone' && feedbackTelefone) {
+            feedbackTelefone.innerHTML = '<small class="text-danger"><i class="fas fa-times-circle"></i> Telefone já cadastrado</small>';
+            document.getElementById(prefixo ? 'editTelefone' : 'telefone').classList.add('is-invalid');
+        }
+        
+        return false;
+    } else {
+        // Limpar classes de erro
+        ['nome', 'cnpj', 'email', 'telefone'].forEach(campo => {
+            const input = document.getElementById(prefixo ? `edit${campo.charAt(0).toUpperCase() + campo.slice(1)}` : campo);
+            if (input) {
+                input.classList.remove('is-invalid');
+                input.classList.add('is-valid');
+            }
+        });
+        
+        if (feedbackNome) feedbackNome.innerHTML = '<small class="text-success"><i class="fas fa-check-circle"></i> Disponível</small>';
+        
+        return true;
+    }
+}
+
+/**
+ * Monitora campos para validação com debounce
+ */
+function setupValidacaoFornecedor(prefixo = '') {
+    const nome = document.getElementById(prefixo ? 'editNome' : 'nome');
+    const cnpj = document.getElementById(prefixo ? 'editCnpj' : 'cnpj');
+    const email = document.getElementById(prefixo ? 'editEmail' : 'email');
+    const telefone = document.getElementById(prefixo ? 'editTelefone' : 'telefone');
+    
+    const validar = () => {
+        const nomeVal = nome.value.trim();
+        const cnpjVal = cnpj.value.trim();
+        const emailVal = email.value.trim();
+        const telefoneVal = telefone.value.trim();
+        
+        if (nomeVal || cnpjVal || emailVal || telefoneVal) {
+            validarDuplicacaoFornecedor(nomeVal, cnpjVal, emailVal, telefoneVal, currentFornecedorId, (resultado) => {
+                mostrarFeedbackDuplicacao(resultado, prefixo === 'edit' ? 'edit' : '');
+            });
+        }
+    };
+    
+    // Monitorar campos com debounce
+    [nome, cnpj, email, telefone].forEach(campo => {
+        if (campo) {
+            campo.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(validar, 500);
+            });
+        }
+    });
+}
+
 function editarFornecedor(id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes) {
+    // Setar ID global para validação
+    currentFornecedorId = id;
+    
     // Preencher o formulário de edição
     document.getElementById('editNome').value = nome || '';
     document.getElementById('editCnpj').value = cnpj || '';
@@ -361,8 +531,18 @@ function editarFornecedor(id, nome, cnpj, telefone, email, endereco, cidade, est
     document.getElementById('editContatoPessoa').value = contato_pessoa || '';
     document.getElementById('editObservacoes').value = observacoes || '';
     
+    // Limpar feedbacks
+    document.getElementById('alertaDuplicacaoEditar').classList.add('d-none');
+    ['editNome', 'editCnpj', 'editEmail', 'editTelefone'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('is-invalid', 'is-valid');
+    });
+    
     // Definir a ação do formulário
     document.getElementById('formEditarFornecedor').action = `/fornecedores/editar/${id}`;
+    
+    // Setup validação
+    setupValidacaoFornecedor('edit');
     
     // Abrir o modal
     new bootstrap.Modal(document.getElementById('modalEditarFornecedor')).show();
@@ -439,14 +619,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Aplicar máscaras
-    aplicarMascaraCNPJ(document.getElementById('cnpj'));
-    aplicarMascaraCNPJ(document.getElementById('editCnpj'));
+    [document.getElementById('cnpj'), document.getElementById('editCnpj')].forEach(el => {
+        if (el) aplicarMascaraCNPJ(el);
+    });
     
-    aplicarMascaraTelefone(document.getElementById('telefone'));
-    aplicarMascaraTelefone(document.getElementById('editTelefone'));
+    [document.getElementById('telefone'), document.getElementById('editTelefone')].forEach(el => {
+        if (el) aplicarMascaraTelefone(el);
+    });
     
-    aplicarMascaraCEP(document.getElementById('cep'));
-    aplicarMascaraCEP(document.getElementById('editCep'));
+    [document.getElementById('cep'), document.getElementById('editCep')].forEach(el => {
+        if (el) aplicarMascaraCEP(el);
+    });
+    
+    // Setup validação no modal de adição
+    const modalAdicionar = document.getElementById('modalAdicionarFornecedor');
+    if (modalAdicionar) {
+        modalAdicionar.addEventListener('show.bs.modal', function() {
+            currentFornecedorId = null;
+            document.getElementById('alertaDuplicacaoAdicionar').classList.add('d-none');
+            setupValidacaoFornecedor('');
+        });
+    }
+    
+    // Prevenir envio se houver duplicação
+    document.getElementById('formAdicionarFornecedor')?.addEventListener('submit', function(e) {
+        const alertaDuplicacao = document.getElementById('alertaDuplicacaoAdicionar');
+        if (!alertaDuplicacao.classList.contains('d-none')) {
+            e.preventDefault();
+            alert('Existe uma duplicação detectada. Verifique os dados e tente novamente.');
+        }
+    });
+    
+    document.getElementById('formEditarFornecedor')?.addEventListener('submit', function(e) {
+        const alertaDuplicacao = document.getElementById('alertaDuplicacaoEditar');
+        if (!alertaDuplicacao.classList.contains('d-none')) {
+            e.preventDefault();
+            alert('Existe uma duplicação detectada. Verifique os dados e tente novamente.');
+        }
+    });
 });
 </script>
 {% endblock %}

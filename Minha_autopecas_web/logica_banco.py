@@ -4330,35 +4330,29 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
                     
                     endereco_completo = ', '.join(partes_endereco) if partes_endereco else None
                 
-                # Buscar ou criar fornecedor
+                # Buscar ou criar fornecedor usando validação robusta
                 if cnpj_fornecedor and nome_fornecedor:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
+                    # Usar função robusta que evita duplicações
+                    resultado_fornecedor = adicionar_ou_atualizar_fornecedor_automatico(
+                        nome=nome_fornecedor,
+                        cnpj=cnpj_fornecedor,
+                        telefone=telefone,
+                        endereco=endereco_completo,
+                        cidade=cidade,
+                        estado=estado,
+                        cep=cep,
+                        observacoes=f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}"
+                    )
                     
-                    # Verificar se fornecedor já existe pelo CNPJ
-                    cursor.execute('SELECT id FROM fornecedores WHERE cnpj = %s', (cnpj_fornecedor,))
-                    fornecedor_existente = cursor.fetchone()
-                    
-                    if fornecedor_existente:
-                        # Atualizar fornecedor existente
-                        fornecedor_id = fornecedor_existente[0]
-                        cursor.execute('''
-                            UPDATE fornecedores 
-                            SET nome = %s, telefone = %s, endereco = %s, cidade = %s, estado = %s, cep = %s
-                            WHERE id = %s
-                        ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id))
+                    if resultado_fornecedor['sucesso']:
+                        fornecedor_id = resultado_fornecedor['fornecedor_id']
+                        if resultado_fornecedor['criado']:
+                            print(f"DEBUG XML: Novo fornecedor criado: {nome_fornecedor} (ID: {fornecedor_id})")
+                        else:
+                            print(f"DEBUG XML: Fornecedor já existia: {nome_fornecedor} (ID: {fornecedor_id})")
                     else:
-                        # Criar novo fornecedor
-                        cursor.execute('''
-                            INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            RETURNING id
-                        ''', (nome_fornecedor, cnpj_fornecedor, telefone, endereco_completo, cidade, estado, cep, 
-                              f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}"))
-                        fornecedor_id = cursor.fetchone()[0]
-                    
-                    conn.commit()
-                    conn.close()
+                        erros.append(f"Erro ao processar fornecedor {nome_fornecedor}: {resultado_fornecedor['mensagem']}")
+                        fornecedor_id = None
                     
             except Exception as e:
                 erros.append(f"Erro ao processar fornecedor: {str(e)}")
@@ -5080,61 +5074,47 @@ def buscar_fornecedor(fornecedor_id):
         conn.close()
 
 def buscar_fornecedor_por_cnpj(cnpj):
-    """Busca um fornecedor pelo CNPJ (normalizado)"""
+    """
+    Busca um fornecedor pelo CNPJ (normalizado).
+    Agora usa a validação robusta de fornecedor.
+    
+    Args:
+        cnpj: CNPJ do fornecedor (pode ser com ou sem formatação)
+    
+    Returns:
+        Dict com dados do fornecedor ou None
+    """
     if not cnpj:
         return None
-        
-    conn = get_db_connection()
-    cursor = conn.cursor()
     
-    try:
-        cnpj_normalizado = normalizar_cnpj(cnpj)
-        
-        # Buscar todos os fornecedores e comparar CNPJ normalizado
-        cursor.execute('SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes, ativo, created_at FROM fornecedores WHERE cnpj IS NOT NULL')
-        fornecedores = cursor.fetchall()
-        
-        for row in fornecedores:
-            if normalizar_cnpj(row[2]) == cnpj_normalizado:
-                return {
-                    'id': row[0],
-                    'nome': row[1],
-                    'cnpj': row[2],
-                    'telefone': row[3],
-                    'email': row[4],
-                    'endereco': row[5],
-                    'cidade': row[6],
-                    'estado': row[7],
-                    'cep': row[8],
-                    'contato_pessoa': row[9],
-                    'observacoes': row[10],
-                    'ativo': row[11],
-                    'created_at': row[12]
-                }
-        
-        return None
-    except Exception as e:
-        print(f"Erro ao buscar fornecedor por CNPJ: {e}")
-        return None
-    finally:
-        conn.close()
+    # Usar a função robusta de busca
+    return buscar_fornecedor_melhorado(cnpj=cnpj)
 
 def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=None, 
                         cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
-    """Adiciona um novo fornecedor"""
+    """
+    Adiciona um novo fornecedor com validação robusta de duplicação.
+    
+    Raises:
+        ValueError: Se o fornecedor já existe (detectado por CNPJ, email ou nome similar)
+    
+    Returns:
+        int: ID do fornecedor criado ou None em caso de erro
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Verificar se já existe fornecedor com o mesmo CNPJ (normalizado)
-        if cnpj:
-            cnpj_normalizado = normalizar_cnpj(cnpj)
-            cursor.execute('SELECT id, cnpj FROM fornecedores WHERE cnpj IS NOT NULL')
-            fornecedores_existentes = cursor.fetchall()
-            
-            for forn_id, forn_cnpj in fornecedores_existentes:
-                if normalizar_cnpj(forn_cnpj) == cnpj_normalizado:
-                    raise ValueError(f"Já existe um fornecedor cadastrado com este CNPJ: {forn_cnpj}")
+        # Validar duplicação usando a função robusta
+        validacao = validar_fornecedor_duplicado(
+            nome=nome,
+            cnpj=cnpj,
+            email=email,
+            telefone=telefone
+        )
+        
+        if validacao['duplicado']:
+            raise ValueError(f"{validacao['mensagem']} (Critério: {validacao['critério']})")
         
         cursor.execute('''
             INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
@@ -5155,20 +5135,30 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
 
 def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None, endereco=None, 
                      cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
-    """Edita um fornecedor existente"""
+    """
+    Edita um fornecedor existente com validação robusta de duplicação.
+    
+    Raises:
+        ValueError: Se já existe outro fornecedor com os mesmos dados
+    
+    Returns:
+        bool: True se atualizado com sucesso, False caso contrário
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Verificar se já existe outro fornecedor com o mesmo CNPJ (normalizado)
-        if cnpj:
-            cnpj_normalizado = normalizar_cnpj(cnpj)
-            cursor.execute('SELECT id, cnpj FROM fornecedores WHERE cnpj IS NOT NULL AND id != %s', (fornecedor_id,))
-            fornecedores_existentes = cursor.fetchall()
-            
-            for forn_id, forn_cnpj in fornecedores_existentes:
-                if normalizar_cnpj(forn_cnpj) == cnpj_normalizado:
-                    raise ValueError(f"Já existe outro fornecedor cadastrado com este CNPJ: {forn_cnpj}")
+        # Validar duplicação usando a função robusta (excluindo este fornecedor)
+        validacao = validar_fornecedor_duplicado(
+            nome=nome,
+            cnpj=cnpj,
+            email=email,
+            telefone=telefone,
+            fornecedor_id_excluir=fornecedor_id
+        )
+        
+        if validacao['duplicado']:
+            raise ValueError(f"{validacao['mensagem']} (Critério: {validacao['critério']})")
         
         cursor.execute('''
             UPDATE fornecedores 
@@ -5896,6 +5886,272 @@ def obter_categorias_cadastradas():
         print(f"Erro ao obter categorias: {e}")
         conn.close()
         return []
+
+
+# ========================================
+# FUNÇÕES ROBUSTAS DE VALIDAÇÃO DE FORNECEDORES
+# ========================================
+
+def validar_fornecedor_duplicado(nome=None, cnpj=None, email=None, telefone=None, fornecedor_id_excluir=None):
+    """
+    Valida se um fornecedor já está cadastrado no sistema usando múltiplos critérios.
+    
+    Busca por:
+    - CNPJ (com e sem formatação)
+    - Nome (comparação com fuzzy matching para variações)
+    - Email
+    - Combinação de critérios
+    
+    Args:
+        nome: Nome do fornecedor
+        cnpj: CNPJ (formatado ou não)
+        email: Email do fornecedor
+        telefone: Telefone do fornecedor
+        fornecedor_id_excluir: ID do fornecedor a excluir da busca (para edição)
+    
+    Returns:
+        Dict com resultado: {
+            'duplicado': bool,
+            'fornecedor_existente': dict or None,
+            'critério': str (qual critério detectou a duplicação),
+            'mensagem': str
+        }
+    """
+    import re
+    from difflib import SequenceMatcher
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Buscar todos os fornecedores (exceto o que está sendo editado)
+        query = 'SELECT id, nome, cnpj, email, telefone FROM fornecedores WHERE ativo = TRUE'
+        params = []
+        
+        if fornecedor_id_excluir:
+            query += ' AND id != %s'
+            params.append(fornecedor_id_excluir)
+        
+        cursor.execute(query, params)
+        fornecedores_existentes = cursor.fetchall()
+        
+        # 1. Verificar CNPJ (com normalização)
+        if cnpj:
+            cnpj_normalizado = normalizar_cnpj(cnpj)
+            if cnpj_normalizado:
+                for forn in fornecedores_existentes:
+                    if forn[2]:  # Se fornecedor existente tem CNPJ
+                        if normalizar_cnpj(forn[2]) == cnpj_normalizado:
+                            return {
+                                'duplicado': True,
+                                'fornecedor_existente': {
+                                    'id': forn[0],
+                                    'nome': forn[1],
+                                    'cnpj': forn[2],
+                                    'email': forn[3],
+                                    'telefone': forn[4]
+                                },
+                                'critério': 'CNPJ',
+                                'mensagem': f"Fornecedor '{forn[1]}' já cadastrado com CNPJ {forn[2]}"
+                            }
+        
+        # 2. Verificar Email (idêntico)
+        if email and email.strip():
+            email_lower = email.lower().strip()
+            for forn in fornecedores_existentes:
+                if forn[3]:  # Se fornecedor existente tem email
+                    if forn[3].lower().strip() == email_lower:
+                        return {
+                            'duplicado': True,
+                            'fornecedor_existente': {
+                                'id': forn[0],
+                                'nome': forn[1],
+                                'cnpj': forn[2],
+                                'email': forn[3],
+                                'telefone': forn[4]
+                            },
+                            'critério': 'Email',
+                            'mensagem': f"Fornecedor '{forn[1]}' já cadastrado com email {forn[3]}"
+                        }
+        
+        # 3. Verificar Nome (com fuzzy matching para variações)
+        if nome:
+            nome_limpo = re.sub(r'[^a-záéíóúâêô\s]', '', nome.lower().strip())
+            
+            for forn in fornecedores_existentes:
+                forn_nome_limpo = re.sub(r'[^a-záéíóúâêô\s]', '', forn[1].lower().strip())
+                
+                # Comparação exata após limpeza
+                if nome_limpo == forn_nome_limpo:
+                    return {
+                        'duplicado': True,
+                        'fornecedor_existente': {
+                            'id': forn[0],
+                            'nome': forn[1],
+                            'cnpj': forn[2],
+                            'email': forn[3],
+                            'telefone': forn[4]
+                        },
+                        'critério': 'Nome (exato)',
+                        'mensagem': f"Fornecedor '{forn[1]}' já cadastrado no sistema"
+                    }
+                
+                # Comparação com fuzzy matching (89% de similitude)
+                similaridade = SequenceMatcher(None, nome_limpo, forn_nome_limpo).ratio()
+                if similaridade >= 0.89:
+                    return {
+                        'duplicado': True,
+                        'fornecedor_existente': {
+                            'id': forn[0],
+                            'nome': forn[1],
+                            'cnpj': forn[2],
+                            'email': forn[3],
+                            'telefone': forn[4]
+                        },
+                        'critério': 'Nome (similar)',
+                        'mensagem': f"Possível duplicação: já existe fornecedor '{forn[1]}' similar (89% de similaridade)"
+                    }
+        
+        # 4. Verificar Telefone (se fornecido e nenhuma duplicação anterior)
+        if telefone and telefone.strip():
+            telefone_normalizado = re.sub(r'\D', '', telefone)
+            
+            if telefone_normalizado:
+                for forn in fornecedores_existentes:
+                    if forn[4]:  # Se fornecedor existente tem telefone
+                        if re.sub(r'\D', '', forn[4]) == telefone_normalizado:
+                            return {
+                                'duplicado': True,
+                                'fornecedor_existente': {
+                                    'id': forn[0],
+                                    'nome': forn[1],
+                                    'cnpj': forn[2],
+                                    'email': forn[3],
+                                    'telefone': forn[4]
+                                },
+                                'critério': 'Telefone',
+                                'mensagem': f"Fornecedor '{forn[1]}' já cadastrado com telefone {forn[4]}"
+                            }
+        
+        # Nenhuma duplicação encontrada
+        return {
+            'duplicado': False,
+            'fornecedor_existente': None,
+            'critério': None,
+            'mensagem': 'Fornecedor não encontrado no sistema'
+        }
+        
+    except Exception as e:
+        print(f"Erro ao validar fornecedor: {e}")
+        return {
+            'duplicado': False,
+            'fornecedor_existente': None,
+            'critério': 'erro',
+            'mensagem': f'Erro ao validar: {str(e)}'
+        }
+    finally:
+        conn.close()
+
+
+def buscar_fornecedor_melhorado(nome=None, cnpj=None, email=None):
+    """
+    Busca um fornecedor usando múltiplos critérios com precedência.
+    
+    Precedência:
+    1. CNPJ (normalizado)
+    2. Email
+    3. Nome (com fuzzy matching)
+    
+    Returns:
+        Dict com dados do fornecedor ou None
+    """
+    validacao = validar_fornecedor_duplicado(
+        nome=nome, 
+        cnpj=cnpj, 
+        email=email
+    )
+    
+    if validacao['duplicado']:
+        return validacao['fornecedor_existente']
+    
+    return None
+
+
+def adicionar_ou_atualizar_fornecedor_automatico(nome, cnpj=None, email=None, telefone=None, 
+                                                  endereco=None, cidade=None, estado=None, 
+                                                  cep=None, observacoes=None):
+    """
+    Adiciona um novo fornecedor ou retorna o existente se já cadastrado.
+    Evita duplicações usando validação robusta.
+    
+    Returns:
+        Dict: {
+            'sucesso': bool,
+            'fornecedor_id': int,
+            'criado': bool (True se foi criado, False se já existia),
+            'fornecedor': dict,
+            'mensagem': str
+        }
+    """
+    try:
+        # Validar se já existe
+        validacao = validar_fornecedor_duplicado(
+            nome=nome,
+            cnpj=cnpj,
+            email=email,
+            telefone=telefone
+        )
+        
+        if validacao['duplicado']:
+            return {
+                'sucesso': True,
+                'fornecedor_id': validacao['fornecedor_existente']['id'],
+                'criado': False,
+                'fornecedor': validacao['fornecedor_existente'],
+                'mensagem': f"Fornecedor já cadastrado: {validacao['fornecedor_existente']['nome']}"
+            }
+        
+        # Criar novo fornecedor
+        fornecedor_id = adicionar_fornecedor(
+            nome=nome,
+            cnpj=cnpj,
+            email=email,
+            telefone=telefone,
+            endereco=endereco,
+            cidade=cidade,
+            estado=estado,
+            cep=cep,
+            observacoes=observacoes
+        )
+        
+        if fornecedor_id:
+            fornecedor = buscar_fornecedor(fornecedor_id)
+            return {
+                'sucesso': True,
+                'fornecedor_id': fornecedor_id,
+                'criado': True,
+                'fornecedor': fornecedor,
+                'mensagem': f"Novo fornecedor '{nome}' cadastrado com sucesso"
+            }
+        else:
+            return {
+                'sucesso': False,
+                'fornecedor_id': None,
+                'criado': False,
+                'fornecedor': None,
+                'mensagem': 'Erro ao cadastrar fornecedor'
+            }
+    
+    except Exception as e:
+        print(f"Erro ao adicionar/atualizar fornecedor: {e}")
+        return {
+            'sucesso': False,
+            'fornecedor_id': None,
+            'criado': False,
+            'fornecedor': None,
+            'mensagem': f'Erro: {str(e)}'
+        }
+
 
 if __name__ == "__main__":
     init_db()
