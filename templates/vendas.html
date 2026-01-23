@@ -111,12 +111,49 @@
         background: linear-gradient(135deg, #c82333, #bd2130);
         transform: translateY(-1px);
     }
+    
+    /* Estilo para botão desabilitado quando caixa está fechado */
+    .btn-disabled {
+        background-color: #ccc !important;
+        color: #666 !important;
+        cursor: not-allowed !important;
+        opacity: 0.6 !important;
+    }
+    
+    .btn-disabled:hover {
+        background-color: #ccc !important;
+        transform: none !important;
+    }
+    
+    /* Aviso de caixa fechado */
+    .alerta-caixa-fechado {
+        background-color: #fff3cd;
+        border: 2px solid #ffc107;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        font-weight: 500;
+        color: #856404;
+    }
+    
+    .alerta-caixa-fechado i {
+        font-size: 1.2rem;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 
 <div class="vendas-container">
+    <!-- ALERTA DE CAIXA FECHADO -->
+    <div class="alerta-caixa-fechado" id="alertaCaixaFechado">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>⚠️ <strong>CAIXA FECHADO!</strong> Abra o caixa para registrar vendas à vista.</span>
+    </div>
+    
     <!-- ÁREA PRINCIPAL DE VENDAS -->
     <div class="venda-principal">
         <div class="card-header-vendas">
@@ -1957,6 +1994,57 @@ function ordenarTabela() {
     linhas.forEach(linha => tbody.appendChild(linha));
 }
 
+// ========== VALIDAÇÃO DO CAIXA ==========
+// Verificar status do caixa ao carregar e periodicamente
+let statusCaixaAtual = { aberto: false };
+
+async function verificarStatusCaixa() {
+    try {
+        const response = await fetch('/api/caixa/status');
+        const data = await response.json();
+        statusCaixaAtual = data;
+        
+        const formaPagamento = document.getElementById('forma_pagamento').value;
+        const btnFinalizar = document.getElementById('btnFinalizar');
+        const alertaCaixa = document.getElementById('alertaCaixaFechado');
+        
+        // Se não é venda a prazo e caixa está fechado, desabilitar
+        if (formaPagamento !== 'prazo' && !statusCaixaAtual.aberto) {
+            btnFinalizar.disabled = true;
+            btnFinalizar.title = '❌ Caixa fechado. Abra o caixa para realizar vendas.';
+            btnFinalizar.classList.add('btn-disabled');
+            
+            // Mostrar alerta
+            if (alertaCaixa) {
+                alertaCaixa.style.display = 'flex';
+            }
+        } else {
+            if (itensVenda.length > 0) {
+                btnFinalizar.disabled = false;
+                btnFinalizar.title = '';
+                btnFinalizar.classList.remove('btn-disabled');
+            }
+            
+            // Esconder alerta se caixa está aberto ou é venda a prazo
+            if (alertaCaixa) {
+                alertaCaixa.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao verificar status do caixa:', error);
+    }
+}
+
+// Verificar quando mudar a forma de pagamento
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'forma_pagamento') {
+        verificarStatusCaixa();
+    }
+}, true);
+
+// Verificar status do caixa a cada 10 segundos
+setInterval(verificarStatusCaixa, 10000);
+
 // Resetar filtros
 function resetarFiltros() {
     document.getElementById('dataInicio').value = new Date().toISOString().split('T')[0];
@@ -2003,6 +2091,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inicializar dados de vendas
     inicializarDadosVendas();
+    
+    // Verificar status do caixa ao inicializar
+    verificarStatusCaixa();
     
     // Configurar ordenação por clique no cabeçalho
     document.querySelectorAll('.sortable').forEach(th => {

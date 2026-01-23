@@ -1071,6 +1071,18 @@ def obter_status_caixa():
         'observacoes': observacoes
     }
 
+def caixa_esta_aberto():
+    """Verifica se há um caixa aberto no momento"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+        resultado = cursor.fetchone()
+        return resultado[0] > 0 if resultado else False
+    finally:
+        conn.close()
+
 def listar_movimentacoes_caixa(limit=50):
     """Lista as movimentações do caixa atual"""
     conn = get_db_connection()
@@ -2336,11 +2348,22 @@ def rejeitar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao):
 
 # FUNÇÕES DE VENDAS
 def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None):
-    """Registra uma nova venda com seus itens"""
+    """Registra uma nova venda com seus itens
+    
+    Validações:
+    - Se a forma de pagamento não for 'prazo', o caixa DEVE estar aberto
+    - Verifica estoque disponível
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        # IMPORTANTE: Validar se o caixa está aberto para vendas não-prazo
+        if forma_pagamento != 'prazo':
+            cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+            if cursor.fetchone()[0] == 0:
+                raise Exception("❌ CAIXA FECHADO! O caixa deve estar aberto para registrar vendas. Por favor, abra o caixa antes de continuar.")
+        
         # Verificar estoque antes de processar a venda
         for item in itens:
             cursor.execute('SELECT nome, estoque FROM produtos WHERE id = %s', (item['produto_id'],))

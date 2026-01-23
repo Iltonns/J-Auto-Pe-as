@@ -48,7 +48,7 @@ from Minha_autopecas_web.logica_banco import (
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
     popular_dados_exemplo,
     # Novas funções do caixa
-    abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa,
+    abrir_caixa, fechar_caixa, registrar_movimentacao_caixa, obter_status_caixa, caixa_esta_aberto,
     listar_movimentacoes_caixa, obter_movimentacoes_caixa, criar_lancamento_financeiro, listar_lancamentos_financeiros,
     # Função de importação XML
     importar_produtos_de_xml,
@@ -744,6 +744,24 @@ def limpar_sincronizacoes_caixa():
         flash(f"❌ {mensagem}", 'error')
     
     return redirect(url_for('caixa'))
+
+@app.route('/api/caixa/status')
+@login_required
+def api_status_caixa():
+    """Retorna o status atual do caixa para o frontend"""
+    try:
+        caixa_aberto = caixa_esta_aberto()
+        status_caixa = obter_status_caixa()
+        
+        return jsonify({
+            'aberto': caixa_aberto,
+            'status': status_caixa
+        })
+    except Exception as e:
+        return jsonify({
+            'aberto': False,
+            'error': str(e)
+        }), 400
 
 @app.route('/api/caixa/exportar/pdf')
 @login_required
@@ -2188,6 +2206,20 @@ def registrar_venda_route():
         forma_pagamento = request.form['forma_pagamento']
         desconto = float(request.form.get('desconto', 0))
         observacoes = request.form.get('observacoes')
+        
+        # Validação: Se não é venda a prazo, o caixa DEVE estar aberto
+        if forma_pagamento != 'prazo' and not caixa_esta_aberto():
+            # Se a requisição é AJAX, retorna JSON
+            if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+                return jsonify({
+                    'success': False,
+                    'error': '❌ CAIXA FECHADO! O caixa deve estar aberto para registrar vendas à vista. Por favor, abra o caixa antes de continuar.',
+                    'error_type': 'cash_drawer_closed'
+                }), 400
+            
+            # Redirecionar para vendas com mensagem de erro
+            flash('❌ CAIXA FECHADO! O caixa deve estar aberto para registrar vendas. Por favor, abra o caixa antes de continuar.', 'error')
+            return redirect(url_for('vendas'))
         
         # Itens da venda (vem do JavaScript)
         itens_json = request.form.get('itens')
