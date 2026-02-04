@@ -595,21 +595,21 @@
     </div>
     {% endif %}
 
-    <!-- Card 10: Orçamentos Pendentes -->
-    {% if has_permission('vendas') %}
-    <div class="stat-card warning">
+    <!-- Card 10: Contas em Atraso -->
+    {% if has_permission('financeiro') %}
+    <div class="stat-card danger">
         <div class="stat-header">
             <div class="stat-content">
-                <h3>{{ estatisticas.orcamentos_pendentes or 0 }}</h3>
-                <p>Orçamentos Abertos</p>
+                <h3>{{ contas_atrasadas|length or 0 }}</h3>
+                <p>Contas em Atraso</p>
             </div>
-            <div class="stat-icon warning">
-                <i class="fas fa-file-invoice-dollar"></i>
+            <div class="stat-icon danger">
+                <i class="fas fa-exclamation-circle"></i>
             </div>
         </div>
         <div class="stat-footer">
-            <i class="fas fa-clock"></i>
-            Aguardando Aprovação
+            <i class="fas fa-calendar-times"></i>
+            Requer Atenção Urgente
         </div>
     </div>
     {% endif %}
@@ -839,6 +839,28 @@
                     <span class="fw-bold text-danger">{{ estatisticas.produtos_sem_estoque }}</span> produto(s) sem estoque.
                     <br><a href="{{ url_for('produtos') }}" class="btn btn-sm btn-danger mt-2">
                         <i class="fas fa-shopping-cart"></i> Repor Estoque
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Alerta de Contas em Atraso -->
+        {% if has_permission('financeiro') and contas_atrasadas %}
+        <div class="modern-alert danger">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                <div>
+                    <strong>Contas em Atraso!</strong><br>
+                    <span class="fw-bold text-danger">{{ contas_atrasadas|length }}</span> conta(s) vencida(s).
+                    <br>
+                    <small class="text-muted">
+                        {% if contas_atrasadas[0] %}
+                            Maior atraso: <strong>{{ contas_atrasadas[0].dias_atraso }} dia(s)</strong>
+                        {% endif %}
+                    </small>
+                    <br><a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-sm btn-danger mt-2">
+                        <i class="fas fa-credit-card"></i> Visualizar Atrasos
                     </a>
                 </div>
             </div>

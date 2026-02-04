@@ -44,6 +44,7 @@ from Minha_autopecas_web.logica_banco import (
     listar_contas_pagar_hoje, adicionar_conta_pagar, pagar_conta, duplicar_conta_pagar, excluir_conta_pagar, obter_conta_pagar, editar_conta_pagar,
     listar_contas_receber_hoje, receber_conta, adicionar_conta_receber, duplicar_conta_receber, excluir_conta_receber, obter_conta_receber, editar_conta_receber,
     listar_contas_pagar_por_periodo, listar_contas_receber_por_periodo,
+    listar_contas_atrasadas, contar_contas_atrasadas,
     obter_estatisticas_dashboard, produtos_estoque_baixo,
     criar_orcamento, listar_orcamentos, obter_orcamento, converter_orcamento_em_venda, atualizar_orcamento, excluir_orcamento,
     popular_dados_exemplo,
@@ -503,13 +504,15 @@ def dashboard():
     vendas_recentes = listar_vendas(limit=10)
     contas_pagar_hoje = listar_contas_pagar_hoje()
     contas_receber_hoje = listar_contas_receber_hoje()
+    contas_atrasadas = listar_contas_atrasadas()
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
                          produtos_baixo_estoque=produtos_baixo_estoque,
                          vendas_recentes=vendas_recentes,
                          contas_pagar_hoje=contas_pagar_hoje,
-                         contas_receber_hoje=contas_receber_hoje)
+                         contas_receber_hoje=contas_receber_hoje,
+                         contas_atrasadas=contas_atrasadas)
 
 # DEMONSTRAÇÃO DO TEMA
 @app.route('/demo-theme')

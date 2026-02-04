@@ -3297,6 +3297,85 @@ def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id
         conn.close()
         return False, f"Erro ao editar conta: {str(e)}"
 
+def listar_contas_atrasadas():
+    """Lista contas a pagar e a receber que estão em atraso (vencimento anterior ao dia de hoje)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    contas_atrasadas = []
+    
+    # Contas a pagar atrasadas
+    cursor.execute('''
+        SELECT 'pagar' as tipo, cp.id, cp.descricao, cp.valor, cp.data_vencimento, 
+               f.nome as entidade, (CURRENT_DATE - cp.data_vencimento::date) as dias_atraso
+        FROM contas_pagar cp
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        WHERE cp.data_vencimento::date < CURRENT_DATE AND cp.status = 'pendente'
+        ORDER BY cp.data_vencimento ASC
+    ''')
+    
+    for row in cursor.fetchall():
+        contas_atrasadas.append({
+            'tipo': 'pagar',
+            'tipo_label': 'A Pagar',
+            'id': row[1],
+            'descricao': row[2],
+            'valor': float(row[3]) if row[3] else 0,
+            'data_vencimento': row[4],
+            'entidade': row[5] or 'Sem fornecedor',
+            'dias_atraso': int(row[6]) if row[6] else 0
+        })
+    
+    # Contas a receber atrasadas
+    cursor.execute('''
+        SELECT 'receber' as tipo, cr.id, cr.descricao, cr.valor, cr.data_vencimento, 
+               c.nome as entidade, (CURRENT_DATE - cr.data_vencimento::date) as dias_atraso
+        FROM contas_receber cr
+        LEFT JOIN clientes c ON cr.cliente_id = c.id
+        WHERE cr.data_vencimento::date < CURRENT_DATE AND cr.status = 'pendente'
+        ORDER BY cr.data_vencimento ASC
+    ''')
+    
+    for row in cursor.fetchall():
+        contas_atrasadas.append({
+            'tipo': 'receber',
+            'tipo_label': 'A Receber',
+            'id': row[1],
+            'descricao': row[2],
+            'valor': float(row[3]) if row[3] else 0,
+            'data_vencimento': row[4],
+            'entidade': row[5] or 'Sem cliente',
+            'dias_atraso': int(row[6]) if row[6] else 0
+        })
+    
+    conn.close()
+    
+    # Ordenar por dias de atraso (maiores primeiro)
+    contas_atrasadas.sort(key=lambda x: x['dias_atraso'], reverse=True)
+    
+    return contas_atrasadas
+
+def contar_contas_atrasadas():
+    """Conta o total de contas em atraso (pagar + receber)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*)
+        FROM (
+            SELECT 1 FROM contas_pagar 
+            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
+            UNION ALL
+            SELECT 1 FROM contas_receber 
+            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
+        ) as contas
+    ''')
+    
+    total = cursor.fetchone()[0] or 0
+    conn.close()
+    
+    return total
+
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
     """Obtém estatísticas para o dashboard"""
