@@ -177,18 +177,13 @@
         </div>
     </div>
 
-    <!-- Filtros -->
+    <!-- Controles de Paginação -->
+    <div id="controlesMovimentacoes" class="mb-3"></div>
+
+    <!-- Filtros Adicionais -->
     <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="input-group">
-                <span class="input-group-text">
-                    <i class="fas fa-search"></i>
-                </span>
-                <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, código, fornecedor...">
-            </div>
-        </div>
         <div class="col-md-3">
-            <select id="statusFilter" class="form-select">
+            <select id="statusFilter" class="form-select form-select-sm">
                 <option value="">Todos os status</option>
                 <option value="pendente">Pendentes</option>
                 <option value="aprovada">Aprovadas</option>
@@ -196,7 +191,7 @@
             </select>
         </div>
         <div class="col-md-3">
-            <select id="tipoFilter" class="form-select">
+            <select id="tipoFilter" class="form-select form-select-sm">
                 <option value="">Todas as origens</option>
                 <option value="manual">Manual</option>
                 <option value="xml_nfe">XML NFe</option>
@@ -207,9 +202,15 @@
     <!-- Tabela de Movimentações -->
     <div class="card">
         <div class="card-header text-white" style="background-color: #1a237e;">
-            <h5 class="mb-0">
-                <i class="fas fa-file-invoice me-2"></i>Notas Fiscais Importadas
-            </h5>
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-invoice me-2"></i>Notas Fiscais Importadas
+                </h5>
+                <span class="badge bg-light text-dark">
+                    <i class="fas fa-list"></i> 
+                    Mostrando <span id="movimentacoesVisiveis">0</span> de <span id="totalMovimentacoes">0</span>
+                </span>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -691,6 +692,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/pagination.js') }}"></script>
 <script>
 // Calculadora de preços (não é mais automática)
 function calcularPreco(tipo) {
@@ -812,38 +814,67 @@ function deletarNfeCompleta(nfeNumero) {
 
 // Filtros
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
+    // Criar controles de paginação
+    createPaginationControls('controlesMovimentacoes', {
+        searchId: 'buscaMovimentacoes',
+        searchPlaceholder: '🔍 Buscar por NF, fornecedor, código...',
+        tableId: 'tabelaMovimentacoes',
+        itemsPerPageId: 'itensPorPaginaMovimentacoes',
+        visibleCountId: 'movimentacoesVisiveis',
+        totalCountId: 'totalMovimentacoes',
+        prevBtnId: 'btnAnteriorMovimentacoes',
+        nextBtnId: 'btnProximoMovimentacoes',
+        paginationControlsId: 'controlesNavegacaoMovimentacoes',
+        pageInfoId: 'infoPaginacaoMovimentacoes'
+    });
+    
+    // Inicializar paginação
+    const pagination = new TablePagination({
+        tableId: 'tabelaMovimentacoes',
+        searchId: 'buscaMovimentacoes',
+        itemsPerPageId: 'itensPorPaginaMovimentacoes',
+        visibleCountId: 'movimentacoesVisiveis',
+        totalCountId: 'totalMovimentacoes',
+        prevBtnId: 'btnAnteriorMovimentacoes',
+        nextBtnId: 'btnProximoMovimentacoes',
+        paginationControlsId: 'controlesNavegacaoMovimentacoes',
+        pageInfoId: 'infoPaginacaoMovimentacoes',
+        defaultItemsPerPage: 20
+    });
+    
+    // Filtros adicionais
     const statusFilter = document.getElementById('statusFilter');
     const tipoFilter = document.getElementById('tipoFilter');
     const tabela = document.getElementById('tabelaMovimentacoes');
     
-    function aplicarFiltros() {
-        const searchTerm = searchInput.value.toLowerCase();
+    function aplicarFiltrosAdicionais() {
         const statusSelecionado = statusFilter.value;
         const tipoSelecionado = tipoFilter.value;
         
         const linhas = tabela.querySelectorAll('tbody tr');
+        let contadorVisivel = 0;
         
         linhas.forEach(linha => {
-            const texto = linha.textContent.toLowerCase();
             const status = linha.dataset.status;
             const origem = linha.dataset.origem;
             
-            const matchSearch = texto.includes(searchTerm);
             const matchStatus = !statusSelecionado || status === statusSelecionado;
             const matchTipo = !tipoSelecionado || origem === tipoSelecionado;
             
-            if (matchSearch && matchStatus && matchTipo) {
+            if (matchStatus && matchTipo) {
                 linha.style.display = '';
+                contadorVisivel++;
             } else {
                 linha.style.display = 'none';
             }
         });
+        
+        // Recarregar paginação após aplicar filtros
+        pagination.reload();
     }
     
-    searchInput.addEventListener('input', aplicarFiltros);
-    statusFilter.addEventListener('change', aplicarFiltros);
-    tipoFilter.addEventListener('change', aplicarFiltros);
+    statusFilter.addEventListener('change', aplicarFiltrosAdicionais);
+    tipoFilter.addEventListener('change', aplicarFiltrosAdicionais);
 });
 
 // Preview de imagem
