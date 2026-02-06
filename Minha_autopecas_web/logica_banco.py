@@ -35,12 +35,19 @@ def converter_utc_para_br(dt_utc):
     if dt_utc is None:
         return None
     
+    # Se for um objeto date (sem hora), apenas retornar como string
+    if isinstance(dt_utc, date) and not isinstance(dt_utc, datetime):
+        return dt_utc
+    
     # Se o datetime não tem timezone, assumir que é UTC
-    if dt_utc.tzinfo is None:
+    if hasattr(dt_utc, 'tzinfo') and dt_utc.tzinfo is None:
         dt_utc = pytz.utc.localize(dt_utc)
     
     # Converter para timezone de Brasília
-    return dt_utc.astimezone(TIMEZONE_BR)
+    if hasattr(dt_utc, 'astimezone'):
+        return dt_utc.astimezone(TIMEZONE_BR)
+    
+    return dt_utc
 
 def normalizar_cnpj(cnpj):
     """Remove todos os caracteres não numéricos do CNPJ para comparação"""
