@@ -4,7 +4,7 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.errors
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from math import ceil
@@ -29,6 +29,18 @@ def agora_br():
 def hoje_br():
     """Retorna a data atual no horário de Brasília"""
     return agora_br().date()
+
+def converter_utc_para_br(dt_utc):
+    """Converte um datetime em UTC para o timezone de Brasília"""
+    if dt_utc is None:
+        return None
+    
+    # Se o datetime não tem timezone, assumir que é UTC
+    if dt_utc.tzinfo is None:
+        dt_utc = pytz.utc.localize(dt_utc)
+    
+    # Converter para timezone de Brasília
+    return dt_utc.astimezone(TIMEZONE_BR)
 
 def normalizar_cnpj(cnpj):
     """Remove todos os caracteres não numéricos do CNPJ para comparação"""
@@ -1002,10 +1014,10 @@ def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, 
         cursor.execute('''
             INSERT INTO caixa_movimentacoes (
                 tipo, categoria, descricao, valor, usuario_id, 
-                venda_id, conta_pagar_id, conta_receber_id, observacoes
+                venda_id, conta_pagar_id, conta_receber_id, observacoes, data_movimentacao
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (tipo, categoria, descricao, valor, usuario_id, venda_id, conta_pagar_id, conta_receber_id, observacoes))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (tipo, categoria, descricao, valor, usuario_id, venda_id, conta_pagar_id, conta_receber_id, observacoes, agora_br()))
         
         conn.commit()
         return True, "Movimentação registrada com sucesso"
@@ -1035,6 +1047,9 @@ def obter_status_caixa():
         return None
     
     caixa_id, data_abertura, saldo_inicial, usuario_abertura, observacoes = caixa_aberto
+    
+    # Converter data_abertura de UTC para Brasil
+    data_abertura = converter_utc_para_br(data_abertura)
     
     # Buscar nome do usuário
     cursor.execute("SELECT nome_completo, username FROM usuarios WHERE id = %s", (usuario_abertura,))
@@ -1115,7 +1130,7 @@ def listar_movimentacoes_caixa(limit=50):
             'categoria': row[2],
             'descricao': row[3],
             'valor': row[4],
-            'data_movimentacao': row[5],
+            'data_movimentacao': converter_utc_para_br(row[5]),
             'usuario_id': row[6],
             'venda_id': row[7],
             'conta_pagar_id': row[8],
@@ -1160,7 +1175,7 @@ def obter_movimentacoes_caixa(data):
                 'categoria': row[2],
                 'descricao': row[3],
                 'valor': row[4],
-                'data_movimentacao': row[5],
+                'data_movimentacao': converter_utc_para_br(row[5]),
                 'usuario_id': row[6],
                 'venda_id': row[7],
                 'conta_pagar_id': row[8],
@@ -1314,9 +1329,9 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
             'categoria': row[2],
             'descricao': row[3],
             'valor': row[4],
-            'data_lancamento': row[5],
-            'data_vencimento': row[6],
-            'data_pagamento': row[7],
+            'data_lancamento': converter_utc_para_br(row[5]),
+            'data_vencimento': converter_utc_para_br(row[6]),
+            'data_pagamento': converter_utc_para_br(row[7]),
             'status': row[8],
             'forma_pagamento': row[9],
             'numero_documento': row[10],
@@ -1957,9 +1972,9 @@ def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None):
         # Atualizar status da movimentação
         cursor.execute('''
             UPDATE movimentacoes 
-            SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP, produto_id = %s
+            SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = %s, produto_id = %s
             WHERE id = %s
-        ''', (usuario_id, produto_id, movimentacao_id))
+        ''', (usuario_id, agora_br(), produto_id, movimentacao_id))
 
         if local_conn:
             conn.commit()
@@ -1982,10 +1997,10 @@ def cancelar_movimentacao(movimentacao_id, usuario_id, motivo_cancelamento):
     
     cursor.execute('''
         UPDATE movimentacoes 
-        SET status = 'cancelada', usuario_aprovacao = %s, data_aprovacao = CURRENT_TIMESTAMP,
+        SET status = 'cancelada', usuario_aprovacao = %s, data_aprovacao = %s,
             motivo_rejeicao = %s
         WHERE id = %s AND status = 'pendente'
-    ''', (usuario_id, motivo_cancelamento, movimentacao_id))
+    ''', (usuario_id, agora_br(), motivo_cancelamento, movimentacao_id))
     
     conn.commit()
     conn.close()
@@ -2381,10 +2396,10 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
         
         # Insere a venda
         cursor.execute('''
-            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, data_venda)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id))
+        ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, agora_br()))
         
         venda_id = cursor.fetchone()[0]
         
@@ -2462,7 +2477,7 @@ def listar_vendas(limit=50):
             'cliente': row[1] or 'Cliente Avulso',
             'total': row[2],
             'forma_pagamento': row[3],
-            'data_venda': row[4]
+            'data_venda': converter_utc_para_br(row[4])
         })
     
     conn.close()
@@ -2526,7 +2541,7 @@ def obter_venda_por_id(venda_id):
             'forma_pagamento': venda_data[5] or 'dinheiro',
             'desconto': float(venda_data[6] or 0),
             'observacoes': venda_data[7] or '',
-            'created_at': venda_data[8],
+            'created_at': converter_utc_para_br(venda_data[8]),
             'usuario_id': venda_data[9],
             'valor_pago': float(venda_data[4]),  # Para compatibilidade, usar o total
             'troco': 0,  # Para compatibilidade 
@@ -2697,7 +2712,8 @@ def obter_vendas_do_dia():
     for row in vendas_encontradas:
         # Verificar se a data da venda realmente corresponde ao dia atual
         # row[4] é um objeto datetime do PostgreSQL, converter para string
-        data_venda = row[4].strftime('%Y-%m-%d') if row[4] else ''
+        data_venda_convertida = converter_utc_para_br(row[4])
+        data_venda = data_venda_convertida.strftime('%Y-%m-%d') if data_venda_convertida else ''
         
         if data_venda == hoje:
             venda = {
@@ -2705,7 +2721,7 @@ def obter_vendas_do_dia():
                 'cliente': row[1] or 'Cliente Avulso',
                 'total': row[2],
                 'forma_pagamento': row[3],
-                'data_venda': row[4],
+                'data_venda': data_venda_convertida,
                 'total_itens': row[5] or 0,
                 'funcionario_nome': row[6] or 'Sem funcionário',
                 'funcionario_username': row[7] or '',
@@ -2714,7 +2730,7 @@ def obter_vendas_do_dia():
             vendas.append(venda)
             total_valor += row[2]
             total_itens += row[5] or 0
-            print(f"  ✓ Venda #{row[0]}: R$ {row[2]}, Data: {row[4]}, Itens: {row[5]}, Funcionário: {row[6] or 'N/A'}")
+            print(f"  ✓ Venda #{row[0]}: R$ {row[2]}, Data: {data_venda_convertida}, Itens: {row[5]}, Funcionário: {row[6] or 'N/A'}")
         else:
             print(f"  ✗ Venda #{row[0]} ignorada - Data: {data_venda} ≠ {hoje}")
     
@@ -2736,14 +2752,16 @@ def listar_contas_pagar_hoje():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    hoje = hoje_br().strftime('%Y-%m-%d')
+    
     cursor.execute('''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.data_vencimento::date = CURRENT_DATE AND cp.status = 'pendente'
+        WHERE cp.data_vencimento::date = %s AND cp.status = 'pendente'
         ORDER BY cp.valor DESC
-    ''')
+    ''', (hoje,))
     
     contas = []
     for row in cursor.fetchall():
@@ -2751,7 +2769,7 @@ def listar_contas_pagar_hoje():
             'id': row[0],
             'descricao': row[1],
             'valor': row[2],
-            'data_vencimento': row[3],
+            'data_vencimento': converter_utc_para_br(row[3]),
             'status': row[4],
             'categoria': row[5],
             'observacoes': row[6],
@@ -2766,31 +2784,40 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    hoje = hoje_br().strftime('%Y-%m-%d')
+    
     base_query = '''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome,
-               (cp.data_vencimento::date - CURRENT_DATE) as dias_restantes,
+               (cp.data_vencimento::date - %s::date) as dias_restantes,
                cp.data_pagamento
         FROM contas_pagar cp
         LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
         WHERE cp.status = %s
     '''
     
-    params = [status]
+    params = [hoje, status]
     
     # Para contas pagas, usar data_pagamento; para pendentes, usar data_vencimento
     campo_data = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
     
     if filtro == 'hoje':
-        base_query += f" AND {campo_data}::date = CURRENT_DATE"
+        base_query += f" AND {campo_data}::date = %s"
+        params.append(hoje)
     elif filtro == 'atrasadas':
-        base_query += f" AND {campo_data}::date < CURRENT_DATE"
+        base_query += f" AND {campo_data}::date < %s"
+        params.append(hoje)
     elif filtro == 'futuras':
-        base_query += f" AND {campo_data}::date > CURRENT_DATE"
+        base_query += f" AND {campo_data}::date > %s"
+        params.append(hoje)
     elif filtro == 'proximos_7_dias':
-        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
+        proximos_7 = (datetime.now(TIMEZONE_BR) + timedelta(days=7)).strftime('%Y-%m-%d')
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
+        params.extend([hoje, proximos_7])
     elif filtro == 'proximos_30_dias':
-        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
+        proximos_30 = (datetime.now(TIMEZONE_BR) + timedelta(days=30)).strftime('%Y-%m-%d')
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
+        params.extend([hoje, proximos_30])
     elif filtro == 'personalizado' and data_inicio and data_fim:
         base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
@@ -2801,7 +2828,8 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
         base_query += " ORDER BY cp.data_pagamento DESC"
     else:
         # Ordenar: atrasadas primeiro (por data ASC), depois futuras (por data ASC)
-        base_query += " ORDER BY CASE WHEN cp.data_vencimento::date < CURRENT_DATE THEN 0 ELSE 1 END, cp.data_vencimento ASC"
+        base_query += f" ORDER BY CASE WHEN cp.data_vencimento::date < %s::date THEN 0 ELSE 1 END, cp.data_vencimento ASC"
+        params.append(hoje)
     
     cursor.execute(base_query, params)
     
@@ -2818,7 +2846,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
             'id': row[0],
             'descricao': row[1],
             'valor': row[2],
-            'data_vencimento': row[3],
+            'data_vencimento': converter_utc_para_br(row[3]),
             'status': row[4],
             'categoria': row[5],
             'observacoes': row[6],
@@ -2826,7 +2854,7 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
             'dias_restantes': dias_restantes,
             'status_visual': status_visual,
             'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}" if row[4] == 'pendente' else 'Pago',
-            'data_pagamento': row[9]
+            'data_pagamento': converter_utc_para_br(row[9])
         })
     
     conn.close()
@@ -2970,16 +2998,19 @@ def obter_conta_pagar(conta_id):
         if not row:
             return False, "Conta não encontrada"
         
+        data_vencimento_convertida = converter_utc_para_br(row[3])
+        data_pagamento_convertida = converter_utc_para_br(row[8])
+        
         conta = {
             'id': row[0],
             'descricao': row[1],
             'valor': float(row[2]),
-            'data_vencimento': row[3].strftime('%Y-%m-%d') if row[3] else None,
+            'data_vencimento': data_vencimento_convertida.strftime('%Y-%m-%d') if data_vencimento_convertida else None,
             'categoria': row[4],
             'observacoes': row[5],
             'fornecedor_id': row[6],
             'status': row[7],
-            'data_pagamento': row[8].strftime('%Y-%m-%d') if row[8] else None,
+            'data_pagamento': data_pagamento_convertida.strftime('%Y-%m-%d') if data_pagamento_convertida else None,
             'fornecedor_nome': row[9]
         }
         
@@ -3025,13 +3056,15 @@ def listar_contas_receber_hoje():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    hoje = hoje_br().strftime('%Y-%m-%d')
+    
     cursor.execute('''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE cr.data_vencimento::date = CURRENT_DATE AND cr.status = 'pendente'
+        WHERE cr.data_vencimento::date = %s AND cr.status = 'pendente'
         ORDER BY cr.valor DESC
-    ''')
+    ''', (hoje,))
     
     contas = []
     for row in cursor.fetchall():
@@ -3039,7 +3072,7 @@ def listar_contas_receber_hoje():
             'id': row[0],
             'descricao': row[1],
             'valor': row[2],
-            'data_vencimento': row[3],
+            'data_vencimento': converter_utc_para_br(row[3]),
             'status': row[4],
             'cliente': row[5]
         })
@@ -3052,30 +3085,39 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    hoje = hoje_br().strftime('%Y-%m-%d')
+    
     base_query = '''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
-               (cr.data_vencimento::date - CURRENT_DATE) as dias_restantes,
+               (cr.data_vencimento::date - %s::date) as dias_restantes,
                cr.data_recebimento
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id
         WHERE cr.status = %s
     '''
     
-    params = [status]
+    params = [hoje, status]
     
     # Para contas recebidas, usar data_recebimento; para pendentes, usar data_vencimento
     campo_data = 'cr.data_recebimento' if status == 'recebido' else 'cr.data_vencimento'
     
     if filtro == 'hoje':
-        base_query += f" AND {campo_data}::date = CURRENT_DATE"
+        base_query += f" AND {campo_data}::date = %s"
+        params.append(hoje)
     elif filtro == 'atrasadas':
-        base_query += f" AND {campo_data}::date < CURRENT_DATE"
+        base_query += f" AND {campo_data}::date < %s"
+        params.append(hoje)
     elif filtro == 'futuras':
-        base_query += f" AND {campo_data}::date > CURRENT_DATE"
+        base_query += f" AND {campo_data}::date > %s"
+        params.append(hoje)
     elif filtro == 'proximos_7_dias':
-        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')"
+        proximos_7 = (datetime.now(TIMEZONE_BR) + timedelta(days=7)).strftime('%Y-%m-%d')
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
+        params.extend([hoje, proximos_7])
     elif filtro == 'proximos_30_dias':
-        base_query += f" AND {campo_data}::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '30 days')"
+        proximos_30 = (datetime.now(TIMEZONE_BR) + timedelta(days=30)).strftime('%Y-%m-%d')
+        base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
+        params.extend([hoje, proximos_30])
     elif filtro == 'personalizado' and data_inicio and data_fim:
         base_query += f" AND {campo_data}::date BETWEEN %s AND %s"
         params.extend([data_inicio, data_fim])
@@ -3099,13 +3141,13 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
             'id': row[0],
             'descricao': row[1],
             'valor': row[2],
-            'data_vencimento': row[3],
+            'data_vencimento': converter_utc_para_br(row[3]),
             'status': row[4],
             'cliente_nome': row[5] or 'Cliente não informado',
             'dias_restantes': dias_restantes,
             'status_visual': status_visual,
             'texto_prazo': f"{abs(dias_restantes)} dias {'em atraso' if dias_restantes < 0 else ('restantes' if dias_restantes > 0 else 'vence hoje')}" if row[4] == 'pendente' else 'Recebido',
-            'data_recebimento': row[7]
+            'data_recebimento': converter_utc_para_br(row[7])
         })
     
     conn.close()
@@ -3249,15 +3291,18 @@ def obter_conta_receber(conta_id):
         if not row:
             return False, "Conta não encontrada"
         
+        data_vencimento_convertida = converter_utc_para_br(row[3])
+        data_recebimento_convertida = converter_utc_para_br(row[7])
+        
         conta = {
             'id': row[0],
             'descricao': row[1],
             'valor': float(row[2]),
-            'data_vencimento': row[3].strftime('%Y-%m-%d') if row[3] else None,
+            'data_vencimento': data_vencimento_convertida.strftime('%Y-%m-%d') if data_vencimento_convertida else None,
             'observacoes': row[4],
             'cliente_id': row[5],
             'status': row[6],
-            'data_recebimento': row[7].strftime('%Y-%m-%d') if row[7] else None,
+            'data_recebimento': data_recebimento_convertida.strftime('%Y-%m-%d') if data_recebimento_convertida else None,
             'cliente_nome': row[8]
         }
         
