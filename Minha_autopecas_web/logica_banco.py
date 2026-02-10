@@ -1521,11 +1521,12 @@ def buscar_produto(termo_busca):
             # Para cada termo, verificar se está presente em qualquer campo
             conditions.append('''(
                 nome ILIKE %s OR 
+                codigo_barras ILIKE %s OR 
                 codigo_fornecedor ILIKE %s OR
                 marca ILIKE %s OR
                 categoria ILIKE %s
             )''')
-            params.extend([f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%'])
+            params.extend([f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%'])
         
         # Juntar todas as condições com AND (todos os termos devem estar presentes)
         where_clause = ' AND '.join(conditions)

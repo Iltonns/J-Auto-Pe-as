@@ -1127,8 +1127,12 @@ def buscar_produto_route():
             produto['preco_venda'] = float(produto.pop('preco', 0) or 0)
             if 'preco_custo' in produto and produto['preco_custo'] is not None:
                 produto['preco_custo'] = float(produto['preco_custo'])
-            if 'quantidade' in produto and produto['quantidade'] is not None:
-                produto['quantidade'] = int(produto['quantidade'])
+            if 'margem_lucro' in produto and produto['margem_lucro'] is not None:
+                produto['margem_lucro'] = float(produto['margem_lucro'])
+            
+            # Garantir que quantidade esteja disponível (mapeando de estoque)
+            if 'quantidade' not in produto and 'estoque' in produto:
+                produto['quantidade'] = int(produto['estoque'])
 
         return jsonify(produtos)
     except Exception as e:
