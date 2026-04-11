@@ -75,7 +75,11 @@ from Minha_autopecas_web.logica_banco import (
     listar_nfes_agrupadas, listar_produtos_por_nfe, aprovar_nfe_completa, rejeitar_nfe_completa, cancelar_nfe_completa,
     vincular_produto_nfe,
     # Funções para autocomplete de marcas e categorias
-    obter_marcas_cadastradas, obter_categorias_cadastradas
+    obter_marcas_cadastradas, obter_categorias_cadastradas,
+    garantir_estrutura_fiscal, obter_nfe_por_venda
+)
+from Minha_autopecas_web.fiscal_service import (
+    emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
 )
 
 app = Flask(__name__)
@@ -475,6 +479,12 @@ def atualizar_configuracoes_empresa_route():
         dados = {
             'nome_empresa': request.form['nome_empresa'],
             'cnpj': request.form['cnpj'],
+            'ie': request.form.get('ie'),
+            'crt': request.form.get('crt'),
+            'cnae': request.form.get('cnae'),
+            'codigo_municipio_ibge': request.form.get('codigo_municipio_ibge'),
+            'ambiente_fiscal': request.form.get('ambiente_fiscal'),
+            'serie_nfe': request.form.get('serie_nfe'),
             'endereco': request.form['endereco'],
             'cidade': request.form['cidade'],
             'estado': request.form['estado'],
@@ -2171,6 +2181,7 @@ def api_vendas_periodo():
 def api_venda_detalhes(venda_id):
     """API para obter detalhes completos de uma venda"""
     try:
+        garantir_estrutura_fiscal()
         venda = obter_venda_por_id(venda_id)
         if not venda:
             return jsonify({'error': 'Venda não encontrada'}), 404
@@ -2215,7 +2226,8 @@ def visualizar_venda(venda_id):
             flash('Venda não encontrada!', 'error')
             return redirect(url_for('vendas'))
         config_empresa = obter_configuracoes_empresa()
-        return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa)
+        nfe = obter_nfe_por_venda(venda_id)
+        return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa, nfe=nfe)
     except Exception as e:
         flash(f'Erro ao carregar venda: {str(e)}', 'error')
         return redirect(url_for('vendas'))
@@ -2260,6 +2272,80 @@ def api_venda(venda_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
+@login_required
+def emitir_nfe_venda_route(venda_id):
+    if not verificar_permissao(current_user.id, 'vendas'):
+        mensagem = 'Acesso negado. Voce nao tem permissao para emitir NF-e.'
+        if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+            return jsonify({'sucesso': False, 'mensagem': mensagem}), 403
+        flash(mensagem, 'error')
+        return redirect(url_for('visualizar_venda', venda_id=venda_id))
+
+    try:
+        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id))
+    except Exception as e:
+        print(f"Erro ao emitir NF-e da venda {venda_id}: {e}")
+        if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+            return jsonify({'sucesso': False, 'mensagem': 'Falha interna ao emitir NF-e.'}), 500
+        flash('Falha interna ao emitir NF-e. Verifique as configuracoes fiscais e tente novamente.', 'error')
+        return redirect(url_for('visualizar_venda', venda_id=venda_id))
+
+    status_code = 200 if resultado.get('sucesso') else 400
+
+    if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+        return jsonify(resultado), status_code
+
+    if resultado.get('sucesso'):
+        flash(resultado.get('mensagem', 'NF-e emitida com sucesso.'), 'success')
+    else:
+        erros = resultado.get('erros_validacao')
+        if erros:
+            flash(' | '.join(erros), 'error')
+        else:
+            flash(resultado.get('mensagem', 'Falha ao emitir NF-e.'), 'error')
+
+    return redirect(url_for('visualizar_venda', venda_id=venda_id))
+
+
+@app.route('/api/vendas/<int:venda_id>/nfe')
+@login_required
+def api_nfe_por_venda(venda_id):
+    if not verificar_permissao(current_user.id, 'vendas'):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
+
+    try:
+        resultado = consultar_nfe_por_venda(venda_id)
+    except Exception as e:
+        print(f"Erro ao consultar NF-e da venda {venda_id}: {e}")
+        return jsonify({'sucesso': False, 'mensagem': 'Falha interna ao consultar NF-e.'}), 500
+
+    if not resultado.get('sucesso'):
+        return jsonify(resultado), 404
+    return jsonify(resultado), 200
+
+
+@app.route('/api/fiscal/nfe/webhook', methods=['POST'])
+def webhook_fiscal_nfe_route():
+    payload = request.get_json(silent=True) or {}
+    token = request.headers.get('X-NFE-WEBHOOK-TOKEN')
+    if not token:
+        auth = request.headers.get('Authorization', '')
+        if auth.lower().startswith('bearer '):
+            token = auth[7:].strip()
+
+    try:
+        resultado = processar_webhook_nfe(payload, token=token)
+    except Exception as e:
+        print(f"Erro inesperado no webhook fiscal NF-e: {e}")
+        resultado = {'sucesso': False, 'erro': 'Falha interna ao processar webhook fiscal.', 'status_code': 500}
+
+    mensagem = resultado.get('erro')
+    if not mensagem:
+        mensagem = 'Webhook processado com sucesso.' if resultado.get('sucesso') else 'Falha ao processar webhook.'
+    return jsonify({'sucesso': resultado.get('sucesso'), 'mensagem': mensagem}), resultado.get('status_code', 200)
+
 
 @app.route('/vendas/<int:venda_id>/recibo')
 def recibo_venda(venda_id):

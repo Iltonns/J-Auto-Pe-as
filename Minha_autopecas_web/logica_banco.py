@@ -21,6 +21,7 @@ if not DATABASE_URL:
 
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
+_fiscal_schema_checked = False
 
 def agora_br():
     """Retorna o datetime atual no horário de Brasília"""
@@ -435,6 +436,123 @@ def init_db():
     add_column_if_not_exists(cursor, conn, 'contas_pagar', "lancamento_financeiro_id INTEGER")
     add_column_if_not_exists(cursor, conn, 'lancamentos_financeiros', "conta_pagar_id INTEGER")
     add_column_if_not_exists(cursor, conn, 'lancamentos_financeiros', "conta_receber_id INTEGER")
+
+    # Colunas fiscais para NF-e
+    add_column_if_not_exists(cursor, conn, 'clientes', "ie TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "indicador_ie TEXT DEFAULT '9'")
+    add_column_if_not_exists(cursor, conn, 'clientes', "tipo_pessoa TEXT DEFAULT 'FISICA'")
+    add_column_if_not_exists(cursor, conn, 'clientes', "bairro TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "numero TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "complemento TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "codigo_municipio_ibge TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "estado TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "cep TEXT")
+
+    add_column_if_not_exists(cursor, conn, 'produtos', "cest TEXT")
+    add_column_if_not_exists(cursor, conn, 'produtos', "cfop TEXT DEFAULT '5102'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "origem_mercadoria TEXT DEFAULT '0'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "csosn TEXT DEFAULT '102'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "cst_icms TEXT")
+    add_column_if_not_exists(cursor, conn, 'produtos', "cst_pis TEXT DEFAULT '01'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "cst_cofins TEXT DEFAULT '01'")
+    add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_icms DECIMAL(5,2) DEFAULT 0")
+    add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_pis DECIMAL(5,2) DEFAULT 0")
+    add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_cofins DECIMAL(5,2) DEFAULT 0")
+
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "ie TEXT")
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "crt TEXT DEFAULT '1'")
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "cnae TEXT")
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "codigo_municipio_ibge TEXT")
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "ambiente_fiscal TEXT DEFAULT 'homologacao'")
+    add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "serie_nfe INTEGER DEFAULT 1")
+
+    # Tabelas fiscais de emissao NF-e
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fiscal_nfe_numeracao (
+            id SERIAL PRIMARY KEY,
+            ano INTEGER NOT NULL,
+            serie INTEGER NOT NULL DEFAULT 1,
+            ultimo_numero INTEGER NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (ano, serie)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fiscal_nfe (
+            id SERIAL PRIMARY KEY,
+            venda_id INTEGER NOT NULL UNIQUE,
+            numero INTEGER NOT NULL,
+            serie INTEGER NOT NULL DEFAULT 1,
+            modelo TEXT NOT NULL DEFAULT '55',
+            ambiente TEXT NOT NULL DEFAULT 'homologacao',
+            status TEXT NOT NULL DEFAULT 'rascunho',
+            chave_acesso TEXT,
+            protocolo_autorizacao TEXT,
+            motivo_status TEXT,
+            xml_enviado TEXT,
+            xml_autorizado TEXT,
+            danfe_url TEXT,
+            payload_json JSONB,
+            response_json JSONB,
+            emitida_por INTEGER,
+            data_emissao TIMESTAMP,
+            data_autorizacao TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+            FOREIGN KEY (emitida_por) REFERENCES usuarios (id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fiscal_nfe_itens (
+            id SERIAL PRIMARY KEY,
+            nfe_id INTEGER NOT NULL,
+            venda_item_id INTEGER,
+            produto_id INTEGER,
+            descricao TEXT NOT NULL,
+            ncm TEXT,
+            cest TEXT,
+            cfop TEXT,
+            unidade TEXT,
+            origem_mercadoria TEXT,
+            csosn TEXT,
+            cst_icms TEXT,
+            cst_pis TEXT,
+            cst_cofins TEXT,
+            aliquota_icms DECIMAL(5,2) DEFAULT 0,
+            aliquota_pis DECIMAL(5,2) DEFAULT 0,
+            aliquota_cofins DECIMAL(5,2) DEFAULT 0,
+            quantidade DECIMAL(12,4) NOT NULL,
+            valor_unitario DECIMAL(12,4) NOT NULL,
+            valor_total DECIMAL(12,4) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos (id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fiscal_nfe_eventos (
+            id SERIAL PRIMARY KEY,
+            nfe_id INTEGER NOT NULL,
+            tipo_evento TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'registrado',
+            protocolo TEXT,
+            justificativa TEXT,
+            request_json JSONB,
+            response_json JSONB,
+            usuario_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+        )
+    ''')
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_status ON fiscal_nfe(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_venda_id ON fiscal_nfe(venda_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_eventos_nfe_id ON fiscal_nfe_eventos(nfe_id)")
     
     conn.commit()
     conn.close()
@@ -2493,6 +2611,7 @@ def listar_vendas(limit=50):
 
 def obter_venda_por_id(venda_id):
     """Obtém os detalhes completos de uma venda específica"""
+    garantir_estrutura_fiscal()
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -2500,6 +2619,9 @@ def obter_venda_por_id(venda_id):
         # Buscar dados da venda
         cursor.execute('''
             SELECT v.id, v.cliente_id, c.nome as cliente_nome, c.telefone as cliente_telefone,
+                   c.email as cliente_email, c.cpf_cnpj as cliente_cpf_cnpj, c.endereco as cliente_endereco,
+                   c.ie as cliente_ie, c.indicador_ie as cliente_indicador_ie, c.tipo_pessoa as cliente_tipo_pessoa,
+                   c.cidade as cliente_cidade, c.estado as cliente_estado, c.cep as cliente_cep,
                    v.total, v.forma_pagamento, v.desconto, v.observacoes, 
                    v.data_venda as created_at, v.usuario_id,
                    u.nome_completo as vendedor_nome
@@ -2544,16 +2666,28 @@ def obter_venda_por_id(venda_id):
             'id': venda_data[0],
             'cliente_id': venda_data[1],
             'cliente_nome': venda_data[2] or 'Cliente Avulso',
+            'cliente': venda_data[2] or 'Cliente Avulso',
             'cliente_telefone': venda_data[3] or '',
-            'total': float(venda_data[4]),
-            'forma_pagamento': venda_data[5] or 'dinheiro',
-            'desconto': float(venda_data[6] or 0),
-            'observacoes': venda_data[7] or '',
-            'created_at': converter_utc_para_br(venda_data[8]),
-            'usuario_id': venda_data[9],
-            'valor_pago': float(venda_data[4]),  # Para compatibilidade, usar o total
+            'cliente_email': venda_data[4] or '',
+            'cliente_cpf_cnpj': venda_data[5] or '',
+            'cliente_endereco': venda_data[6] or '',
+            'cliente_ie': venda_data[7] or '',
+            'cliente_indicador_ie': venda_data[8] or '',
+            'cliente_tipo_pessoa': venda_data[9] or '',
+            'cliente_cidade': venda_data[10] or '',
+            'cliente_estado': venda_data[11] or '',
+            'cliente_cep': venda_data[12] or '',
+            'total': float(venda_data[13]),
+            'forma_pagamento': venda_data[14] or 'dinheiro',
+            'desconto': float(venda_data[15] or 0),
+            'observacoes': venda_data[16] or '',
+            'created_at': converter_utc_para_br(venda_data[17]),
+            'data_venda': converter_utc_para_br(venda_data[17]),
+            'usuario_id': venda_data[18],
+            'valor_pago': float(venda_data[13]),  # Para compatibilidade, usar o total
             'troco': 0,  # Para compatibilidade 
-            'vendedor_nome': venda_data[10] or 'Sistema',
+            'vendedor_nome': venda_data[19] or 'Sistema',
+            'funcionario_nome': venda_data[19] or 'Sistema',
             'itens': itens
         }
         
@@ -5512,6 +5646,7 @@ def sincronizar_lancamentos_com_contas(usuario_id):
 # FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
 def obter_configuracoes_empresa():
     """Obtém as configurações da empresa"""
+    garantir_estrutura_fiscal()
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -5527,8 +5662,9 @@ def obter_configuracoes_empresa():
             return obter_configuracoes_padrao()
         
         cursor.execute('''
-            SELECT nome_empresa, cnpj, endereco, cidade, estado, cep, 
-                   telefone, email, website, logo_path, observacoes
+            SELECT nome_empresa, cnpj, ie, crt, cnae, codigo_municipio_ibge,
+                   ambiente_fiscal, serie_nfe,
+                   endereco, cidade, estado, cep, telefone, email, website, logo_path, observacoes
             FROM configuracoes_empresa 
             ORDER BY id DESC 
             LIMIT 1
@@ -5539,15 +5675,21 @@ def obter_configuracoes_empresa():
             config = {
                 'nome_empresa': resultado[0] or 'FG AUTO PEÇAS',
                 'cnpj': resultado[1] or '',
-                'endereco': resultado[2] or 'Rua Exemplo, 123 - Centro',
-                'cidade': resultado[3] or '',
-                'estado': resultado[4] or '',
-                'cep': resultado[5] or '',
-                'telefone': resultado[6] or '(00) 0000-0000',
-                'email': resultado[7] or 'contato@fgautopecas.com.br',
-                'website': resultado[8] or '',
-                'logo_path': resultado[9] or '',
-                'observacoes': resultado[10] or ''
+                'ie': resultado[2] or '',
+                'crt': resultado[3] or '1',
+                'cnae': resultado[4] or '',
+                'codigo_municipio_ibge': resultado[5] or '',
+                'ambiente_fiscal': resultado[6] or 'homologacao',
+                'serie_nfe': resultado[7] or 1,
+                'endereco': resultado[8] or 'Rua Exemplo, 123 - Centro',
+                'cidade': resultado[9] or '',
+                'estado': resultado[10] or '',
+                'cep': resultado[11] or '',
+                'telefone': resultado[12] or '(00) 0000-0000',
+                'email': resultado[13] or 'contato@fgautopecas.com.br',
+                'website': resultado[14] or '',
+                'logo_path': resultado[15] or '',
+                'observacoes': resultado[16] or ''
             }
             print(f"Configurações da empresa carregadas: {config['nome_empresa']}")
             return config
@@ -5568,6 +5710,12 @@ def obter_configuracoes_padrao():
     return {
         'nome_empresa': 'FG AUTO PEÇAS',
         'cnpj': '',
+        'ie': '',
+        'crt': '1',
+        'cnae': '',
+        'codigo_municipio_ibge': '',
+        'ambiente_fiscal': 'homologacao',
+        'serie_nfe': 1,
         'endereco': 'Rua Exemplo, 123 - Centro',
         'cidade': '',
         'estado': '',
@@ -5581,6 +5729,7 @@ def obter_configuracoes_padrao():
 
 def atualizar_configuracoes_empresa(dados):
     """Atualiza as configurações da empresa"""
+    garantir_estrutura_fiscal()
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -5593,28 +5742,33 @@ def atualizar_configuracoes_empresa(dados):
             # Atualizar existente
             cursor.execute('''
                 UPDATE configuracoes_empresa SET
-                    nome_empresa = %s, cnpj = %s, endereco = %s, cidade = %s, 
-                    estado = %s, cep = %s, telefone = %s, email = %s, 
+                    nome_empresa = %s, cnpj = %s, ie = %s, crt = %s, cnae = %s, codigo_municipio_ibge = %s,
+                    ambiente_fiscal = %s, serie_nfe = %s,
+                    endereco = %s, cidade = %s, estado = %s, cep = %s, telefone = %s, email = %s, 
                     website = %s, observacoes = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = (SELECT id FROM configuracoes_empresa ORDER BY id DESC LIMIT 1)
             ''', (
-                dados['nome_empresa'], dados['cnpj'], dados['endereco'],
-                dados['cidade'], dados['estado'], dados['cep'],
-                dados['telefone'], dados['email'], dados['website'],
-                dados['observacoes']
+                dados.get('nome_empresa', ''), dados.get('cnpj', ''), dados.get('ie', ''), dados.get('crt', '1'),
+                dados.get('cnae', ''), dados.get('codigo_municipio_ibge', ''),
+                dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
+                dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
+                dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
+                dados.get('observacoes', '')
             ))
         else:
             # Inserir nova
             cursor.execute('''
                 INSERT INTO configuracoes_empresa (
-                    nome_empresa, cnpj, endereco, cidade, estado, cep,
-                    telefone, email, website, observacoes
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    nome_empresa, cnpj, ie, crt, cnae, codigo_municipio_ibge, ambiente_fiscal, serie_nfe,
+                    endereco, cidade, estado, cep, telefone, email, website, observacoes
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
-                dados['nome_empresa'], dados['cnpj'], dados['endereco'],
-                dados['cidade'], dados['estado'], dados['cep'],
-                dados['telefone'], dados['email'], dados['website'],
-                dados['observacoes']
+                dados.get('nome_empresa', ''), dados.get('cnpj', ''), dados.get('ie', ''), dados.get('crt', '1'),
+                dados.get('cnae', ''), dados.get('codigo_municipio_ibge', ''),
+                dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
+                dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
+                dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
+                dados.get('observacoes', '')
             ))
         
         conn.commit()
@@ -6283,6 +6437,592 @@ def adicionar_ou_atualizar_fornecedor_automatico(nome, cnpj=None, email=None, te
             'fornecedor': None,
             'mensagem': f'Erro: {str(e)}'
         }
+
+
+# =========================
+# FUNCOES FISCAIS (NF-e)
+# =========================
+def garantir_estrutura_fiscal():
+    """Garante que tabelas e colunas fiscais existam no banco."""
+    global _fiscal_schema_checked
+
+    if _fiscal_schema_checked:
+        return True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        add_column_if_not_exists(cursor, conn, 'clientes', "ie TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "indicador_ie TEXT DEFAULT '9'")
+        add_column_if_not_exists(cursor, conn, 'clientes', "tipo_pessoa TEXT DEFAULT 'FISICA'")
+        add_column_if_not_exists(cursor, conn, 'clientes', "bairro TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "numero TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "complemento TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "codigo_municipio_ibge TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "estado TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "cep TEXT")
+
+        add_column_if_not_exists(cursor, conn, 'produtos', "cest TEXT")
+        add_column_if_not_exists(cursor, conn, 'produtos', "cfop TEXT DEFAULT '5102'")
+        add_column_if_not_exists(cursor, conn, 'produtos', "origem_mercadoria TEXT DEFAULT '0'")
+        add_column_if_not_exists(cursor, conn, 'produtos', "csosn TEXT DEFAULT '102'")
+        add_column_if_not_exists(cursor, conn, 'produtos', "cst_icms TEXT")
+        add_column_if_not_exists(cursor, conn, 'produtos', "cst_pis TEXT DEFAULT '01'")
+        add_column_if_not_exists(cursor, conn, 'produtos', "cst_cofins TEXT DEFAULT '01'")
+        add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_icms DECIMAL(5,2) DEFAULT 0")
+        add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_pis DECIMAL(5,2) DEFAULT 0")
+        add_column_if_not_exists(cursor, conn, 'produtos', "aliquota_cofins DECIMAL(5,2) DEFAULT 0")
+
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "ie TEXT")
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "crt TEXT DEFAULT '1'")
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "cnae TEXT")
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "codigo_municipio_ibge TEXT")
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "ambiente_fiscal TEXT DEFAULT 'homologacao'")
+        add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "serie_nfe INTEGER DEFAULT 1")
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fiscal_nfe_numeracao (
+                id SERIAL PRIMARY KEY,
+                ano INTEGER NOT NULL,
+                serie INTEGER NOT NULL DEFAULT 1,
+                ultimo_numero INTEGER NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (ano, serie)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fiscal_nfe (
+                id SERIAL PRIMARY KEY,
+                venda_id INTEGER NOT NULL UNIQUE,
+                numero INTEGER NOT NULL,
+                serie INTEGER NOT NULL DEFAULT 1,
+                modelo TEXT NOT NULL DEFAULT '55',
+                ambiente TEXT NOT NULL DEFAULT 'homologacao',
+                status TEXT NOT NULL DEFAULT 'rascunho',
+                chave_acesso TEXT,
+                protocolo_autorizacao TEXT,
+                motivo_status TEXT,
+                xml_enviado TEXT,
+                xml_autorizado TEXT,
+                danfe_url TEXT,
+                payload_json JSONB,
+                response_json JSONB,
+                emitida_por INTEGER,
+                data_emissao TIMESTAMP,
+                data_autorizacao TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+                FOREIGN KEY (emitida_por) REFERENCES usuarios (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fiscal_nfe_itens (
+                id SERIAL PRIMARY KEY,
+                nfe_id INTEGER NOT NULL,
+                venda_item_id INTEGER,
+                produto_id INTEGER,
+                descricao TEXT NOT NULL,
+                ncm TEXT,
+                cest TEXT,
+                cfop TEXT,
+                unidade TEXT,
+                origem_mercadoria TEXT,
+                csosn TEXT,
+                cst_icms TEXT,
+                cst_pis TEXT,
+                cst_cofins TEXT,
+                aliquota_icms DECIMAL(5,2) DEFAULT 0,
+                aliquota_pis DECIMAL(5,2) DEFAULT 0,
+                aliquota_cofins DECIMAL(5,2) DEFAULT 0,
+                quantidade DECIMAL(12,4) NOT NULL,
+                valor_unitario DECIMAL(12,4) NOT NULL,
+                valor_total DECIMAL(12,4) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
+                FOREIGN KEY (produto_id) REFERENCES produtos (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fiscal_nfe_eventos (
+                id SERIAL PRIMARY KEY,
+                nfe_id INTEGER NOT NULL,
+                tipo_evento TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'registrado',
+                protocolo TEXT,
+                justificativa TEXT,
+                request_json JSONB,
+                response_json JSONB,
+                usuario_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+            )
+        ''')
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_status ON fiscal_nfe(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_venda_id ON fiscal_nfe(venda_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_eventos_nfe_id ON fiscal_nfe_eventos(nfe_id)")
+
+        conn.commit()
+        _fiscal_schema_checked = True
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao garantir estrutura fiscal: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None):
+    """
+    Reserva o proximo numero de NF-e de forma transacional.
+    Se conn/cursor forem passados, usa a mesma transacao.
+    """
+    garantir_estrutura_fiscal()
+    ano = ano or hoje_br().year
+    close_conn = False
+
+    if conn is None or cursor is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        close_conn = True
+
+    try:
+        cursor.execute(
+            '''
+            SELECT id, ultimo_numero
+            FROM fiscal_nfe_numeracao
+            WHERE ano = %s AND serie = %s
+            FOR UPDATE
+            ''',
+            (ano, serie)
+        )
+        row = cursor.fetchone()
+
+        if row:
+            numeracao_id, ultimo_numero = row
+            proximo = int(ultimo_numero) + 1
+            cursor.execute(
+                '''
+                UPDATE fiscal_nfe_numeracao
+                SET ultimo_numero = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                ''',
+                (proximo, numeracao_id)
+            )
+        else:
+            proximo = 1
+            cursor.execute(
+                '''
+                INSERT INTO fiscal_nfe_numeracao (ano, serie, ultimo_numero)
+                VALUES (%s, %s, %s)
+                ''',
+                (ano, serie, proximo)
+            )
+
+        if close_conn:
+            conn.commit()
+
+        return proximo
+    except Exception:
+        if close_conn:
+            conn.rollback()
+        raise
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
+    """Registra snapshot fiscal dos itens da venda na NF-e."""
+    cursor.execute(
+        '''
+        SELECT iv.id, iv.produto_id, p.nome, p.ncm, p.cest, p.cfop, p.unidade,
+               p.origem_mercadoria, p.csosn, p.cst_icms, p.cst_pis, p.cst_cofins,
+               p.aliquota_icms, p.aliquota_pis, p.aliquota_cofins,
+               iv.quantidade, iv.preco_unitario, iv.subtotal
+        FROM itens_venda iv
+        JOIN produtos p ON p.id = iv.produto_id
+        WHERE iv.venda_id = %s
+        ORDER BY iv.id
+        ''',
+        (venda_id,)
+    )
+    itens = cursor.fetchall()
+
+    cursor.execute("DELETE FROM fiscal_nfe_itens WHERE nfe_id = %s", (nfe_id,))
+
+    for item in itens:
+        cursor.execute(
+            '''
+            INSERT INTO fiscal_nfe_itens (
+                nfe_id, venda_item_id, produto_id, descricao, ncm, cest, cfop, unidade,
+                origem_mercadoria, csosn, cst_icms, cst_pis, cst_cofins,
+                aliquota_icms, aliquota_pis, aliquota_cofins,
+                quantidade, valor_unitario, valor_total
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s
+            )
+            ''',
+            (
+                nfe_id, item[0], item[1], item[2], item[3], item[4], item[5], item[6] or 'UN',
+                item[7], item[8], item[9], item[10], item[11],
+                item[12] or 0, item[13] or 0, item[14] or 0,
+                item[15], item[16], item[17]
+            )
+        )
+
+
+def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologacao', serie=1):
+    """Cria rascunho fiscal para uma venda e retorna os dados da NF-e."""
+    if not garantir_estrutura_fiscal():
+        return {'sucesso': False, 'erro': 'Nao foi possivel inicializar a estrutura fiscal.'}
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        cursor.execute("SELECT id FROM vendas WHERE id = %s", (venda_id,))
+        venda = cursor.fetchone()
+        if not venda:
+            return {'sucesso': False, 'erro': f'Venda {venda_id} nao encontrada.'}
+
+        cursor.execute(
+            '''
+            SELECT *
+            FROM fiscal_nfe
+            WHERE venda_id = %s
+            LIMIT 1
+            ''',
+            (venda_id,)
+        )
+        existente = cursor.fetchone()
+        if existente:
+            _registrar_snapshot_itens_nfe(cursor, existente['id'], venda_id)
+            conn.commit()
+            return {'sucesso': True, 'criada': False, 'nfe': dict(existente)}
+
+        numero_nfe = reservar_proximo_numero_nfe(serie=serie, conn=conn, cursor=cursor)
+        cursor.execute(
+            '''
+            INSERT INTO fiscal_nfe (
+                venda_id, numero, serie, ambiente, status, emitida_por, data_emissao
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            ''',
+            (venda_id, numero_nfe, serie, ambiente, 'rascunho', usuario_id, agora_br())
+        )
+        nfe = cursor.fetchone()
+        _registrar_snapshot_itens_nfe(cursor, nfe['id'], venda_id)
+        conn.commit()
+        return {'sucesso': True, 'criada': True, 'nfe': dict(nfe)}
+    except Exception as e:
+        conn.rollback()
+        return {'sucesso': False, 'erro': f'Erro ao criar rascunho NF-e: {str(e)}'}
+    finally:
+        conn.close()
+
+
+def obter_nfe_por_venda(venda_id):
+    """Retorna os dados da NF-e vinculada a venda."""
+    if not garantir_estrutura_fiscal():
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        cursor.execute(
+            '''
+            SELECT *
+            FROM fiscal_nfe
+            WHERE venda_id = %s
+            LIMIT 1
+            ''',
+            (venda_id,)
+        )
+        nfe = cursor.fetchone()
+        if not nfe:
+            return None
+        return dict(nfe)
+    except Exception as e:
+        print(f"Erro ao obter NF-e da venda {venda_id}: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def obter_nfe_por_id(nfe_id):
+    """Retorna os dados da NF-e por ID."""
+    if not garantir_estrutura_fiscal():
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s", (nfe_id,))
+        nfe = cursor.fetchone()
+        return dict(nfe) if nfe else None
+    except Exception as e:
+        print(f"Erro ao obter NF-e #{nfe_id}: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def atualizar_dados_nfe(nfe_id, **campos):
+    """Atualiza campos da fiscal_nfe dinamicamente."""
+    if not campos:
+        return True
+
+    if not garantir_estrutura_fiscal():
+        return False
+
+    campos_permitidos = {
+        'status', 'chave_acesso', 'protocolo_autorizacao', 'motivo_status',
+        'xml_enviado', 'xml_autorizado', 'danfe_url', 'payload_json',
+        'response_json', 'data_emissao', 'data_autorizacao', 'ambiente'
+    }
+
+    updates = []
+    params = []
+
+    for chave, valor in campos.items():
+        if chave not in campos_permitidos:
+            continue
+
+        if chave in ('payload_json', 'response_json') and valor is not None:
+            updates.append(f"{chave} = %s")
+            params.append(psycopg2.extras.Json(valor))
+        else:
+            updates.append(f"{chave} = %s")
+            params.append(valor)
+
+    if not updates:
+        return True
+
+    updates.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(nfe_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        query = f"UPDATE fiscal_nfe SET {', '.join(updates)} WHERE id = %s"
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao atualizar NF-e #{nfe_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def registrar_evento_nfe(nfe_id, tipo_evento, status='registrado', protocolo=None, justificativa=None,
+                         request_json=None, response_json=None, usuario_id=None):
+    """Registra um evento fiscal da NF-e."""
+    if not garantir_estrutura_fiscal():
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            INSERT INTO fiscal_nfe_eventos (
+                nfe_id, tipo_evento, status, protocolo, justificativa,
+                request_json, response_json, usuario_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''',
+            (
+                nfe_id, tipo_evento, status, protocolo, justificativa,
+                psycopg2.extras.Json(request_json) if request_json is not None else None,
+                psycopg2.extras.Json(response_json) if response_json is not None else None,
+                usuario_id
+            )
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao registrar evento da NF-e #{nfe_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def obter_itens_nfe(nfe_id):
+    """Retorna os itens fiscais de uma NF-e."""
+    if not garantir_estrutura_fiscal():
+        return []
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor.execute(
+            '''
+            SELECT *
+            FROM fiscal_nfe_itens
+            WHERE nfe_id = %s
+            ORDER BY id
+            ''',
+            (nfe_id,)
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"Erro ao obter itens da NF-e #{nfe_id}: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def obter_dados_venda_para_nfe(venda_id):
+    """Carrega dados fiscais completos da venda, emitente, destinatario e itens."""
+    if not garantir_estrutura_fiscal():
+        return {'sucesso': False, 'erro': 'Estrutura fiscal indisponivel.'}
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        cursor.execute(
+            '''
+            SELECT
+                v.id, v.cliente_id, v.total, v.forma_pagamento, v.desconto, v.observacoes,
+                v.data_venda, v.usuario_id,
+                c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.email AS cliente_email,
+                c.cpf_cnpj AS cliente_cpf_cnpj, c.ie AS cliente_ie, c.indicador_ie AS cliente_indicador_ie,
+                c.tipo_pessoa AS cliente_tipo_pessoa,
+                c.endereco AS cliente_endereco, c.bairro AS cliente_bairro, c.numero AS cliente_numero,
+                c.complemento AS cliente_complemento, c.cidade AS cliente_cidade, c.estado AS cliente_estado,
+                c.cep AS cliente_cep, c.codigo_municipio_ibge AS cliente_codigo_municipio_ibge
+            FROM vendas v
+            LEFT JOIN clientes c ON c.id = v.cliente_id
+            WHERE v.id = %s
+            ''',
+            (venda_id,)
+        )
+        venda = cursor.fetchone()
+        if not venda:
+            return {'sucesso': False, 'erro': f'Venda {venda_id} nao encontrada.'}
+
+        cursor.execute(
+            '''
+            SELECT
+                nome_empresa, cnpj, ie, crt, cnae, endereco, cidade, estado, cep, telefone, email,
+                codigo_municipio_ibge, ambiente_fiscal, serie_nfe
+            FROM configuracoes_empresa
+            ORDER BY id DESC
+            LIMIT 1
+            '''
+        )
+        empresa = cursor.fetchone()
+        if not empresa:
+            return {'sucesso': False, 'erro': 'Configuracoes da empresa nao encontradas.'}
+
+        cursor.execute(
+            '''
+            SELECT
+                iv.id AS venda_item_id, iv.produto_id, iv.quantidade, iv.preco_unitario, iv.subtotal,
+                p.nome AS produto_nome, p.ncm, p.cest, p.cfop, p.unidade,
+                p.origem_mercadoria, p.csosn, p.cst_icms, p.cst_pis, p.cst_cofins,
+                p.aliquota_icms, p.aliquota_pis, p.aliquota_cofins
+            FROM itens_venda iv
+            JOIN produtos p ON p.id = iv.produto_id
+            WHERE iv.venda_id = %s
+            ORDER BY iv.id
+            ''',
+            (venda_id,)
+        )
+        itens = cursor.fetchall()
+
+        return {
+            'sucesso': True,
+            'venda': dict(venda),
+            'empresa': dict(empresa),
+            'itens': [dict(item) for item in itens]
+        }
+    except Exception as e:
+        return {'sucesso': False, 'erro': f'Erro ao montar dados da NF-e: {str(e)}'}
+    finally:
+        conn.close()
+
+
+def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=None):
+    """
+    Atualiza NF-e por webhook de provedor externo.
+    Permite buscar por nfe_id ou venda_id.
+    """
+    if not garantir_estrutura_fiscal():
+        return {'sucesso': False, 'erro': 'Estrutura fiscal indisponivel.'}
+
+    if not nfe_id and not venda_id:
+        return {'sucesso': False, 'erro': 'Informe nfe_id ou venda_id.'}
+
+    nfe = None
+    if nfe_id:
+        nfe = obter_nfe_por_id(nfe_id)
+    elif venda_id:
+        nfe = obter_nfe_por_venda(venda_id)
+
+    if not nfe:
+        return {'sucesso': False, 'erro': 'NF-e nao encontrada.'}
+
+    campos = {'response_json': payload or {}}
+    if status:
+        campos['status'] = status
+
+    chave = None
+    protocolo = None
+    motivo = None
+    danfe_url = None
+    xml = None
+
+    if payload:
+        chave = payload.get('chave_acesso') or payload.get('chave') or payload.get('access_key')
+        protocolo = payload.get('protocolo') or payload.get('protocolo_autorizacao') or payload.get('protocol')
+        motivo = payload.get('motivo') or payload.get('mensagem') or payload.get('status_motivo')
+        danfe_url = payload.get('danfe_url') or payload.get('url_danfe')
+        xml = payload.get('xml') or payload.get('xml_autorizado')
+
+    if chave:
+        campos['chave_acesso'] = chave
+    if protocolo:
+        campos['protocolo_autorizacao'] = protocolo
+    if motivo:
+        campos['motivo_status'] = motivo
+    if danfe_url:
+        campos['danfe_url'] = danfe_url
+    if xml:
+        campos['xml_autorizado'] = xml
+    if status == 'autorizada':
+        campos['data_autorizacao'] = agora_br()
+
+    sucesso = atualizar_dados_nfe(nfe['id'], **campos)
+    if not sucesso:
+        return {'sucesso': False, 'erro': 'Falha ao atualizar dados da NF-e.'}
+
+    registrar_evento_nfe(
+        nfe['id'],
+        tipo_evento='webhook_retorno',
+        status=status or 'processado',
+        protocolo=protocolo,
+        justificativa=motivo,
+        response_json=payload or {}
+    )
+
+    return {'sucesso': True, 'nfe_id': nfe['id']}
 
 
 if __name__ == "__main__":

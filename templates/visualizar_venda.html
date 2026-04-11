@@ -214,6 +214,42 @@
         border-color: #f57c00;
         color: white;
     }
+
+    .btn-nfe {
+        background: #1565c0;
+        border-color: #1565c0;
+        color: white;
+    }
+
+    .btn-nfe:hover {
+        background: #0d47a1;
+        border-color: #0d47a1;
+        color: white;
+    }
+
+    .status-nfe {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-nfe-autorizada {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .status-nfe-rejeitada {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .status-nfe-processando, .status-nfe-enviada {
+        background: #fff8e1;
+        color: #ef6c00;
+    }
     
     .btn-deletar {
         background: #f44336;
@@ -441,8 +477,55 @@
                 </div>
 
                 <!-- AÇÕES -->
+                <div class="info-card mt-3">
+                    <div class="info-card-header">
+                        <i class="fas fa-file-invoice-dollar"></i> Situação Fiscal (NF-e)
+                    </div>
+                    <div class="info-card-body">
+                        {% if nfe %}
+                        <div class="info-item">
+                            <div class="info-label">Número/Série</div>
+                            <div class="info-value">Nº {{ nfe.numero }}/{{ nfe.serie }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Status</div>
+                            <div class="info-value">
+                                <span class="status-nfe status-nfe-{{ nfe.status|lower }}">
+                                    {{ nfe.status|replace('_', ' ') }}
+                                </span>
+                            </div>
+                        </div>
+                        {% if nfe.chave_acesso %}
+                        <div class="info-item">
+                            <div class="info-label">Chave</div>
+                            <div class="info-value" style="font-size: 0.75rem;">{{ nfe.chave_acesso }}</div>
+                        </div>
+                        {% endif %}
+                        {% if nfe.protocolo_autorizacao %}
+                        <div class="info-item">
+                            <div class="info-label">Protocolo</div>
+                            <div class="info-value">{{ nfe.protocolo_autorizacao }}</div>
+                        </div>
+                        {% endif %}
+                        {% if nfe.motivo_status %}
+                        <div class="info-item">
+                            <div class="info-label">Motivo</div>
+                            <div class="info-value" style="font-size: 0.85rem;">{{ nfe.motivo_status }}</div>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <p class="mb-0 text-muted">NF-e ainda não emitida para esta venda.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
                 <div class="mt-4">
                     <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-acao btn-nfe" onclick="emitirNfe({{ venda.id }})">
+                            <i class="fas fa-receipt"></i>
+                            {% if nfe and nfe.status == 'autorizada' %}Reemitir NF-e{% else %}Emitir NF-e{% endif %}
+                        </button>
+
                         <button type="button" class="btn btn-acao btn-imprimir" onclick="imprimirVenda()">
                             <i class="fas fa-print"></i> Imprimir Recibo
                         </button>
@@ -520,6 +603,38 @@
 
 {% block extra_js %}
 <script>
+function emitirNfe(vendaId) {
+    if (!confirm('Deseja iniciar a emissão de NF-e desta venda?')) {
+        return;
+    }
+
+    fetch(`/vendas/${vendaId}/nfe/emitir?ajax=1`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem || 'NF-e processada com sucesso.');
+            window.location.reload();
+            return;
+        }
+
+        if (data.erros_validacao && data.erros_validacao.length) {
+            alert('Falha de validação fiscal:\\n- ' + data.erros_validacao.join('\\n- '));
+            return;
+        }
+
+        alert(data.mensagem || 'Falha ao emitir NF-e.');
+    })
+    .catch(error => {
+        console.error('Erro ao emitir NF-e:', error);
+        alert('Erro ao emitir NF-e. Tente novamente.');
+    });
+}
+
 // Função para imprimir a venda
 function imprimirVenda() {
     window.open('{{ url_for("recibo_venda", venda_id=venda.id) }}', '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
