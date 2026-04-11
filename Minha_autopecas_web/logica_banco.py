@@ -2610,95 +2610,130 @@ def listar_vendas(limit=50):
     return vendas
 
 def obter_venda_por_id(venda_id):
-    """Obtém os detalhes completos de uma venda específica"""
-    garantir_estrutura_fiscal()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
+    """Obtem os detalhes completos de uma venda especifica"""
     try:
-        # Buscar dados da venda
-        cursor.execute('''
-            SELECT v.id, v.cliente_id, c.nome as cliente_nome, c.telefone as cliente_telefone,
-                   c.email as cliente_email, c.cpf_cnpj as cliente_cpf_cnpj, c.endereco as cliente_endereco,
-                   c.ie as cliente_ie, c.indicador_ie as cliente_indicador_ie, c.tipo_pessoa as cliente_tipo_pessoa,
-                   c.cidade as cliente_cidade, c.estado as cliente_estado, c.cep as cliente_cep,
-                   v.total, v.forma_pagamento, v.desconto, v.observacoes, 
-                   v.data_venda as created_at, v.usuario_id,
-                   u.nome_completo as vendedor_nome
+        garantir_estrutura_fiscal()
+    except Exception as e:
+        # Nao bloqueia a visualizacao da venda caso a estrutura fiscal esteja inconsistente.
+        print(f"Aviso ao garantir estrutura fiscal para venda {venda_id}: {e}")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        # Consulta robusta: usa to_jsonb para tolerar ausencia de colunas fiscais legadas.
+        cursor.execute(
+            '''
+            SELECT
+                v.id,
+                v.cliente_id,
+                COALESCE(to_jsonb(c)->>'nome', 'Cliente Avulso') AS cliente_nome,
+                COALESCE(to_jsonb(c)->>'telefone', '') AS cliente_telefone,
+                COALESCE(to_jsonb(c)->>'email', '') AS cliente_email,
+                COALESCE(to_jsonb(c)->>'cpf_cnpj', '') AS cliente_cpf_cnpj,
+                COALESCE(to_jsonb(c)->>'endereco', '') AS cliente_endereco,
+                COALESCE(to_jsonb(c)->>'ie', '') AS cliente_ie,
+                COALESCE(to_jsonb(c)->>'indicador_ie', '') AS cliente_indicador_ie,
+                COALESCE(to_jsonb(c)->>'tipo_pessoa', '') AS cliente_tipo_pessoa,
+                COALESCE(to_jsonb(c)->>'cidade', '') AS cliente_cidade,
+                COALESCE(to_jsonb(c)->>'estado', '') AS cliente_estado,
+                COALESCE(to_jsonb(c)->>'cep', '') AS cliente_cep,
+                COALESCE(to_jsonb(c)->>'bairro', '') AS cliente_bairro,
+                COALESCE(to_jsonb(c)->>'numero', '') AS cliente_numero,
+                COALESCE(to_jsonb(c)->>'complemento', '') AS cliente_complemento,
+                COALESCE(to_jsonb(c)->>'codigo_municipio_ibge', '') AS cliente_codigo_municipio_ibge,
+                v.total,
+                v.forma_pagamento,
+                v.desconto,
+                v.observacoes,
+                v.data_venda AS created_at,
+                v.usuario_id,
+                COALESCE(u.nome_completo, 'Sistema') AS vendedor_nome
             FROM vendas v
             LEFT JOIN clientes c ON v.cliente_id = c.id
             LEFT JOIN usuarios u ON v.usuario_id = u.id
             WHERE v.id = %s
-        ''', (venda_id,))
-        
+            ''',
+            (venda_id,),
+        )
+
         venda_data = cursor.fetchone()
         if not venda_data:
-            print(f"Venda {venda_id} não encontrada")
+            print(f"Venda {venda_id} nao encontrada")
             return None
-        
-        print(f"Dados da venda {venda_id}: {venda_data}")
-        
+
         # Buscar itens da venda
-        cursor.execute('''
-            SELECT iv.produto_id, p.nome as produto_nome, p.codigo_fornecedor, 
-                   p.codigo_barras, iv.quantidade, iv.preco_unitario, iv.subtotal
+        cursor.execute(
+            '''
+            SELECT
+                iv.produto_id,
+                COALESCE(p.nome, 'Produto removido') AS produto_nome,
+                COALESCE(p.codigo_fornecedor, '') AS codigo_fornecedor,
+                COALESCE(p.codigo_barras, '') AS codigo_barras,
+                iv.quantidade,
+                iv.preco_unitario,
+                iv.subtotal
             FROM itens_venda iv
-            JOIN produtos p ON iv.produto_id = p.id
+            LEFT JOIN produtos p ON iv.produto_id = p.id
             WHERE iv.venda_id = %s
-        ''', (venda_id,))
-        
+            ORDER BY iv.id
+            ''',
+            (venda_id,),
+        )
+
         itens = []
         for item_row in cursor.fetchall():
             itens.append({
-                'produto_id': item_row[0],
-                'produto_nome': item_row[1],
-                'codigo_fornecedor': item_row[2] or '',
-                'codigo_barras': item_row[3] or '',
-                'quantidade': item_row[4],
-                'preco_unitario': float(item_row[5]),
-                'subtotal': float(item_row[6])
+                'produto_id': item_row['produto_id'],
+                'produto_nome': item_row['produto_nome'],
+                'codigo_fornecedor': item_row['codigo_fornecedor'],
+                'codigo_barras': item_row['codigo_barras'],
+                'quantidade': item_row['quantidade'],
+                'preco_unitario': float(item_row['preco_unitario']),
+                'subtotal': float(item_row['subtotal']),
             })
-        
-        print(f"Itens da venda {venda_id}: {len(itens)} itens")
-        
+
         # Montar resultado
         venda = {
-            'id': venda_data[0],
-            'cliente_id': venda_data[1],
-            'cliente_nome': venda_data[2] or 'Cliente Avulso',
-            'cliente': venda_data[2] or 'Cliente Avulso',
-            'cliente_telefone': venda_data[3] or '',
-            'cliente_email': venda_data[4] or '',
-            'cliente_cpf_cnpj': venda_data[5] or '',
-            'cliente_endereco': venda_data[6] or '',
-            'cliente_ie': venda_data[7] or '',
-            'cliente_indicador_ie': venda_data[8] or '',
-            'cliente_tipo_pessoa': venda_data[9] or '',
-            'cliente_cidade': venda_data[10] or '',
-            'cliente_estado': venda_data[11] or '',
-            'cliente_cep': venda_data[12] or '',
-            'total': float(venda_data[13]),
-            'forma_pagamento': venda_data[14] or 'dinheiro',
-            'desconto': float(venda_data[15] or 0),
-            'observacoes': venda_data[16] or '',
-            'created_at': converter_utc_para_br(venda_data[17]),
-            'data_venda': converter_utc_para_br(venda_data[17]),
-            'usuario_id': venda_data[18],
-            'valor_pago': float(venda_data[13]),  # Para compatibilidade, usar o total
-            'troco': 0,  # Para compatibilidade 
-            'vendedor_nome': venda_data[19] or 'Sistema',
-            'funcionario_nome': venda_data[19] or 'Sistema',
-            'itens': itens
+            'id': venda_data['id'],
+            'cliente_id': venda_data['cliente_id'],
+            'cliente_nome': venda_data['cliente_nome'] or 'Cliente Avulso',
+            'cliente': venda_data['cliente_nome'] or 'Cliente Avulso',
+            'cliente_telefone': venda_data['cliente_telefone'] or '',
+            'cliente_email': venda_data['cliente_email'] or '',
+            'cliente_cpf_cnpj': venda_data['cliente_cpf_cnpj'] or '',
+            'cliente_endereco': venda_data['cliente_endereco'] or '',
+            'cliente_ie': venda_data['cliente_ie'] or '',
+            'cliente_indicador_ie': venda_data['cliente_indicador_ie'] or '',
+            'cliente_tipo_pessoa': venda_data['cliente_tipo_pessoa'] or '',
+            'cliente_cidade': venda_data['cliente_cidade'] or '',
+            'cliente_estado': venda_data['cliente_estado'] or '',
+            'cliente_cep': venda_data['cliente_cep'] or '',
+            'cliente_bairro': venda_data['cliente_bairro'] or '',
+            'cliente_numero': venda_data['cliente_numero'] or '',
+            'cliente_complemento': venda_data['cliente_complemento'] or '',
+            'cliente_codigo_municipio_ibge': venda_data['cliente_codigo_municipio_ibge'] or '',
+            'total': float(venda_data['total']),
+            'forma_pagamento': venda_data['forma_pagamento'] or 'dinheiro',
+            'desconto': float(venda_data['desconto'] or 0),
+            'observacoes': venda_data['observacoes'] or '',
+            'created_at': converter_utc_para_br(venda_data['created_at']),
+            'data_venda': converter_utc_para_br(venda_data['created_at']),
+            'usuario_id': venda_data['usuario_id'],
+            'valor_pago': float(venda_data['total']),  # Para compatibilidade, usar o total
+            'troco': 0,  # Para compatibilidade
+            'vendedor_nome': venda_data['vendedor_nome'] or 'Sistema',
+            'funcionario_nome': venda_data['vendedor_nome'] or 'Sistema',
+            'itens': itens,
         }
-        
-        print(f"Venda {venda_id} processada com sucesso: {venda['total']} reais, {len(venda['itens'])} itens")
+
         return venda
-        
+
     except Exception as e:
         print(f"Erro ao buscar venda {venda_id}: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        raise
     finally:
         conn.close()
 
@@ -6901,12 +6936,21 @@ def obter_dados_venda_para_nfe(venda_id):
             SELECT
                 v.id, v.cliente_id, v.total, v.forma_pagamento, v.desconto, v.observacoes,
                 v.data_venda, v.usuario_id,
-                c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.email AS cliente_email,
-                c.cpf_cnpj AS cliente_cpf_cnpj, c.ie AS cliente_ie, c.indicador_ie AS cliente_indicador_ie,
-                c.tipo_pessoa AS cliente_tipo_pessoa,
-                c.endereco AS cliente_endereco, c.bairro AS cliente_bairro, c.numero AS cliente_numero,
-                c.complemento AS cliente_complemento, c.cidade AS cliente_cidade, c.estado AS cliente_estado,
-                c.cep AS cliente_cep, c.codigo_municipio_ibge AS cliente_codigo_municipio_ibge
+                COALESCE(to_jsonb(c)->>'nome', 'Cliente Avulso') AS cliente_nome,
+                COALESCE(to_jsonb(c)->>'telefone', '') AS cliente_telefone,
+                COALESCE(to_jsonb(c)->>'email', '') AS cliente_email,
+                COALESCE(to_jsonb(c)->>'cpf_cnpj', '') AS cliente_cpf_cnpj,
+                COALESCE(to_jsonb(c)->>'ie', '') AS cliente_ie,
+                COALESCE(to_jsonb(c)->>'indicador_ie', '') AS cliente_indicador_ie,
+                COALESCE(to_jsonb(c)->>'tipo_pessoa', '') AS cliente_tipo_pessoa,
+                COALESCE(to_jsonb(c)->>'endereco', '') AS cliente_endereco,
+                COALESCE(to_jsonb(c)->>'bairro', '') AS cliente_bairro,
+                COALESCE(to_jsonb(c)->>'numero', '') AS cliente_numero,
+                COALESCE(to_jsonb(c)->>'complemento', '') AS cliente_complemento,
+                COALESCE(to_jsonb(c)->>'cidade', '') AS cliente_cidade,
+                COALESCE(to_jsonb(c)->>'estado', '') AS cliente_estado,
+                COALESCE(to_jsonb(c)->>'cep', '') AS cliente_cep,
+                COALESCE(to_jsonb(c)->>'codigo_municipio_ibge', '') AS cliente_codigo_municipio_ibge
             FROM vendas v
             LEFT JOIN clientes c ON c.id = v.cliente_id
             WHERE v.id = %s
@@ -6920,10 +6964,26 @@ def obter_dados_venda_para_nfe(venda_id):
         cursor.execute(
             '''
             SELECT
-                nome_empresa, cnpj, ie, crt, cnae, endereco, cidade, estado, cep, telefone, email,
-                codigo_municipio_ibge, ambiente_fiscal, serie_nfe
-            FROM configuracoes_empresa
-            ORDER BY id DESC
+                COALESCE(to_jsonb(cfg)->>'nome_empresa', '') AS nome_empresa,
+                COALESCE(to_jsonb(cfg)->>'cnpj', '') AS cnpj,
+                COALESCE(to_jsonb(cfg)->>'ie', '') AS ie,
+                COALESCE(to_jsonb(cfg)->>'crt', '1') AS crt,
+                COALESCE(to_jsonb(cfg)->>'cnae', '') AS cnae,
+                COALESCE(to_jsonb(cfg)->>'endereco', '') AS endereco,
+                COALESCE(to_jsonb(cfg)->>'cidade', '') AS cidade,
+                COALESCE(to_jsonb(cfg)->>'estado', '') AS estado,
+                COALESCE(to_jsonb(cfg)->>'cep', '') AS cep,
+                COALESCE(to_jsonb(cfg)->>'telefone', '') AS telefone,
+                COALESCE(to_jsonb(cfg)->>'email', '') AS email,
+                COALESCE(to_jsonb(cfg)->>'codigo_municipio_ibge', '') AS codigo_municipio_ibge,
+                COALESCE(to_jsonb(cfg)->>'ambiente_fiscal', 'homologacao') AS ambiente_fiscal,
+                CASE
+                    WHEN COALESCE(to_jsonb(cfg)->>'serie_nfe', '') ~ '^[0-9]+$'
+                    THEN (to_jsonb(cfg)->>'serie_nfe')::INTEGER
+                    ELSE 1
+                END AS serie_nfe
+            FROM configuracoes_empresa cfg
+            ORDER BY cfg.id DESC
             LIMIT 1
             '''
         )
@@ -6935,11 +6995,21 @@ def obter_dados_venda_para_nfe(venda_id):
             '''
             SELECT
                 iv.id AS venda_item_id, iv.produto_id, iv.quantidade, iv.preco_unitario, iv.subtotal,
-                p.nome AS produto_nome, p.ncm, p.cest, p.cfop, p.unidade,
-                p.origem_mercadoria, p.csosn, p.cst_icms, p.cst_pis, p.cst_cofins,
-                p.aliquota_icms, p.aliquota_pis, p.aliquota_cofins
+                COALESCE(p.nome, 'Produto removido') AS produto_nome,
+                COALESCE(to_jsonb(p)->>'ncm', '') AS ncm,
+                COALESCE(to_jsonb(p)->>'cest', '') AS cest,
+                COALESCE(to_jsonb(p)->>'cfop', '') AS cfop,
+                COALESCE(to_jsonb(p)->>'unidade', '') AS unidade,
+                COALESCE(to_jsonb(p)->>'origem_mercadoria', '') AS origem_mercadoria,
+                COALESCE(to_jsonb(p)->>'csosn', '') AS csosn,
+                COALESCE(to_jsonb(p)->>'cst_icms', '') AS cst_icms,
+                COALESCE(to_jsonb(p)->>'cst_pis', '') AS cst_pis,
+                COALESCE(to_jsonb(p)->>'cst_cofins', '') AS cst_cofins,
+                COALESCE(to_jsonb(p)->>'aliquota_icms', '0')::DECIMAL AS aliquota_icms,
+                COALESCE(to_jsonb(p)->>'aliquota_pis', '0')::DECIMAL AS aliquota_pis,
+                COALESCE(to_jsonb(p)->>'aliquota_cofins', '0')::DECIMAL AS aliquota_cofins
             FROM itens_venda iv
-            JOIN produtos p ON p.id = iv.produto_id
+            LEFT JOIN produtos p ON p.id = iv.produto_id
             WHERE iv.venda_id = %s
             ORDER BY iv.id
             ''',
