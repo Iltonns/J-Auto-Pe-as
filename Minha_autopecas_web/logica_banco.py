@@ -145,6 +145,18 @@ def init_db():
     ''')
     conn.commit()  # Commit da tabela de clientes
     
+    # Adicionar colunas para dados de NF-e
+    add_column_if_not_exists(cursor, conn, 'clientes', "tipo_pessoa VARCHAR(1) DEFAULT 'F'")
+    add_column_if_not_exists(cursor, conn, 'clientes', "razao_social TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "inscricao_estadual TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "rua TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "numero TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "complemento TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "bairro TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "cidade TEXT")
+    add_column_if_not_exists(cursor, conn, 'clientes', "estado VARCHAR(2)")
+    add_column_if_not_exists(cursor, conn, 'clientes', "cep TEXT")
+
     # Tabela de produtos
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
@@ -1478,7 +1490,8 @@ def listar_clientes():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, nome, telefone, email, cpf_cnpj, endereco
+        SELECT id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep
         FROM clientes
         ORDER BY nome
     ''')
@@ -1491,38 +1504,61 @@ def listar_clientes():
             'telefone': row[2],
             'email': row[3],
             'cpf_cnpj': row[4],
-            'endereco': row[5]
+            'endereco': row[5],
+            'tipo_pessoa': row[6],
+            'razao_social': row[7],
+            'inscricao_estadual': row[8],
+            'rua': row[9],
+            'numero': row[10],
+            'complemento': row[11],
+            'bairro': row[12],
+            'cidade': row[13],
+            'estado': row[14],
+            'cep': row[15]
         })
     
     conn.close()
     return clientes
 
-def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=None):
+def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=None, 
+                     tipo_pessoa='F', razao_social=None, inscricao_estadual=None, 
+                     rua=None, numero=None, complemento=None, bairro=None, 
+                     cidade=None, estado=None, cep=None):
     """Adiciona um novo cliente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
-        INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                             razao_social, inscricao_estadual, rua, numero, complemento, 
+                             bairro, cidade, estado, cep)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
-    ''', (nome, telefone, email, cpf_cnpj, endereco))
+    ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+           inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep))
     
     cliente_id = cursor.fetchone()[0]
     conn.commit()
     conn.close()
     return cliente_id
 
-def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=None):
+def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=None, 
+                   tipo_pessoa='F', razao_social=None, inscricao_estadual=None, 
+                   rua=None, numero=None, complemento=None, bairro=None, 
+                   cidade=None, estado=None, cep=None):
     """Edita um cliente existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
         UPDATE clientes 
-        SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s
+        SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s, 
+            tipo_pessoa = %s, razao_social = %s, inscricao_estadual = %s, 
+            rua = %s, numero = %s, complemento = %s, bairro = %s, 
+            cidade = %s, estado = %s, cep = %s
         WHERE id = %s
-    ''', (nome, telefone, email, cpf_cnpj, endereco, id))
+    ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+           inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, id))
     
     conn.commit()
     conn.close()

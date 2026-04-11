@@ -42,7 +42,7 @@
                                 <td>{{ cliente.cpf_cnpj or '-' }}</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="editarCliente({{ cliente.id }}, '{{ cliente.nome }}', '{{ cliente.telefone or '' }}', '{{ cliente.email or '' }}', '{{ cliente.cpf_cnpj or '' }}', '{{ cliente.endereco or '' }}')"
+                                            onclick="editarCliente({{ cliente.id }}, '{{ cliente.nome }}', '{{ cliente.telefone or '' }}', '{{ cliente.email or '' }}', '{{ cliente.cpf_cnpj or '' }}', '{{ cliente.endereco or '' }}', '{{ cliente.tipo_pessoa or 'F' }}', '{{ cliente.razao_social or '' }}', '{{ cliente.inscricao_estadual or '' }}', '{{ cliente.rua or '' }}', '{{ cliente.numero or '' }}', '{{ cliente.complemento or '' }}', '{{ cliente.bairro or '' }}', '{{ cliente.cidade or '' }}', '{{ cliente.estado or '' }}', '{{ cliente.cep or '' }}')"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarCliente">
                                         <i class="fas fa-edit"></i>
@@ -81,39 +81,151 @@
             </div>
             <form method="POST" action="{{ url_for('adicionar_cliente') }}">
                 <div class="modal-body">
+                    <!-- SEÇÃO DE DADOS BÁSICOS -->
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="fas fa-info-circle"></i> <strong>Dados Básicos do Cliente</strong>
+                    </div>
                     <div class="row">
                         <div class="col-md-8">
                             <div class="mb-3">
-                                <label for="nome" class="form-label">Nome *</label>
+                                <label for="nome" class="form-label">Nome/Razão Social *</label>
                                 <input type="text" class="form-control" id="nome" name="nome" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="telefone" class="form-label">Telefone</label>
-                                <input type="text" class="form-control" id="telefone" name="telefone" placeholder="(11) 99999-9999">
+                                <label for="tipo_pessoa" class="form-label">Tipo de Pessoa *</label>
+                                <select class="form-select" id="tipo_pessoa" name="tipo_pessoa" required onchange="toggleRazaoSocial()">
+                                    <option value="F">Pessoa Física</option>
+                                    <option value="J">Pessoa Jurídica</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="razao-social-row" style="display: none;">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="razao_social" class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" id="razao_social" name="razao_social" placeholder="Nome corporativo">
                             </div>
                         </div>
                     </div>
                     
                     <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cpf_cnpj" class="form-label">CPF/CNPJ *</label>
+                                <input type="text" class="form-control" id="cpf_cnpj" name="cpf_cnpj" placeholder="000.000.000-00" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" id="inscricao_estadual" name="inscricao_estadual" placeholder="IE">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="telefone" class="form-label">Telefone</label>
+                                <input type="text" class="form-control" id="telefone" name="telefone" placeholder="(11) 99999-9999">
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
                                 <input type="email" class="form-control" id="email" name="email" placeholder="cliente@email.com">
                             </div>
                         </div>
-                        <div class="col-md-6">
+                    </div>
+                    
+                    <!-- SEÇÃO DE ENDEREÇO PARA NF-e -->
+                    <hr>
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="fas fa-map-marker-alt"></i> <strong>Endereço para NF-e</strong>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
                             <div class="mb-3">
-                                <label for="cpf_cnpj" class="form-label">CPF/CNPJ</label>
-                                <input type="text" class="form-control" id="cpf_cnpj" name="cpf_cnpj" placeholder="000.000.000-00">
+                                <label for="rua" class="form-label">Rua</label>
+                                <input type="text" class="form-control" id="rua" name="rua" placeholder="Nome da rua">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="numero" class="form-label">Número</label>
+                                <input type="text" class="form-control" id="numero" name="numero" placeholder="Nº">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="cep" class="form-label">CEP</label>
+                                <input type="text" class="form-control" id="cep" name="cep" placeholder="00000-000">
                             </div>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="endereco" class="form-label">Endereço</label>
-                        <textarea class="form-control" id="endereco" name="endereco" rows="3" placeholder="Rua, número, bairro, cidade"></textarea>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="complemento" class="form-label">Complemento</label>
+                                <input type="text" class="form-control" id="complemento" name="complemento" placeholder="Apto., sala, etc.">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="bairro" class="form-label">Bairro</label>
+                                <input type="text" class="form-control" id="bairro" name="bairro" placeholder="Bairro">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="cidade" class="form-label">Cidade</label>
+                                <input type="text" class="form-control" id="cidade" name="cidade" placeholder="Cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="estado" class="form-label">Estado (UF)</label>
+                                <select class="form-select" id="estado" name="estado">
+                                    <option value="">Selecione</option>
+                                    <option value="AC">Acre</option>
+                                    <option value="AL">Alagoas</option>
+                                    <option value="AP">Amapá</option>
+                                    <option value="AM">Amazonas</option>
+                                    <option value="BA">Bahia</option>
+                                    <option value="CE">Ceará</option>
+                                    <option value="DF">Distrito Federal</option>
+                                    <option value="ES">Espírito Santo</option>
+                                    <option value="GO">Goiás</option>
+                                    <option value="MA">Maranhão</option>
+                                    <option value="MT">Mato Grosso</option>
+                                    <option value="MS">Mato Grosso do Sul</option>
+                                    <option value="MG">Minas Gerais</option>
+                                    <option value="PA">Pará</option>
+                                    <option value="PB">Paraíba</option>
+                                    <option value="PR">Paraná</option>
+                                    <option value="PE">Pernambuco</option>
+                                    <option value="PI">Piauí</option>
+                                    <option value="RJ">Rio de Janeiro</option>
+                                    <option value="RN">Rio Grande do Norte</option>
+                                    <option value="RS">Rio Grande do Sul</option>
+                                    <option value="RO">Rondônia</option>
+                                    <option value="RR">Roraima</option>
+                                    <option value="SC">Santa Catarina</option>
+                                    <option value="SP">São Paulo</option>
+                                    <option value="SE">Sergipe</option>
+                                    <option value="TO">Tocantins</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -140,39 +252,151 @@
             <form method="POST" id="form-editar-cliente" action="">
                 <input type="hidden" id="edit_cliente_id" name="cliente_id">
                 <div class="modal-body">
+                    <!-- SEÇÃO DE DADOS BÁSICOS -->
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="fas fa-info-circle"></i> <strong>Dados Básicos do Cliente</strong>
+                    </div>
                     <div class="row">
                         <div class="col-md-8">
                             <div class="mb-3">
-                                <label for="edit_nome" class="form-label">Nome *</label>
+                                <label for="edit_nome" class="form-label">Nome/Razão Social *</label>
                                 <input type="text" class="form-control" id="edit_nome" name="nome" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="edit_telefone" class="form-label">Telefone</label>
-                                <input type="text" class="form-control" id="edit_telefone" name="telefone">
+                                <label for="edit_tipo_pessoa" class="form-label">Tipo de Pessoa *</label>
+                                <select class="form-select" id="edit_tipo_pessoa" name="tipo_pessoa" required onchange="toggleRazaoSocial('edit')">
+                                    <option value="F">Pessoa Física</option>
+                                    <option value="J">Pessoa Jurídica</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="edit-razao-social-row" style="display: none;">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="edit_razao_social" class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" id="edit_razao_social" name="razao_social" placeholder="Nome corporativo">
                             </div>
                         </div>
                     </div>
                     
                     <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_cpf_cnpj" class="form-label">CPF/CNPJ *</label>
+                                <input type="text" class="form-control" id="edit_cpf_cnpj" name="cpf_cnpj" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_inscricao_estadual" class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" id="edit_inscricao_estadual" name="inscricao_estadual" placeholder="IE">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_telefone" class="form-label">Telefone</label>
+                                <input type="text" class="form-control" id="edit_telefone" name="telefone">
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="edit_email" class="form-label">Email</label>
                                 <input type="email" class="form-control" id="edit_email" name="email">
                             </div>
                         </div>
-                        <div class="col-md-6">
+                    </div>
+                    
+                    <!-- SEÇÃO DE ENDEREÇO PARA NF-e -->
+                    <hr>
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="fas fa-map-marker-alt"></i> <strong>Endereço para NF-e</strong>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
                             <div class="mb-3">
-                                <label for="edit_cpf_cnpj" class="form-label">CPF/CNPJ</label>
-                                <input type="text" class="form-control" id="edit_cpf_cnpj" name="cpf_cnpj">
+                                <label for="edit_rua" class="form-label">Rua</label>
+                                <input type="text" class="form-control" id="edit_rua" name="rua" placeholder="Nome da rua">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="edit_numero" class="form-label">Número</label>
+                                <input type="text" class="form-control" id="edit_numero" name="numero" placeholder="Nº">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="edit_cep" class="form-label">CEP</label>
+                                <input type="text" class="form-control" id="edit_cep" name="cep" placeholder="00000-000">
                             </div>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="edit_endereco" class="form-label">Endereço</label>
-                        <textarea class="form-control" id="edit_endereco" name="endereco" rows="3"></textarea>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_complemento" class="form-label">Complemento</label>
+                                <input type="text" class="form-control" id="edit_complemento" name="complemento" placeholder="Apto., sala, etc.">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_bairro" class="form-label">Bairro</label>
+                                <input type="text" class="form-control" id="edit_bairro" name="bairro" placeholder="Bairro">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="edit_cidade" class="form-label">Cidade</label>
+                                <input type="text" class="form-control" id="edit_cidade" name="cidade" placeholder="Cidade">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit_estado" class="form-label">Estado (UF)</label>
+                                <select class="form-select" id="edit_estado" name="estado">
+                                    <option value="">Selecione</option>
+                                    <option value="AC">Acre</option>
+                                    <option value="AL">Alagoas</option>
+                                    <option value="AP">Amapá</option>
+                                    <option value="AM">Amazonas</option>
+                                    <option value="BA">Bahia</option>
+                                    <option value="CE">Ceará</option>
+                                    <option value="DF">Distrito Federal</option>
+                                    <option value="ES">Espírito Santo</option>
+                                    <option value="GO">Goiás</option>
+                                    <option value="MA">Maranhão</option>
+                                    <option value="MT">Mato Grosso</option>
+                                    <option value="MS">Mato Grosso do Sul</option>
+                                    <option value="MG">Minas Gerais</option>
+                                    <option value="PA">Pará</option>
+                                    <option value="PB">Paraíba</option>
+                                    <option value="PR">Paraná</option>
+                                    <option value="PE">Pernambuco</option>
+                                    <option value="PI">Piauí</option>
+                                    <option value="RJ">Rio de Janeiro</option>
+                                    <option value="RN">Rio Grande do Norte</option>
+                                    <option value="RS">Rio Grande do Sul</option>
+                                    <option value="RO">Rondônia</option>
+                                    <option value="RR">Roraima</option>
+                                    <option value="SC">Santa Catarina</option>
+                                    <option value="SP">São Paulo</option>
+                                    <option value="SE">Sergipe</option>
+                                    <option value="TO">Tocantins</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -190,13 +414,38 @@
 
 {% block extra_js %}
 <script>
-function editarCliente(id, nome, telefone, email, cpf_cnpj, endereco) {
+function toggleRazaoSocial(prefix = '') {
+    const tipoPessoaId = prefix ? `#${prefix}_tipo_pessoa` : '#tipo_pessoa';
+    const razaoSocialRowId = prefix ? `#${prefix}-razao-social-row` : '#razao-social-row';
+    const tipoPessoa = $(tipoPessoaId).val();
+    
+    if (tipoPessoa === 'J') {
+        $(razaoSocialRowId).show();
+    } else {
+        $(razaoSocialRowId).hide();
+    }
+}
+
+function editarCliente(id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+                       inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep) {
     $('#edit_cliente_id').val(id);
     $('#edit_nome').val(nome);
     $('#edit_telefone').val(telefone);
     $('#edit_email').val(email);
     $('#edit_cpf_cnpj').val(cpf_cnpj);
-    $('#edit_endereco').val(endereco);
+    $('#edit_tipo_pessoa').val(tipo_pessoa || 'F');
+    $('#edit_razao_social').val(razao_social || '');
+    $('#edit_inscricao_estadual').val(inscricao_estadual || '');
+    $('#edit_rua').val(rua || '');
+    $('#edit_numero').val(numero || '');
+    $('#edit_complemento').val(complemento || '');
+    $('#edit_bairro').val(bairro || '');
+    $('#edit_cidade').val(cidade || '');
+    $('#edit_estado').val(estado || '');
+    $('#edit_cep').val(cep || '');
+    
+    // Mostrar/ocultar campo de razão social
+    toggleRazaoSocial('edit');
     
     // Definir a action do formulário com o ID correto
     $('#form-editar-cliente').attr('action', '/clientes/editar/' + id);

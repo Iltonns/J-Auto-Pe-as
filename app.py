@@ -851,9 +851,21 @@ def adicionar_cliente_route():
     email = request.form.get('email')
     cpf_cnpj = request.form.get('cpf_cnpj')
     endereco = request.form.get('endereco')
+    tipo_pessoa = request.form.get('tipo_pessoa', 'F')
+    razao_social = request.form.get('razao_social')
+    inscricao_estadual = request.form.get('inscricao_estadual')
+    rua = request.form.get('rua')
+    numero = request.form.get('numero')
+    complemento = request.form.get('complemento')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    estado = request.form.get('estado')
+    cep = request.form.get('cep')
     
     try:
-        adicionar_cliente(nome, telefone, email, cpf_cnpj, endereco)
+        adicionar_cliente(nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                         razao_social, inscricao_estadual, rua, numero, complemento, 
+                         bairro, cidade, estado, cep)
         flash('Cliente adicionado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar cliente: {str(e)}', 'error')
@@ -868,9 +880,21 @@ def editar_cliente_route(id):
     email = request.form.get('email')
     cpf_cnpj = request.form.get('cpf_cnpj')
     endereco = request.form.get('endereco')
+    tipo_pessoa = request.form.get('tipo_pessoa', 'F')
+    razao_social = request.form.get('razao_social')
+    inscricao_estadual = request.form.get('inscricao_estadual')
+    rua = request.form.get('rua')
+    numero = request.form.get('numero')
+    complemento = request.form.get('complemento')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    estado = request.form.get('estado')
+    cep = request.form.get('cep')
     
     try:
-        editar_cliente(id, nome, telefone, email, cpf_cnpj, endereco)
+        editar_cliente(id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                      razao_social, inscricao_estadual, rua, numero, complemento, 
+                      bairro, cidade, estado, cep)
         flash('Cliente editado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao editar cliente: {str(e)}', 'error')
