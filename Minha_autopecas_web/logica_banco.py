@@ -1490,8 +1490,17 @@ def listar_clientes():
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
-               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep
+        SELECT id, nome, telefone, email, cpf_cnpj, endereco,
+               COALESCE(tipo_pessoa, 'F') as tipo_pessoa, 
+               COALESCE(razao_social, '') as razao_social, 
+               COALESCE(inscricao_estadual, '') as inscricao_estadual,
+               COALESCE(rua, '') as rua, 
+               COALESCE(numero, '') as numero, 
+               COALESCE(complemento, '') as complemento,
+               COALESCE(bairro, '') as bairro, 
+               COALESCE(cidade, '') as cidade, 
+               COALESCE(estado, '') as estado, 
+               COALESCE(cep, '') as cep
         FROM clientes
         ORDER BY nome
     ''')
@@ -1528,14 +1537,24 @@ def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=N
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
-                             razao_social, inscricao_estadual, rua, numero, complemento, 
-                             bairro, cidade, estado, cep)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id
-    ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
-           inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep))
+    try:
+        # Tentar inserir com todas as colunas
+        cursor.execute('''
+            INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                                 razao_social, inscricao_estadual, rua, numero, complemento, 
+                                 bairro, cidade, estado, cep)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep))
+    except Exception as e:
+        # Se falhar, tentar com apenas as colunas básicas (fallback)
+        print(f"Insert com colunas novaspfalhou: {e}")
+        cursor.execute('''
+            INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (nome, telefone, email, cpf_cnpj, endereco))
     
     cliente_id = cursor.fetchone()[0]
     conn.commit()
@@ -1550,15 +1569,25 @@ def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        UPDATE clientes 
-        SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s, 
-            tipo_pessoa = %s, razao_social = %s, inscricao_estadual = %s, 
-            rua = %s, numero = %s, complemento = %s, bairro = %s, 
-            cidade = %s, estado = %s, cep = %s
-        WHERE id = %s
-    ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
-           inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, id))
+    try:
+        # Tentar atualizar com todas as colunas
+        cursor.execute('''
+            UPDATE clientes 
+            SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s, 
+                tipo_pessoa = %s, razao_social = %s, inscricao_estadual = %s, 
+                rua = %s, numero = %s, complemento = %s, bairro = %s, 
+                cidade = %s, estado = %s, cep = %s
+            WHERE id = %s
+        ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
+               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, id))
+    except Exception as e:
+        # Se falhar, tentar com apenas as colunas básicas (fallback)
+        print(f"Update com colunas novas falhou: {e}")
+        cursor.execute('''
+            UPDATE clientes 
+            SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s
+            WHERE id = %s
+        ''', (nome, telefone, email, cpf_cnpj, endereco, id))
     
     conn.commit()
     conn.close()
