@@ -1,0 +1,47 @@
+.financeiro-shell,
+.vendas-shell {
+    display: block;
+}
+
+.financeiro-shell .card,
+.vendas-shell .card,
+.relatorios-shell .card {
+    box-shadow: var(--shadow-sm);
+}
+
+.financeiro-shell .nav-tabs .nav-link {
+    border: 0;
+    color: var(--neutral-600);
+    font-weight: 600;
+}
+
+.financeiro-shell .nav-tabs .nav-link.active {
+    color: var(--brand-700);
+    border-bottom: 2px solid var(--brand-500);
+    background: transparent;
+}
+
+.financeiro-shell .table tbody tr:hover,
+.vendas-shell .table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.vendas-shell .secao-vendas {
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fff;
+}
+
+.vendas-shell .secao-titulo {
+    color: var(--brand-900);
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.vendas-shell .resumo-venda .card-body {
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    background: #f8fafc;
+}

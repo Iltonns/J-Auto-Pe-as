@@ -1,0 +1,35 @@
+.relatorios-shell .card-header {
+    background: var(--gradient-primary);
+}
+
+.relatorios-shell .report-grid {
+    row-gap: 16px;
+}
+
+.relatorios-shell .report-card h5 {
+    color: var(--brand-900);
+    margin-bottom: 8px;
+}
+
+.relatorios-shell .report-card p {
+    color: var(--neutral-500);
+    min-height: 42px;
+}
+
+@media print {
+    .report-print-brand {
+        font-family: "Manrope", "Segoe UI", Tahoma, sans-serif !important;
+        color: #0f2742 !important;
+    }
+
+    .report-print-kpi {
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        background: #f8fafc !important;
+    }
+
+    .table th {
+        background: #e2e8f0 !important;
+        color: #1e293b !important;
+    }
+}

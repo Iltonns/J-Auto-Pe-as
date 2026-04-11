@@ -21,6 +21,11 @@
     <!-- Cor do tema para navegadores móveis -->
     <meta name="theme-color" content="#1a237e">
     <meta name="msapplication-TileColor" content="#1a237e">
+
+    <!-- Fontes Profissionais -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -551,6 +556,11 @@
         }
     </style>
     
+    <!-- Design System Profissional -->
+    <link href="{{ url_for('static', filename='css/professional-tokens.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/professional-components.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/professional-layout.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/professional-pages.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -616,14 +626,14 @@
                     </a>
                     
                     <hr class="section-divider">
-                    <div class="section-title px-3 mb-2">💰 FINANCEIRO</div>
+                    <div class="section-title px-3 mb-2">Financeiro</div>
                     
                     {% if has_permission('caixa') %}
                     <a class="nav-link" href="{{ url_for('caixa') }}">
                         <i class="fas fa-cash-register"></i> Caixa
                     </a>
                     <a class="nav-link" href="{{ url_for('financeiro') }}">
-                        <i class="fas fa-chart-line"></i> Lançamentos Financeiros
+                        <i class="fas fa-chart-line"></i> Lancamentos
                     </a>
                     {% endif %}
                     
@@ -643,16 +653,16 @@
                     
                     {% if has_permission('relatorios') %}
                     <a class="nav-link" href="{{ url_for('relatorios') }}">
-                        <i class="fas fa-chart-line"></i> Relatórios
+                        <i class="fas fa-chart-line"></i> Relatorios
                     </a>
                     {% endif %}
                     
                     {% if has_permission('admin') %}
                     <hr class="section-divider">
-                    <div class="section-title px-3 mb-2">⚙️ ADMINISTRAÇÃO</div>
+                    <div class="section-title px-3 mb-2">Administracao</div>
                     
                     <a class="nav-link" href="{{ url_for('usuarios') }}">
-                        <i class="fas fa-users-cog"></i> Gerenciar Usuários
+                        <i class="fas fa-users-cog"></i> Usuarios
                     </a>
                     
                     <a class="nav-link" href="{{ url_for('configuracoes_empresa') }}">
@@ -661,10 +671,10 @@
                     {% endif %}
                     
                     <hr class="section-divider">
-                    <div class="section-title px-3 mb-2">🎨 NOVO TEMA 2025</div>
+                    <div class="section-title px-3 mb-2">Aparencia</div>
                     
                     <a class="nav-link glow-effect" href="{{ url_for('demo_theme') }}">
-                        <i class="fas fa-palette"></i> Demonstração do Tema
+                        <i class="fas fa-palette"></i> Demonstracao do Tema
                     </a>
                     
                     {% if current_user.is_authenticated %}

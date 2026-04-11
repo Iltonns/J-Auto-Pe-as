@@ -4,6 +4,7 @@
 {% block page_title %}Relatório Financeiro{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports-professional.css') }}">
 <style>
     .relatorio-table {
         font-size: 0.9rem;
@@ -104,7 +105,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid" id="contentToPrint">
+<div class="container-fluid relatorios-shell" id="contentToPrint">
     <!-- Cabeçalho para Impressão/PDF -->
     <div class="print-header" style="display: none;">
         <div style="display: flex; align-items: center; margin-bottom: 20px;">

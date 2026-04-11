@@ -1,80 +1,94 @@
 {% extends "base.html" %}
 
-{% block title %}Relatórios - Sistema de Autopeças{% endblock %}
-{% block page_title %}Relatórios{% endblock %}
+{% block title %}Relatorios - Sistema de Autopecas{% endblock %}
+{% block page_title %}Relatorios{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports-professional.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/business-pages.css') }}">
+{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar"></i> Relatórios do Sistema
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <div class="card border-primary">
-                            <div class="card-body text-center">
-                                <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
-                                <h5>Relatório de Vendas</h5>
-                                <p class="text-muted">Vendas por período, clientes e formas de pagamento</p>
-                                <a href="{{ url_for('relatorio_vendas') }}" class="btn btn-primary">
-                                    <i class="fas fa-file-chart-line"></i> Gerar Relatório
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <div class="card border-success">
-                            <div class="card-body text-center">
-                                <i class="fas fa-star fa-3x text-success mb-3"></i>
-                                <h5>Produtos Mais Vendidos</h5>
-                                <p class="text-muted">Ranking dos produtos mais vendidos</p>
-                                <a href="{{ url_for('relatorio_produtos_mais_vendidos') }}" class="btn btn-success">
-                                    <i class="fas fa-trophy"></i> Gerar Relatório
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <div class="card border-warning">
-                            <div class="card-body text-center">
-                                <i class="fas fa-boxes fa-3x text-warning mb-3"></i>
-                                <h5>Relatório de Estoque</h5>
-                                <p class="text-muted">Situação do estoque, produtos em falta</p>
-                                <a href="{{ url_for('relatorio_estoque') }}" class="btn btn-warning">
-                                    <i class="fas fa-warehouse"></i> Gerar Relatório
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <div class="card border-info">
-                            <div class="card-body text-center">
-                                <i class="fas fa-dollar-sign fa-3x text-info mb-3"></i>
-                                <h5>Relatório Financeiro</h5>
-                                <p class="text-muted">Contas a pagar/receber, fluxo de caixa</p>
-                                <a href="{{ url_for('relatorio_financeiro') }}" class="btn btn-info">
-                                    <i class="fas fa-chart-pie"></i> Gerar Relatório
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <hr class="my-4">
-                
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>Informação:</strong> Os relatórios são gerados baseados nas movimentações reais do sistema e podem ser filtrados por período.
+<div class="relatorios-shell">
+    <div class="page-head">
+        <div>
+            <h2><i class="fas fa-chart-bar me-2"></i>Painel de Relatorios</h2>
+            <div class="page-subtitle">Visao consolidada para analise de vendas, estoque e financeiro.</div>
+        </div>
+    </div>
+
+    <div class="kpi-grid mb-4">
+        <div class="kpi-card">
+            <div class="kpi-label">Area Comercial</div>
+            <div class="kpi-value">Vendas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Area Operacional</div>
+            <div class="kpi-value">Estoque</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Area Financeira</div>
+            <div class="kpi-value">Fluxo de Caixa</div>
+        </div>
+    </div>
+
+    <div class="row report-grid">
+        <div class="col-md-6 mb-3">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon"><i class="fas fa-chart-line"></i></div>
+                    <h5>Relatorio de Vendas</h5>
+                    <p>Desempenho por periodo, clientes e formas de pagamento.</p>
+                    <a href="{{ url_for('relatorio_vendas') }}" class="btn btn-primary">
+                        <i class="fas fa-file-lines me-2"></i>Gerar Relatorio
+                    </a>
                 </div>
             </div>
         </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon"><i class="fas fa-trophy"></i></div>
+                    <h5>Produtos Mais Vendidos</h5>
+                    <p>Ranking de produtos com maior giro no periodo selecionado.</p>
+                    <a href="{{ url_for('relatorio_produtos_mais_vendidos') }}" class="btn btn-primary">
+                        <i class="fas fa-file-lines me-2"></i>Gerar Relatorio
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon"><i class="fas fa-boxes-stacked"></i></div>
+                    <h5>Relatorio de Estoque</h5>
+                    <p>Status de estoque, ruptura e reposicao dos itens criticos.</p>
+                    <a href="{{ url_for('relatorio_estoque') }}" class="btn btn-primary">
+                        <i class="fas fa-file-lines me-2"></i>Gerar Relatorio
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon"><i class="fas fa-wallet"></i></div>
+                    <h5>Relatorio Financeiro</h5>
+                    <p>Receitas, despesas e situacao de contas a pagar e receber.</p>
+                    <a href="{{ url_for('relatorio_financeiro') }}" class="btn btn-primary">
+                        <i class="fas fa-file-lines me-2"></i>Gerar Relatorio
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-3">
+        <i class="fas fa-circle-info me-2"></i>
+        Os relatorios utilizam os dados operacionais e financeiros em tempo real do sistema.
     </div>
 </div>
 {% endblock %}

@@ -1,0 +1,66 @@
+.page-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+}
+
+.page-head h1,
+.page-head h2,
+.page-head h3 {
+    margin: 0;
+    color: var(--brand-900);
+    font-weight: 700;
+}
+
+.page-subtitle {
+    margin-top: 6px;
+    color: var(--neutral-500);
+    font-size: .94rem;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
+}
+
+.kpi-card {
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    background: #fff;
+    padding: var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.kpi-label {
+    color: var(--neutral-500);
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 8px;
+}
+
+.kpi-value {
+    color: var(--brand-900);
+    font-size: 1.55rem;
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.report-card {
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    height: 100%;
+}
+
+.report-card .card-body {
+    padding: var(--space-5);
+}
+
+.report-card .report-icon {
+    font-size: 2rem;
+    margin-bottom: 14px;
+    color: var(--brand-500);
+}

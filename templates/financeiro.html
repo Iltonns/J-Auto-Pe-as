@@ -2,8 +2,12 @@
 
 {% block title %}Financeiro - Sistema Autopeças{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/business-pages.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="main-content">
+<div class="main-content financeiro-shell">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-0">

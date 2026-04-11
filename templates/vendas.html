@@ -4,6 +4,7 @@
 {% block page_title %}Sistema de Vendas e Caixa{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/business-pages.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/vendas-layout.css') }}">
 <style>
     /* Checkbox personalizado para impressão */
@@ -147,7 +148,7 @@
 
 {% block content %}
 
-<div class="vendas-container">
+<div class="vendas-container vendas-shell">
     <!-- ALERTA DE CAIXA FECHADO -->
     <div class="alerta-caixa-fechado" id="alertaCaixaFechado">
         <i class="fas fa-exclamation-circle"></i>

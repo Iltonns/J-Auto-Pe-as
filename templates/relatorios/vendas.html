@@ -4,6 +4,7 @@
 {% block page_title %}Relatório de Vendas{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/reports-professional.css') }}">
 <style>
 /* Ocultar colunas extras na tela normal */
 .print-only {
@@ -116,7 +117,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid" id="contentToPrint">
+<div class="container-fluid relatorios-shell" id="contentToPrint">
     <!-- Cabeçalho para Impressão/PDF -->
     <div class="print-header" style="display: none;">
         <div style="display: flex; align-items: center; margin-bottom: 20px;">
@@ -130,7 +131,7 @@
                 {% endif %}
             </div>
             <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
-                <h2 style="color: #007bff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                <h2 class="report-print-brand" style="color: #007bff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
                     {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
                 </h2>
                 <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
@@ -148,7 +149,7 @@
             </div>
         </div>
         <hr style="margin: 15px 0; border: none; border-top: 3px solid #007bff;">
-        <h3 style="text-align: center; color: #007bff; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE VENDAS</h3>
+        <h3 class="report-print-brand" style="text-align: center; color: #007bff; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATORIO DETALHADO DE VENDAS</h3>
         <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
             <p style="margin: 0; font-size: 10px; text-align: center;">
                 <strong>Total de Vendas:</strong> {{ relatorio.quantidade_vendas }} | 
@@ -167,7 +168,7 @@
         </div>
         <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
             <div class="col-6" style="width: 50%; padding: 5px;">
-                <div class="stat-box" style="border: 2px solid #007bff; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
+                <div class="stat-box report-print-kpi" style="border: 2px solid #007bff; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
                     <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
                         <i class="fas fa-shopping-cart"></i> TOTAL DE VENDAS
                     </div>
@@ -177,7 +178,7 @@
                 </div>
             </div>
             <div class="col-6" style="width: 50%; padding: 5px;">
-                <div class="stat-box" style="border: 3px solid #28a745; padding: 15px; border-radius: 8px; background: #e8f5e9; text-align: center;">
+                <div class="stat-box report-print-kpi" style="border: 3px solid #28a745; padding: 15px; border-radius: 8px; background: #e8f5e9; text-align: center;">
                     <div class="stat-label" style="font-size: 12px; color: #666; font-weight: bold; margin-bottom: 8px;">
                         <i class="fas fa-money-bill-wave"></i> VALOR TOTAL
                     </div>
