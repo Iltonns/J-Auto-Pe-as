@@ -22,6 +22,8 @@ if not DATABASE_URL:
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
 _fiscal_schema_checked = False
+_clientes_schema_checked = False
+_contas_receber_schema_checked = False
 
 def agora_br():
     """Retorna o datetime atual no horário de Brasília"""
@@ -88,6 +90,60 @@ def add_column_if_not_exists(cursor, conn, table_name, column_definition):
     except Exception as e:
         conn.rollback()
         print(f"Erro ao adicionar coluna {column_definition} na tabela {table_name}: {e}")
+
+
+def garantir_colunas_clientes():
+    """Garante colunas opcionais da tabela clientes para compatibilidade com bancos antigos."""
+    global _clientes_schema_checked
+
+    if _clientes_schema_checked:
+        return True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        add_column_if_not_exists(cursor, conn, 'clientes', "tipo_pessoa VARCHAR(1) DEFAULT 'F'")
+        add_column_if_not_exists(cursor, conn, 'clientes', "razao_social TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "inscricao_estadual TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "rua TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "numero TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "complemento TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "bairro TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "cidade TEXT")
+        add_column_if_not_exists(cursor, conn, 'clientes', "estado VARCHAR(2)")
+        add_column_if_not_exists(cursor, conn, 'clientes', "cep TEXT")
+        _clientes_schema_checked = True
+        return True
+    except Exception as e:
+        print(f"Erro ao garantir colunas da tabela clientes: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def garantir_colunas_contas_receber():
+    """Garante colunas da tabela contas_receber usadas nas telas financeiras."""
+    global _contas_receber_schema_checked
+
+    if _contas_receber_schema_checked:
+        return True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        add_column_if_not_exists(cursor, conn, 'contas_receber', "status TEXT DEFAULT 'pendente'")
+        add_column_if_not_exists(cursor, conn, 'contas_receber', "data_recebimento DATE")
+        add_column_if_not_exists(cursor, conn, 'contas_receber', "cliente_id INTEGER")
+        add_column_if_not_exists(cursor, conn, 'contas_receber', "observacoes TEXT")
+        _contas_receber_schema_checked = True
+        return True
+    except Exception as e:
+        print(f"Erro ao garantir colunas da tabela contas_receber: {e}")
+        return False
+    finally:
+        conn.close()
 
 def init_db():
     """Inicializa o banco de dados criando todas as tabelas necessárias"""
@@ -1486,6 +1542,7 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
 # FUNÇÕES DE CLIENTES
 def listar_clientes():
     """Lista todos os clientes"""
+    garantir_colunas_clientes()
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -3295,6 +3352,7 @@ def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=No
 # FUNÇÕES DE CONTAS A RECEBER
 def listar_contas_receber_hoje():
     """Lista contas a receber com vencimento hoje"""
+    garantir_colunas_contas_receber()
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -3324,6 +3382,7 @@ def listar_contas_receber_hoje():
 
 def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
     """Lista contas a receber com filtros de período"""
+    garantir_colunas_contas_receber()
     conn = get_db_connection()
     cursor = conn.cursor()
     
