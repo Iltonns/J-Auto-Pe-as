@@ -5,6 +5,10 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --layout-header-gradient-products: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+    }
+
     .product-card {
         border: 1px solid #e9ecef;
         transition: none;
@@ -71,8 +75,8 @@
     }
     
     .table-header-professional {
-        background: #1a237e !important;
-        border-bottom: 2px solid #1a237e;
+        background: var(--layout-header-gradient-products) !important;
+        border-bottom: 2px solid var(--primary-dark);
     }
     
     .table-header-professional th {
@@ -83,7 +87,7 @@
         border: none !important;
         text-transform: none;
         letter-spacing: normal;
-        background: #1a237e !important;
+        background: var(--layout-header-gradient-products) !important;
         display: table-cell !important;
         visibility: visible !important;
     }
@@ -196,8 +200,8 @@
     
     /* Cabeçalho da Tabela */
     .table-header-professional {
-        background: #1a237e;
-        border-bottom: 2px solid #1a237e;
+        background: var(--layout-header-gradient-products);
+        border-bottom: 2px solid var(--primary-dark);
     }
     
     .table-header-professional th {
@@ -230,7 +234,7 @@
     
     /* Cabeçalho Principal */
     .page-header {
-        background: #1a237e;
+        background: var(--layout-header-gradient-products);
         color: white;
         padding: 20px 0;
         margin: -20px -15px 30px -15px;
@@ -314,7 +318,7 @@
     
     #tabelaProdutos thead tr,
     #tabelaProdutos thead th {
-        background: #1a237e !important;
+        background: var(--layout-header-gradient-products) !important;
         color: white !important;
         font-weight: 600;
         font-size: 0.85rem;

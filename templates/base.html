@@ -635,6 +635,7 @@
         .page-header,
         .info-card-header,
         .card-header-vendas,
+        .historico-header,
         .resultado-header {
             background: var(--layout-header-gradient-final) !important;
             color: #fff !important;
@@ -709,6 +710,128 @@
         thead.table-light td {
             background: var(--layout-header-gradient-final) !important;
             color: #fff !important;
+        }
+
+        /* Modo uniforme sem destaques de cor/efeito */
+        :root {
+            --uniform-neutral-bg: #edf1f5;
+            --uniform-neutral-bg-2: #e3e9f0;
+            --uniform-neutral-border: #c8d1db;
+            --uniform-neutral-text: #243447;
+        }
+
+        .table-hover tbody tr:hover,
+        .table tbody tr:hover,
+        .table-striped tbody tr:hover,
+        .venda-row:hover,
+        .produto-resultado:hover,
+        .automotive-table tbody tr:hover,
+        .relatorio-table tbody tr:hover,
+        .modern-table tbody tr:hover,
+        #tabelaMovimentacoes tbody tr:hover,
+        #tabelaUsuarios tbody tr:hover,
+        #tabelaProdutos tbody tr:hover,
+        #tabelaClientes tbody tr:hover,
+        #tabelaFornecedores tbody tr:hover {
+            background: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+
+        .table-striped > tbody > tr:nth-of-type(odd) > * {
+            background-color: inherit !important;
+        }
+
+        .badge,
+        .badge-status,
+        .professional-badge,
+        .pagamento-badge,
+        .filter-pills .nav-link,
+        .filter-pills .nav-link.active,
+        [class*="badge-"],
+        [class*="status-"],
+        [class*="chip"],
+        [class*="pill"],
+        [class*="tag"] {
+            background: var(--uniform-neutral-bg) !important;
+            color: var(--uniform-neutral-text) !important;
+            border: 1px solid var(--uniform-neutral-border) !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+
+        .nav-tabs .nav-link,
+        .card-header-tabs .nav-link,
+        .nav-tabs .nav-link.active,
+        .card-header-tabs .nav-link.active,
+        .nav-tabs .nav-link:hover,
+        .card-header-tabs .nav-link:hover {
+            background: var(--uniform-neutral-bg) !important;
+            color: var(--uniform-neutral-text) !important;
+            border: 1px solid var(--uniform-neutral-border) !important;
+            box-shadow: none !important;
+        }
+
+        .status-indicator {
+            background: #7b8794 !important;
+        }
+
+        .status-disponivel,
+        .status-baixo,
+        .status-indisponivel,
+        .table .text-success,
+        .table .text-danger,
+        .table .text-warning,
+        .table .text-info,
+        .table .text-primary {
+            color: var(--uniform-neutral-text) !important;
+            font-weight: 600 !important;
+        }
+
+        a:not(.btn):not(.nav-link),
+        a:not(.btn):not(.nav-link):hover,
+        a:not(.btn):not(.nav-link):focus,
+        a:not(.btn):not(.nav-link):active {
+            color: inherit !important;
+            text-decoration: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-group .btn,
+        .btn-action,
+        .acoes-venda .btn,
+        .table .btn-sm,
+        .table .btn-outline-primary,
+        .table .btn-outline-secondary,
+        .table .btn-outline-success,
+        .table .btn-outline-info,
+        .table .btn-outline-warning,
+        .table .btn-outline-danger {
+            background: var(--uniform-neutral-bg) !important;
+            color: var(--uniform-neutral-text) !important;
+            border: 1px solid var(--uniform-neutral-border) !important;
+            box-shadow: none !important;
+        }
+
+        .btn-group .btn:hover,
+        .btn-action:hover,
+        .acoes-venda .btn:hover,
+        .table .btn-sm:hover,
+        .table .btn-outline-primary:hover,
+        .table .btn-outline-secondary:hover,
+        .table .btn-outline-success:hover,
+        .table .btn-outline-info:hover,
+        .table .btn-outline-warning:hover,
+        .table .btn-outline-danger:hover,
+        .btn-group .btn:focus,
+        .btn-action:focus,
+        .acoes-venda .btn:focus,
+        .table .btn-sm:focus {
+            background: var(--uniform-neutral-bg-2) !important;
+            color: var(--uniform-neutral-text) !important;
+            border-color: var(--uniform-neutral-border) !important;
+            box-shadow: none !important;
+            filter: none !important;
         }
     </style>
 </head>
