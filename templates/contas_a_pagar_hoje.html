@@ -32,7 +32,7 @@
 }
 
 .filter-pills .nav-link.active {
-    background: linear-gradient(45deg, #2962ff, #1e40af);
+    background: linear-gradient(45deg, var(--primary-dark), var(--neutral-dark));
 }
 
 .table-hover tbody tr:hover {
@@ -315,7 +315,7 @@
     
     <!-- Cabeçalho da Empresa (Visível na Tela) -->
     <div class="card mb-4 no-print">
-        <div class="card-body" style="background: linear-gradient(135deg, #2962ff 0%, #1e40af 100%); color: white;">
+        <div class="card-body" style="background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%); color: white;">
             <div class="row align-items-center">
                 <div class="col-md-2 text-center">
                     {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
