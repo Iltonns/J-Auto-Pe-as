@@ -524,12 +524,6 @@ def dashboard():
                          contas_receber_hoje=contas_receber_hoje,
                          contas_atrasadas=contas_atrasadas)
 
-# DEMONSTRAÇÃO DO TEMA
-@app.route('/demo-theme')
-@login_required
-def demo_theme():
-    return render_template('demo-theme.html')
-
 # =====================================================
 # ROTAS DO CAIXA FINANCEIRO
 # =====================================================

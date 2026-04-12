@@ -6818,6 +6818,45 @@ def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
     cursor.execute("DELETE FROM fiscal_nfe_itens WHERE nfe_id = %s", (nfe_id,))
 
     for item in itens:
+        if hasattr(item, 'get'):
+            venda_item_id = item.get('id')
+            produto_id = item.get('produto_id')
+            descricao = item.get('nome')
+            ncm = item.get('ncm')
+            cest = item.get('cest')
+            cfop = item.get('cfop')
+            unidade = item.get('unidade') or 'UN'
+            origem_mercadoria = item.get('origem_mercadoria')
+            csosn = item.get('csosn')
+            cst_icms = item.get('cst_icms')
+            cst_pis = item.get('cst_pis')
+            cst_cofins = item.get('cst_cofins')
+            aliquota_icms = item.get('aliquota_icms') or 0
+            aliquota_pis = item.get('aliquota_pis') or 0
+            aliquota_cofins = item.get('aliquota_cofins') or 0
+            quantidade = item.get('quantidade')
+            valor_unitario = item.get('preco_unitario')
+            valor_total = item.get('subtotal')
+        else:
+            venda_item_id = item[0]
+            produto_id = item[1]
+            descricao = item[2]
+            ncm = item[3]
+            cest = item[4]
+            cfop = item[5]
+            unidade = item[6] or 'UN'
+            origem_mercadoria = item[7]
+            csosn = item[8]
+            cst_icms = item[9]
+            cst_pis = item[10]
+            cst_cofins = item[11]
+            aliquota_icms = item[12] or 0
+            aliquota_pis = item[13] or 0
+            aliquota_cofins = item[14] or 0
+            quantidade = item[15]
+            valor_unitario = item[16]
+            valor_total = item[17]
+
         cursor.execute(
             '''
             INSERT INTO fiscal_nfe_itens (
@@ -6833,10 +6872,10 @@ def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
             )
             ''',
             (
-                nfe_id, item[0], item[1], item[2], item[3], item[4], item[5], item[6] or 'UN',
-                item[7], item[8], item[9], item[10], item[11],
-                item[12] or 0, item[13] or 0, item[14] or 0,
-                item[15], item[16], item[17]
+                nfe_id, venda_item_id, produto_id, descricao, ncm, cest, cfop, unidade,
+                origem_mercadoria, csosn, cst_icms, cst_pis, cst_cofins,
+                aliquota_icms, aliquota_pis, aliquota_cofins,
+                quantidade, valor_unitario, valor_total
             )
         )
 
@@ -6886,7 +6925,7 @@ def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologac
         return {'sucesso': True, 'criada': True, 'nfe': dict(nfe)}
     except Exception as e:
         conn.rollback()
-        return {'sucesso': False, 'erro': f'Erro ao criar rascunho NF-e: {str(e)}'}
+        return {'sucesso': False, 'erro': f'Erro ao criar rascunho NF-e ({type(e).__name__}): {str(e)}'}
     finally:
         conn.close()
 
