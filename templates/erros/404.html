@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Erro 404 - Sistema de Autopeças{% endblock %}
+{% block page_title %}Página Não Encontrada{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body py-5">
+                <i class="fas fa-map-signs fa-5x text-warning mb-4"></i>
+                <h1 class="card-title">Erro 404</h1>
+                <p class="card-text">A página solicitada não foi encontrada.</p>
+                <p class="text-muted">Verifique o endereço ou retorne para o painel principal.</p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Voltar ao Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

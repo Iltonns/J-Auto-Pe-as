@@ -24,10 +24,11 @@
             --accent-red: #d32f2f;
             --neutral-dark: #37474f;
             --neutral-medium: #546e7a;
+            --layout-header-gradient: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
         }
 
         body {
-            background: linear-gradient(135deg, var(--neutral-dark) 0%, var(--primary-dark) 50%, #000051 100%);
+            background: var(--layout-header-gradient);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -71,7 +72,7 @@
         }
         
         .login-left {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 50%, var(--accent-orange) 100%);
+            background: var(--layout-header-gradient);
             color: white;
             padding: 30px 25px;
             display: flex;
@@ -131,7 +132,7 @@
         }
         
         .btn-login {
-            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-dark) 100%);
+            background: var(--layout-header-gradient);
             border: none;
             border-radius: 20px;
             padding: 10px 30px;

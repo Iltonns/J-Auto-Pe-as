@@ -530,7 +530,7 @@
         
         /* Estilo Padronizado para Modais */
         .modal-header {
-            background-color: #1a237e !important;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%) !important;
             color: white !important;
             border-bottom: none;
         }
@@ -553,6 +553,49 @@
         .modal-header {
             border-top-left-radius: 12px;
             border-top-right-radius: 12px;
+        }
+
+        /* Uniformização Global de Layout (sessões) */
+        :root {
+            --layout-header-gradient: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+        }
+
+        .dashboard-header,
+        .page-head,
+        .page-header,
+        .card-header.text-white {
+            background: var(--layout-header-gradient) !important;
+            color: #fff !important;
+        }
+
+        .filter-pills .nav-link.active {
+            background: linear-gradient(45deg, var(--primary-dark), var(--neutral-dark)) !important;
+            color: #fff !important;
+        }
+
+        /* Corrige estilos inline legados em azul claro */
+        [style*="background-color: #2962ff"],
+        [style*="background-color:#2962ff"],
+        [style*="background-color: #1a237e"],
+        [style*="background-color:#1a237e"],
+        [style*="background-color: #283593"],
+        [style*="background-color:#283593"],
+        [style*="background-color: #007bff"],
+        [style*="background-color:#007bff"] {
+            background: var(--layout-header-gradient) !important;
+            color: #fff !important;
+            border-color: transparent !important;
+        }
+
+        [style*="linear-gradient(135deg, #2962ff 0%, #1e40af 100%)"],
+        [style*="linear-gradient(45deg, #2962ff, #1e40af)"],
+        [style*="linear-gradient(135deg, #1a237e 0%, #283593 100%)"],
+        [style*="linear-gradient(135deg, #1a237e 0%, #3949ab 100%)"],
+        [style*="linear-gradient(135deg, #1a237e 0%, #37474f 100%)"],
+        [style*="linear-gradient(135deg, #007bff 0%, #0056b3 100%)"],
+        [style*="linear-gradient(45deg, #007bff, #0056b3)"] {
+            background: var(--layout-header-gradient) !important;
+            color: #fff !important;
         }
     </style>
     

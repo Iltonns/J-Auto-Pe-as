@@ -11,6 +11,12 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
     <style>
+        :root {
+            --primary-dark: #1a237e;
+            --neutral-dark: #37474f;
+            --layout-header-gradient: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -38,7 +44,7 @@
         }
         
         .success-title {
-            color: #2c3e50;
+            color: var(--primary-dark);
             font-size: 1.8rem;
             font-weight: bold;
             margin-bottom: 15px;
@@ -61,7 +67,7 @@
         }
         
         .btn-print {
-            background: linear-gradient(135deg, #1a237e 0%, #37474f 100%);
+            background: var(--layout-header-gradient);
             color: white;
             border: none;
         }
