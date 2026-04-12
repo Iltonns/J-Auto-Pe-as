@@ -374,6 +374,63 @@ body {
     color: white;
 }
 
+/* ============================================================================ 
+   QUICK ACTIONS UNIFORMES - PADRAO PROFISSIONAL
+   ============================================================================ */
+.quick-action-btn {
+    min-height: 112px;
+    border: 1px solid rgba(15, 39, 66, 0.25) !important;
+    background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-900) 100%) !important;
+    color: #ffffff !important;
+    box-shadow: var(--shadow-sm);
+    transition: none !important;
+    animation: none !important;
+}
+
+.quick-action-btn::before {
+    display: none !important;
+}
+
+.quick-action-btn:hover {
+    transform: none !important;
+    box-shadow: var(--shadow-sm) !important;
+    background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-900) 100%) !important;
+    color: #ffffff !important;
+}
+
+.quick-action-btn i {
+    color: #ffffff !important;
+    opacity: 0.95;
+}
+
+.quick-action-label {
+    display: block;
+    margin-top: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    letter-spacing: 0.01em;
+    color: #ffffff;
+}
+
+.quick-action-btn.btn-primary,
+.quick-action-btn.btn-success,
+.quick-action-btn.btn-info,
+.quick-action-btn.btn-warning,
+.quick-action-btn.btn-secondary,
+.quick-action-btn.btn-dark,
+.quick-action-btn.btn-outline-primary,
+.quick-action-btn.btn-outline-success,
+.quick-action-btn.btn-outline-warning,
+.quick-action-btn.btn-outline-danger,
+.quick-action-btn.btn-outline-info,
+.quick-action-btn.btn-outline-secondary {
+    background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-900) 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+}
+
 /* ============================================================================
    CONTENT CARD - Painel de Conteúdo
    ============================================================================ */

@@ -11,6 +11,45 @@
     display: none;
 }
 
+.relatorios-shell {
+    --report-header-gradient: linear-gradient(135deg, #184b7a 0%, #0f2742 100%);
+    --report-kpi-bg: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+    --report-kpi-border: #cbd5e1;
+    --report-kpi-text: #1e293b;
+}
+
+.relatorios-shell .report-company-header {
+    background: var(--report-header-gradient) !important;
+    color: #fff !important;
+}
+
+.relatorios-shell .report-kpi-card {
+    border: 1px solid var(--report-kpi-border);
+    background: var(--report-kpi-bg);
+    color: var(--report-kpi-text);
+    box-shadow: none;
+}
+
+.relatorios-shell .report-kpi-card .report-kpi-value {
+    color: var(--report-kpi-text);
+    font-weight: 700;
+}
+
+.relatorios-shell .report-kpi-card .report-kpi-label {
+    color: #475569;
+    font-weight: 600;
+}
+
+.relatorios-shell .report-kpi-card .report-kpi-icon {
+    color: #334155;
+}
+
+.relatorios-shell .export-buttons .btn:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+
 /* Estilos de Impressão */
 @media print {
     .no-print,
@@ -65,7 +104,7 @@
     }
     
     .table th {
-        background-color: #007bff !important;
+        background-color: #184b7a !important;
         color: white !important;
         font-weight: bold !important;
     }
@@ -125,13 +164,13 @@
                 {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                     <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
                 {% else %}
-                    <div style="width: 150px; height: 80px; background: #007bff; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    <div style="width: 150px; height: 80px; background: #184b7a; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <i class="fas fa-building fa-3x"></i>
                     </div>
                 {% endif %}
             </div>
             <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
-                <h2 class="report-print-brand" style="color: #007bff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                <h2 class="report-print-brand" style="color: #184b7a; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
                     {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'FG AUTO PEÇAS' }}
                 </h2>
                 <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
@@ -148,8 +187,8 @@
                 <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ relatorio.vendas|length if relatorio.vendas else 0 }}</p>
             </div>
         </div>
-        <hr style="margin: 15px 0; border: none; border-top: 3px solid #007bff;">
-        <h3 class="report-print-brand" style="text-align: center; color: #007bff; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATORIO DETALHADO DE VENDAS</h3>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #184b7a;">
+        <h3 class="report-print-brand" style="text-align: center; color: #184b7a; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATORIO DETALHADO DE VENDAS</h3>
         <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
             <p style="margin: 0; font-size: 10px; text-align: center;">
                 <strong>Total de Vendas:</strong> {{ relatorio.quantidade_vendas }} | 
@@ -161,18 +200,18 @@
 
     <!-- Resumo para PDF -->
     <div class="stats-for-print" style="display: none;">
-        <div style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
+        <div style="background: linear-gradient(135deg, #184b7a 0%, #0f2742 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
             <h4 style="margin: 0; font-size: 16px; text-align: center;">
                 <i class="fas fa-chart-bar"></i> RESUMO DE VENDAS
             </h4>
         </div>
         <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
             <div class="col-6" style="width: 50%; padding: 5px;">
-                <div class="stat-box report-print-kpi" style="border: 2px solid #007bff; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
+                <div class="stat-box report-print-kpi" style="border: 2px solid #184b7a; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
                     <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
                         <i class="fas fa-shopping-cart"></i> TOTAL DE VENDAS
                     </div>
-                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #007bff;">
+                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #184b7a;">
                         {{ relatorio.quantidade_vendas }}
                     </div>
                 </div>
@@ -192,13 +231,13 @@
 
     <!-- Cabeçalho da Empresa (Visível na Tela) -->
     <div class="card mb-4 no-print">
-        <div class="card-body" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white;">
+        <div class="card-body report-company-header">
             <div class="row align-items-center">
                 <div class="col-md-2 text-center">
                     {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                         <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
                     {% else %}
-                        <div style="width: 100px; height: 100px; background: white; color: #007bff; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                        <div style="width: 100px; height: 100px; background: white; color: #184b7a; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
                             <i class="fas fa-building fa-3x"></i>
                         </div>
                     {% endif %}
@@ -274,14 +313,14 @@
             <!-- Resumo -->
             <div class="row mb-4">
                 <div class="col-md-3">
-                    <div class="card bg-primary text-white">
+                    <div class="card report-kpi-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>{{ relatorio.quantidade_vendas }}</h4>
-                                    <p class="mb-0">Total de Vendas</p>
+                                    <h4 class="report-kpi-value">{{ relatorio.quantidade_vendas }}</h4>
+                                    <p class="mb-0 report-kpi-label">Total de Vendas</p>
                                 </div>
-                                <div class="align-self-center">
+                                <div class="align-self-center report-kpi-icon">
                                     <i class="fas fa-shopping-cart fa-2x"></i>
                                 </div>
                             </div>
@@ -289,14 +328,14 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-success text-white">
+                    <div class="card report-kpi-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.total_geral) }}</h4>
-                                    <p class="mb-0">Valor Total</p>
+                                    <h4 class="report-kpi-value">R$ {{ "%.2f"|format(relatorio.total_geral) }}</h4>
+                                    <p class="mb-0 report-kpi-label">Valor Total</p>
                                 </div>
-                                <div class="align-self-center">
+                                <div class="align-self-center report-kpi-icon">
                                     <i class="fas fa-dollar-sign fa-2x"></i>
                                 </div>
                             </div>
@@ -304,14 +343,14 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-info text-white">
+                    <div class="card report-kpi-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>R$ {{ "%.2f"|format(relatorio.ticket_medio) }}</h4>
-                                    <p class="mb-0">Ticket Médio</p>
+                                    <h4 class="report-kpi-value">R$ {{ "%.2f"|format(relatorio.ticket_medio) }}</h4>
+                                    <p class="mb-0 report-kpi-label">Ticket Médio</p>
                                 </div>
-                                <div class="align-self-center">
+                                <div class="align-self-center report-kpi-icon">
                                     <i class="fas fa-chart-line fa-2x"></i>
                                 </div>
                             </div>
@@ -319,14 +358,14 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-warning text-white">
+                    <div class="card report-kpi-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h4>{{ relatorio.formas_pagamento|length }}</h4>
-                                    <p class="mb-0">Formas de Pagamento</p>
+                                    <h4 class="report-kpi-value">{{ relatorio.formas_pagamento|length }}</h4>
+                                    <p class="mb-0 report-kpi-label">Formas de Pagamento</p>
                                 </div>
-                                <div class="align-self-center">
+                                <div class="align-self-center report-kpi-icon">
                                     <i class="fas fa-credit-card fa-2x"></i>
                                 </div>
                             </div>
@@ -421,7 +460,7 @@
                                     {% endfor %}
                                 </tbody>
                                 <tfoot>
-                                    <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #007bff;">
+                                    <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #184b7a;">
                                         <td colspan="8" class="text-end" style="padding: 12px;">
                                             <strong style="font-size: 14px;">TOTAL GERAL:</strong>
                                         </td>
@@ -463,8 +502,8 @@
         
         <!-- Informações Adicionais para PDF -->
         <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff;">
-                <h5 style="color: #007bff; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #184b7a;">
+                <h5 style="color: #184b7a; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
                     <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO
                 </h5>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
@@ -529,3 +568,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+

@@ -37,52 +37,27 @@
         margin: 0 2px;
         padding: 6px 10px;
         border-radius: 4px;
-        border: none;
-        transition: all 0.2s ease;
+        border: 1px solid #cbd5e1;
+        background-color: #f1f5f9;
+        color: #1e293b;
+        transition: none;
     }
     
-    .btn-visualizar {
-        background-color: #17a2b8;
-        color: white;
-    }
-    
-    .btn-visualizar:hover {
-        background-color: #138496;
-        color: white;
-        transform: translateY(-1px);
-    }
-    
-    .btn-imprimir {
-        background-color: #28a745;
-        color: white;
-    }
-    
-    .btn-imprimir:hover {
-        background-color: #218838;
-        color: white;
-        transform: translateY(-1px);
-    }
-    
-    .btn-duplicar {
-        background-color: #ffc107;
-        color: #212529;
-    }
-    
-    .btn-duplicar:hover {
-        background-color: #e0a800;
-        color: #212529;
-        transform: translateY(-1px);
-    }
-    
+    .btn-visualizar,
+    .btn-imprimir,
+    .btn-duplicar,
     .btn-deletar {
-        background-color: #dc3545;
-        color: white;
+        background-color: #f1f5f9;
+        color: #1e293b;
     }
     
+    .btn-visualizar:hover,
+    .btn-imprimir:hover,
+    .btn-duplicar:hover,
     .btn-deletar:hover {
-        background-color: #c82333;
-        color: white;
-        transform: translateY(-1px);
+        background-color: #f1f5f9;
+        color: #1e293b;
+        transform: none;
     }
     
     .acoes-venda {
@@ -97,20 +72,20 @@
     }
     
     .modal-confirmar-delecao .modal-header {
-        background: linear-gradient(135deg, #dc3545, #c82333);
+        background: linear-gradient(135deg, #184b7a 0%, #0f2742 100%);
         border-radius: 10px 10px 0 0;
     }
     
     .modal-confirmar-delecao .btn-danger {
-        background: linear-gradient(135deg, #dc3545, #c82333);
-        border: none;
+        background: linear-gradient(135deg, #184b7a 0%, #0f2742 100%);
+        border: 1px solid #0f2742;
         padding: 10px 20px;
         font-weight: 600;
     }
     
     .modal-confirmar-delecao .btn-danger:hover {
-        background: linear-gradient(135deg, #c82333, #bd2130);
-        transform: translateY(-1px);
+        background: linear-gradient(135deg, #184b7a 0%, #0f2742 100%);
+        transform: none;
     }
     
     /* Estilo para botão desabilitado quando caixa está fechado */
@@ -2127,3 +2102,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+

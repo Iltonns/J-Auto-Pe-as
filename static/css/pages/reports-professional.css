@@ -2,6 +2,34 @@
     background: var(--gradient-primary);
 }
 
+.relatorios-shell .page-head {
+    background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-900) 100%) !important;
+    border-radius: var(--radius-lg);
+    padding: 26px 28px;
+    min-height: 124px;
+    align-items: center;
+    margin-bottom: var(--space-6);
+    box-shadow: var(--shadow-md);
+}
+
+.relatorios-shell .page-head h2 {
+    color: #ffffff !important;
+    font-size: clamp(1.55rem, 2.2vw, 2rem);
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.relatorios-shell .page-head i {
+    color: #ffffff !important;
+}
+
+.relatorios-shell .page-subtitle {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 1.02rem;
+    line-height: 1.35;
+    margin-top: 10px;
+}
+
 .relatorios-shell .report-grid {
     row-gap: 16px;
 }
@@ -14,6 +42,17 @@
 .relatorios-shell .report-card p {
     color: var(--neutral-500);
     min-height: 42px;
+}
+
+@media (max-width: 768px) {
+    .relatorios-shell .page-head {
+        min-height: 104px;
+        padding: 20px 18px;
+    }
+
+    .relatorios-shell .page-subtitle {
+        font-size: 0.94rem;
+    }
 }
 
 @media print {
