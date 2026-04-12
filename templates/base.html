@@ -581,7 +581,11 @@
         [style*="background-color: #283593"],
         [style*="background-color:#283593"],
         [style*="background-color: #007bff"],
-        [style*="background-color:#007bff"] {
+        [style*="background-color:#007bff"],
+        [style*="background-color: #0d6efd"],
+        [style*="background-color:#0d6efd"],
+        [style*="background-color: #0b5ed7"],
+        [style*="background-color:#0b5ed7"] {
             background: var(--layout-header-gradient) !important;
             color: #fff !important;
             border-color: transparent !important;
@@ -593,9 +597,18 @@
         [style*="linear-gradient(135deg, #1a237e 0%, #3949ab 100%)"],
         [style*="linear-gradient(135deg, #1a237e 0%, #37474f 100%)"],
         [style*="linear-gradient(135deg, #007bff 0%, #0056b3 100%)"],
-        [style*="linear-gradient(45deg, #007bff, #0056b3)"] {
+        [style*="linear-gradient(45deg, #007bff, #0056b3)"],
+        [style*="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"],
+        [style*="linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%)"] {
             background: var(--layout-header-gradient) !important;
             color: #fff !important;
+        }
+
+        /* Padronizacao profissional: sem deslocamento no hover */
+        *:hover,
+        *:hover::before,
+        *:hover::after {
+            transform: none !important;
         }
     </style>
     
@@ -605,6 +618,99 @@
     <link href="{{ url_for('static', filename='css/professional-layout.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/professional-pages.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
+    <style>
+        /* Uniformizacao final global (aplicada apos CSS das paginas) */
+        :root {
+            --layout-header-gradient-final: linear-gradient(135deg, var(--primary-dark) 0%, var(--neutral-dark) 100%);
+        }
+
+        .card-header,
+        .card-header.bg-primary,
+        .card-header.bg-success,
+        .card-header.bg-info,
+        .card-header.bg-warning,
+        .card-header.bg-danger,
+        .card-header.bg-dark,
+        .modal-header,
+        .page-header,
+        .info-card-header,
+        .card-header-vendas,
+        .resultado-header {
+            background: var(--layout-header-gradient-final) !important;
+            color: #fff !important;
+            border-color: transparent !important;
+        }
+
+        .card-header h1,
+        .card-header h2,
+        .card-header h3,
+        .card-header h4,
+        .card-header h5,
+        .card-header h6,
+        .card-header .btn,
+        .card-header .nav-link,
+        .modal-header .modal-title,
+        .modal-header .btn-close,
+        .modal-header .btn-close-white {
+            color: #fff !important;
+        }
+
+        .card-header .text-dark,
+        .card-header .text-muted {
+            color: rgba(255, 255, 255, 0.92) !important;
+        }
+
+        .card-header .nav-tabs,
+        .card-header .card-header-tabs {
+            border-bottom: none !important;
+        }
+
+        .card-header .nav-tabs .nav-link,
+        .card-header .card-header-tabs .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            background: transparent !important;
+            border: 1px solid transparent !important;
+        }
+
+        .card-header .nav-tabs .nav-link:hover,
+        .card-header .card-header-tabs .nav-link:hover {
+            color: #fff !important;
+            background: rgba(255, 255, 255, 0.12) !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
+        }
+
+        .card-header .nav-tabs .nav-link.active,
+        .card-header .card-header-tabs .nav-link.active,
+        .card-header .nav-tabs .nav-item.show .nav-link {
+            color: #fff !important;
+            background: rgba(255, 255, 255, 0.18) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+        }
+
+        .table thead th,
+        .table thead td,
+        .table-dark th,
+        .table-dark td,
+        .table-dark thead th,
+        thead.table-dark th,
+        .table-header-professional th,
+        .tabela-busca thead th,
+        .vendas-table thead th,
+        .modern-table thead th,
+        .relatorio-table thead th {
+            background: var(--layout-header-gradient-final) !important;
+            color: #fff !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+
+        .table .table-light th,
+        .table .table-light td,
+        thead.table-light th,
+        thead.table-light td {
+            background: var(--layout-header-gradient-final) !important;
+            color: #fff !important;
+        }
+    </style>
 </head>
 <body>
     <!-- Overlay para mobile -->

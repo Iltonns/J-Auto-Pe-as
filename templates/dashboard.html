@@ -584,17 +584,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Efeito de hover nos cards de estatística
-document.querySelectorAll('.stat-card').forEach(card => {
-    card.addEventListener('mouseenter', function() {
-        this.style.transform = 'translateY(-5px) scale(1.02)';
-    });
-    
-    card.addEventListener('mouseleave', function() {
-        this.style.transform = 'translateY(0) scale(1)';
-    });
-});
-
 // Auto-refresh dos dados a cada 5 minutos (apenas se não houver interação)
 let lastActivity = Date.now();
 document.addEventListener('mousemove', () => lastActivity = Date.now());

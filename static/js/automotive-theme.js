@@ -18,19 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Efeito de Hover Avançado nos Cards
     function initCardEffects() {
-        const cards = document.querySelectorAll('.card');
-        cards.forEach(card => {
-            card.addEventListener('mouseenter', function() {
-                this.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-                this.style.transform = 'translateY(-8px) scale(1.02)';
-                this.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15)';
-            });
-            
-            card.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0) scale(1)';
-                this.style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)';
-            });
-        });
+        // Sem movimento por hover nos cards.
     }
 
     // Busca Inteligente
