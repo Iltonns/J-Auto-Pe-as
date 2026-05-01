@@ -1,5 +1,5 @@
 # SISTEMA DE AUTOPEÇAS - FAMÍLIA
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
 import json
@@ -144,6 +144,34 @@ class User(UserMixin):
         self.username = user_data['username']
         self.email = user_data.get('email', '')
 
+def _montar_mapa_permissoes(user_data):
+    """Monta um mapa de permissoes do usuario para cache na request atual."""
+    if not user_data:
+        return {}
+
+    return {
+        'vendas': bool(user_data.get('permissao_vendas', False)),
+        'estoque': bool(user_data.get('permissao_estoque', False)),
+        'clientes': bool(user_data.get('permissao_clientes', False)),
+        'financeiro': bool(user_data.get('permissao_financeiro', False)),
+        'caixa': bool(user_data.get('permissao_caixa', False)),
+        'relatorios': bool(user_data.get('permissao_relatorios', False)),
+        'admin': bool(user_data.get('permissao_admin', False)),
+        'contas_pagar': bool(user_data.get('permissao_contas_pagar', False)),
+        'contas_receber': bool(user_data.get('permissao_contas_receber', False))
+    }
+
+def has_permission_cached(permission):
+    """Verifica permissao usando cache em memoria da request."""
+    if not current_user.is_authenticated:
+        return False
+
+    permissions = getattr(g, 'user_permissions', None)
+    if permissions is None:
+        return verificar_permissao(current_user.id, permission)
+
+    return permissions.get('admin', False) or permissions.get(permission, False)
+
 # Middleware para verificar sessão única
 @app.before_request
 def check_session_validity():
@@ -169,13 +197,40 @@ def load_user(user_id):
         return User(user_data)
     return None
 
+@app.before_request
+def load_user_access_context():
+    """
+    Carrega status e permissoes do usuario uma unica vez por request.
+    Reduz consultas repetidas durante a renderizacao.
+    """
+    g.user_permissions = {}
+    g.user_is_active = True
+
+    if request.endpoint == 'static' or not current_user.is_authenticated:
+        return
+
+    try:
+        user_id = int(current_user.id)
+    except (TypeError, ValueError):
+        g.user_is_active = False
+        return
+
+    user_data = buscar_usuario_por_id(user_id)
+    if not user_data:
+        g.user_is_active = False
+        return
+
+    g.user_is_active = bool(user_data.get('ativo', False))
+    if g.user_is_active:
+        g.user_permissions = _montar_mapa_permissoes(user_data)
+
 # Decorator para verificar permissões
 def required_permission(permission):
     def decorator(f):
         @wraps(f)
         @login_required
         def decorated_function(*args, **kwargs):
-            if not verificar_permissao(current_user.id, permission):
+            if not has_permission_cached(permission):
                 flash(f'Acesso negado. Você não tem permissão para acessar esta área.', 'error')
                 return redirect(url_for('dashboard'))
             return f(*args, **kwargs)
@@ -204,9 +259,7 @@ def format_date(value):
 @app.context_processor
 def utility_processor():
     def has_permission(permission):
-        if current_user.is_authenticated:
-            return verificar_permissao(current_user.id, permission)
-        return False
+        return has_permission_cached(permission)
     return dict(has_permission=has_permission)
 
 # Verificação de usuário ativo antes de cada requisição
@@ -218,9 +271,7 @@ def check_user_active():
     
     # Se não for uma rota excluída e o usuário estiver autenticado
     if request.endpoint not in excluded_routes and current_user.is_authenticated:
-        # Verificar se o usuário ainda existe e está ativo
-        user_data = buscar_usuario_por_id(int(current_user.id))
-        if not user_data or not user_data.get('ativo', False):
+        if not getattr(g, 'user_is_active', True):
             # Usuário foi inativado, fazer logout automaticamente
             logout_user()
             flash('Sua conta foi inativada. Entre em contato com o administrador.', 'error')
@@ -355,7 +406,7 @@ def criar_usuario_route():
 @login_required
 def usuarios():
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not has_permission_cached('admin'):
         flash('Acesso negado. Você não tem permissão para gerenciar usuários.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -366,7 +417,7 @@ def usuarios():
 @login_required
 def editar_usuario_route(user_id):
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not has_permission_cached('admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -403,7 +454,7 @@ def editar_usuario_route(user_id):
 @login_required
 def deletar_usuario_route(user_id):
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not has_permission_cached('admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -432,7 +483,7 @@ def trocar_senha_usuario_route(user_id):
     try:
         # Apenas admins podem trocar senha de outros usuários
         # Usuários podem trocar sua própria senha
-        if user_id != current_user.id and not verificar_permissao(current_user.id, 'admin'):
+        if user_id != current_user.id and not has_permission_cached('admin'):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         nova_senha = request.form.get('nova_senha')
@@ -509,12 +560,19 @@ def atualizar_configuracoes_empresa_route():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    pode_admin = has_permission_cached('admin')
+    pode_estoque = pode_admin or has_permission_cached('estoque')
+    pode_vendas = pode_admin or has_permission_cached('vendas')
+    pode_financeiro = pode_admin or has_permission_cached('financeiro')
+    pode_contas_pagar = pode_financeiro or pode_admin or has_permission_cached('contas_pagar')
+    pode_contas_receber = pode_financeiro or pode_admin or has_permission_cached('contas_receber')
+
     estatisticas = obter_estatisticas_dashboard()
-    produtos_baixo_estoque = produtos_estoque_baixo()
-    vendas_recentes = listar_vendas(limit=10)
-    contas_pagar_hoje = listar_contas_pagar_hoje()
-    contas_receber_hoje = listar_contas_receber_hoje()
-    contas_atrasadas = listar_contas_atrasadas()
+    produtos_baixo_estoque = produtos_estoque_baixo() if pode_estoque else []
+    vendas_recentes = listar_vendas(limit=10) if pode_vendas else []
+    contas_pagar_hoje = listar_contas_pagar_hoje() if pode_contas_pagar else []
+    contas_receber_hoje = listar_contas_receber_hoje() if pode_contas_receber else []
+    contas_atrasadas = listar_contas_atrasadas() if pode_financeiro else []
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -2294,7 +2352,7 @@ def api_venda(venda_id):
 @app.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
 @login_required
 def emitir_nfe_venda_route(venda_id):
-    if not verificar_permissao(current_user.id, 'vendas'):
+    if not has_permission_cached('vendas'):
         mensagem = 'Acesso negado. Voce nao tem permissao para emitir NF-e.'
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
             return jsonify({'sucesso': False, 'mensagem': mensagem}), 403
@@ -2330,7 +2388,7 @@ def emitir_nfe_venda_route(venda_id):
 @app.route('/api/vendas/<int:venda_id>/nfe')
 @login_required
 def api_nfe_por_venda(venda_id):
-    if not verificar_permissao(current_user.id, 'vendas'):
+    if not has_permission_cached('vendas'):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
 
     try:
@@ -2491,7 +2549,7 @@ def deletar_venda_route(venda_id):
     """
     try:
         # Verificar se o usuário tem permissão para vendas ou é admin
-        if not verificar_permissao(current_user.id, 'vendas') and not current_user.is_admin:
+        if not has_permission_cached('vendas') and not has_permission_cached('admin'):
             return jsonify({
                 'success': False,
                 'error': 'Você não tem permissão para deletar vendas.'
@@ -3003,7 +3061,7 @@ def excluir_orcamento_route(id):
 @login_required
 def relatorios():
     # Verificar se o usuário tem permissão para acessar relatórios
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3013,7 +3071,7 @@ def relatorios():
 @login_required
 def relatorio_vendas():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3039,7 +3097,7 @@ def relatorio_vendas():
 @login_required
 def relatorio_produtos_mais_vendidos():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3061,7 +3119,7 @@ def relatorio_produtos_mais_vendidos():
 @login_required
 def relatorio_estoque():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3079,7 +3137,7 @@ def relatorio_estoque():
 @login_required
 def relatorio_financeiro():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3433,7 +3491,7 @@ def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, statu
 @app.route('/relatorios/contas-a-receber/pdf')
 @login_required
 def exportar_contas_a_receber_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3566,7 +3624,7 @@ def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=
 @app.route('/relatorios/contas-a-pagar/pdf')
 @login_required
 def exportar_contas_a_pagar_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3845,7 +3903,7 @@ def criar_pdf_estoque(relatorio):
 @app.route('/relatorios/vendas/pdf')
 @login_required
 def exportar_vendas_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3875,7 +3933,7 @@ def exportar_vendas_pdf():
 @app.route('/relatorios/produtos-mais-vendidos/pdf')
 @login_required
 def exportar_produtos_mais_vendidos_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3895,7 +3953,7 @@ def exportar_produtos_mais_vendidos_pdf():
 @app.route('/relatorios/estoque/pdf')
 @login_required
 def exportar_estoque_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4161,7 +4219,7 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
 @app.route('/relatorios/financeiro/pdf')
 @login_required
 def exportar_financeiro_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     

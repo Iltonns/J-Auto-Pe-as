@@ -16,8 +16,19 @@ load_dotenv()
 # URL de conexão do PostgreSQL Neon
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+def _database_url_com_timeout(database_url, timeout_seconds=5):
+    """Garante connect_timeout na URL para falhar rápido em indisponibilidade de rede."""
+    if not database_url:
+        return database_url
+    if 'connect_timeout=' in database_url:
+        return database_url
+    separador = '&' if '?' in database_url else '?'
+    return f"{database_url}{separador}connect_timeout={timeout_seconds}"
+
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL não encontrada! Configure o arquivo .env com suas credenciais do Neon.")
+
+DATABASE_URL = _database_url_com_timeout(DATABASE_URL)
 
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
@@ -63,7 +74,7 @@ def normalizar_cnpj(cnpj):
 def get_db_connection():
     """Cria uma conexão com o banco PostgreSQL Neon"""
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL, application_name='jautopecas-web')
         # PostgreSQL usa autocommit=False por padrão, o que é bom para transações
         return conn
     except psycopg2.Error as e:
@@ -3765,123 +3776,129 @@ def contar_contas_atrasadas():
 
 # FUNÇÕES DE ESTATÍSTICAS
 def obter_estatisticas_dashboard():
-    """Obtém estatísticas para o dashboard"""
-    
-    # Usar conexões separadas para evitar conflitos de transação
-    def executar_consulta_segura(query, default=0):
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(query)
-            resultado = cursor.fetchone()[0] or default
-            conn.close()
-            return resultado
-        except Exception as e:
-            return default
-    
-    # Total de produtos
-    total_produtos = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
-    
-    # Total de clientes
-    total_clientes = executar_consulta_segura("SELECT COUNT(*) FROM clientes")
-    
-    # Total de fornecedores
-    total_fornecedores = executar_consulta_segura("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
-    
-    # Valor do estoque
-    valor_estoque = executar_consulta_segura("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
-    
-    # Produtos com estoque baixo
-    produtos_estoque_baixo = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo")
+    """Obtém estatísticas para o dashboard."""
+    conn = None
 
-    # Produtos sem estoque
-    produtos_sem_estoque = executar_consulta_segura("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
-    
-    # Vendas do mês e do dia - usando uma conexão para ambas
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Vendas do mês
-        cursor.execute('''
-            SELECT COUNT(*), SUM(total) 
-            FROM vendas 
-            WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
+
+        def consultar_valor(query, default=0):
+            try:
+                cursor.execute(query)
+                row = cursor.fetchone()
+                if not row:
+                    return default
+                return row[0] if row[0] is not None else default
+            except Exception:
+                return default
+
+        total_produtos = consultar_valor("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
+        total_clientes = consultar_valor("SELECT COUNT(*) FROM clientes")
+        total_fornecedores = consultar_valor("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
+        valor_estoque = consultar_valor("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
+        produtos_estoque_baixo = consultar_valor(
+            "SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo"
+        )
+        produtos_sem_estoque = consultar_valor("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
+
+        try:
+            cursor.execute('''
+                SELECT COUNT(*), SUM(total)
+                FROM vendas
+                WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
+            ''')
+            vendas_mes = cursor.fetchone() or (0, 0)
+        except Exception:
+            vendas_mes = (0, 0)
+
+        try:
+            cursor.execute('''
+                SELECT COUNT(*), SUM(total)
+                FROM vendas
+                WHERE data_venda::date = CURRENT_DATE
+            ''')
+            vendas_dia = cursor.fetchone() or (0, 0)
+        except Exception:
+            vendas_dia = (0, 0)
+
+        valor_atraso_receber = consultar_valor('''
+            SELECT SUM(valor)
+            FROM contas_receber
+            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
         ''')
-        vendas_mes = cursor.fetchone()
-        
-        # Vendas do dia
-        cursor.execute('''
-            SELECT COUNT(*), SUM(total) 
-            FROM vendas 
-            WHERE data_venda::date = CURRENT_DATE
+
+        valor_atraso_pagar = consultar_valor('''
+            SELECT SUM(valor)
+            FROM contas_pagar
+            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
         ''')
-        vendas_dia = cursor.fetchone()
-        
-        conn.close()
-    except:
-        vendas_mes = (0, 0)
-        vendas_dia = (0, 0)
-    
-    # Contas em atraso
-    valor_atraso_receber = executar_consulta_segura('''
-        SELECT SUM(valor) 
-        FROM contas_receber 
-        WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-    ''')
-    
-    valor_atraso_pagar = executar_consulta_segura('''
-        SELECT SUM(valor) 
-        FROM contas_pagar 
-        WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-    ''')
-    
-    # Movimentações pendentes (verificar se a tabela existe)
-    movimentacoes_pendentes = executar_consulta_segura('''
-        SELECT COUNT(*) 
-        FROM movimentacoes_produtos 
-        WHERE status = 'pendente'
-    ''')
-    
-    # Orçamentos pendentes
-    orcamentos_pendentes = executar_consulta_segura('''
-        SELECT COUNT(*) 
-        FROM orcamentos 
-        WHERE status = 'pendente'
-    ''')
-    
-    # Contas a pagar hoje
-    contas_pagar_hoje = executar_consulta_segura('''
-        SELECT COUNT(*) 
-        FROM contas_pagar 
-        WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
-    ''')
-    
-    # Contas a receber hoje
-    contas_receber_hoje = executar_consulta_segura('''
-        SELECT COUNT(*) 
-        FROM contas_receber 
-        WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
-    ''')
-    
-    return {
-        'total_produtos': total_produtos,
-        'total_clientes': total_clientes,
-        'total_fornecedores': total_fornecedores,
-        'valor_estoque': valor_estoque,
-        'produtos_estoque_baixo': produtos_estoque_baixo,
-        'produtos_sem_estoque': produtos_sem_estoque,
-        'vendas_mes_quantidade': vendas_mes[0] or 0,
-        'vendas_mes_valor': vendas_mes[1] or 0,
-        'vendas_dia_quantidade': vendas_dia[0] or 0,
-        'vendas_dia_valor': vendas_dia[1] or 0,
-        'valor_atraso_receber': valor_atraso_receber,
-        'valor_atraso_pagar': valor_atraso_pagar,
-        'movimentacoes_pendentes': movimentacoes_pendentes,
-        'orcamentos_pendentes': orcamentos_pendentes,
-        'contas_pagar_hoje': contas_pagar_hoje,
-        'contas_receber_hoje': contas_receber_hoje
-    }
+
+        movimentacoes_pendentes = consultar_valor('''
+            SELECT COUNT(*)
+            FROM movimentacoes_produtos
+            WHERE status = 'pendente'
+        ''')
+
+        orcamentos_pendentes = consultar_valor('''
+            SELECT COUNT(*)
+            FROM orcamentos
+            WHERE status = 'pendente'
+        ''')
+
+        contas_pagar_hoje = consultar_valor('''
+            SELECT COUNT(*)
+            FROM contas_pagar
+            WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
+        ''')
+
+        contas_receber_hoje = consultar_valor('''
+            SELECT COUNT(*)
+            FROM contas_receber
+            WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
+        ''')
+
+        return {
+            'total_produtos': total_produtos,
+            'total_clientes': total_clientes,
+            'total_fornecedores': total_fornecedores,
+            'valor_estoque': valor_estoque,
+            'produtos_estoque_baixo': produtos_estoque_baixo,
+            'produtos_sem_estoque': produtos_sem_estoque,
+            'vendas_mes_quantidade': vendas_mes[0] or 0,
+            'vendas_mes_valor': vendas_mes[1] or 0,
+            'vendas_dia_quantidade': vendas_dia[0] or 0,
+            'vendas_dia_valor': vendas_dia[1] or 0,
+            'valor_atraso_receber': valor_atraso_receber,
+            'valor_atraso_pagar': valor_atraso_pagar,
+            'movimentacoes_pendentes': movimentacoes_pendentes,
+            'orcamentos_pendentes': orcamentos_pendentes,
+            'contas_pagar_hoje': contas_pagar_hoje,
+            'contas_receber_hoje': contas_receber_hoje
+        }
+    except Exception as e:
+        print(f"Erro ao obter estatísticas do dashboard: {e}")
+        return {
+            'total_produtos': 0,
+            'total_clientes': 0,
+            'total_fornecedores': 0,
+            'valor_estoque': 0,
+            'produtos_estoque_baixo': 0,
+            'produtos_sem_estoque': 0,
+            'vendas_mes_quantidade': 0,
+            'vendas_mes_valor': 0,
+            'vendas_dia_quantidade': 0,
+            'vendas_dia_valor': 0,
+            'valor_atraso_receber': 0,
+            'valor_atraso_pagar': 0,
+            'movimentacoes_pendentes': 0,
+            'orcamentos_pendentes': 0,
+            'contas_pagar_hoje': 0,
+            'contas_receber_hoje': 0
+        }
+    finally:
+        if conn:
+            conn.close()
 
 def produtos_estoque_baixo():
     """Lista produtos com estoque baixo"""
