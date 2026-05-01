@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard - Sistema de Autopeças{% endblock %}
-{% block page_title %}Dashboard - FG Auto Peças{% endblock %}
+{% block page_title %}Dashboard - J-AUTO PEÇAS{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/dashboard-improved.css') }}">
@@ -600,7 +600,7 @@ setInterval(() => {
 {% if estatisticas.produtos_estoque_baixo > 0 %}
 setTimeout(() => {
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('AutoPeças Pro - Alerta de Estoque', {
+        new Notification('J-AUTO PEÇAS - Alerta de Estoque', {
             body: `${estatisticas.produtos_estoque_baixo} produto(s) com estoque baixo necessitam de atenção.`,
             icon: '/static/images/logo.png'
         });

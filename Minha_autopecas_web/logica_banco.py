@@ -422,14 +422,14 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS configuracoes_empresa (
             id SERIAL PRIMARY KEY,
-            nome_empresa TEXT NOT NULL DEFAULT 'FG AUTO PEÇAS',
-            cnpj TEXT,
-            endereco TEXT DEFAULT 'Rua Exemplo, 123 - Centro',
-            cidade TEXT,
-            estado TEXT,
-            cep TEXT,
-            telefone TEXT DEFAULT '(00) 0000-0000',
-            email TEXT DEFAULT 'contato@fgautopecas.com.br',
+            nome_empresa TEXT NOT NULL DEFAULT 'J-AUTO PEÇAS',
+            cnpj TEXT DEFAULT '58.776.125/0001-98',
+            endereco TEXT DEFAULT 'Avenida 01, 240 - Quadra 19 - Alto Turu',
+            cidade TEXT DEFAULT 'São José de Ribamar',
+            estado TEXT DEFAULT 'MA',
+            cep TEXT DEFAULT '65122-344',
+            telefone TEXT DEFAULT '(98) 8423-0576',
+            email TEXT DEFAULT 'jaimendes27@gmail.com',
             website TEXT,
             logo_path TEXT DEFAULT 'logo.jpg',
             observacoes TEXT,
@@ -441,9 +441,50 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa")
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
-            INSERT INTO configuracoes_empresa (nome_empresa, endereco, telefone, email)
-            VALUES (%s, %s, %s, %s)
-        ''', ('FG AUTO PEÇAS', 'Rua Exemplo, 123 - Centro', '(00) 0000-0000', 'contato@fgautopecas.com.br'))
+            INSERT INTO configuracoes_empresa (nome_empresa, cnpj, endereco, cidade, estado, cep, telefone, email)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            'J-AUTO PEÇAS',
+            '58.776.125/0001-98',
+            'Avenida 01, 240 - Quadra 19 - Alto Turu',
+            'São José de Ribamar',
+            'MA',
+            '65122-344',
+            '(98) 8423-0576',
+            'jaimendes27@gmail.com'
+        ))
+    else:
+        cursor.execute('''
+            SELECT id, nome_empresa
+            FROM configuracoes_empresa
+            ORDER BY id DESC
+            LIMIT 1
+        ''')
+        config_atual = cursor.fetchone()
+        if config_atual and (config_atual[1] or '').strip().upper() == 'FG AUTO PEÇAS':
+            cursor.execute('''
+                UPDATE configuracoes_empresa
+                SET nome_empresa = %s,
+                    cnpj = %s,
+                    endereco = %s,
+                    cidade = %s,
+                    estado = %s,
+                    cep = %s,
+                    telefone = %s,
+                    email = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (
+                'J-AUTO PEÇAS',
+                '58.776.125/0001-98',
+                'Avenida 01, 240 - Quadra 19 - Alto Turu',
+                'São José de Ribamar',
+                'MA',
+                '65122-344',
+                '(98) 8423-0576',
+                'jaimendes27@gmail.com',
+                config_atual[0]
+            ))
     
     # Tabela de movimentações de produtos (para aprovação antes de ir ao estoque)
     cursor.execute('''
@@ -5832,22 +5873,22 @@ def obter_configuracoes_empresa():
         resultado = cursor.fetchone()
         if resultado:
             config = {
-                'nome_empresa': resultado[0] or 'FG AUTO PEÇAS',
-                'cnpj': resultado[1] or '',
-                'ie': resultado[2] or '',
+                'nome_empresa': resultado[0] or 'J-AUTO PEÇAS',
+                'cnpj': resultado[1] or '58.776.125/0001-98',
+                'ie': resultado[2] or '12.887955-6',
                 'crt': resultado[3] or '1',
-                'cnae': resultado[4] or '',
-                'codigo_municipio_ibge': resultado[5] or '',
+                'cnae': resultado[4] or '4530703',
+                'codigo_municipio_ibge': resultado[5] or '2111201',
                 'ambiente_fiscal': resultado[6] or 'homologacao',
                 'serie_nfe': resultado[7] or 1,
-                'endereco': resultado[8] or 'Rua Exemplo, 123 - Centro',
-                'cidade': resultado[9] or '',
-                'estado': resultado[10] or '',
-                'cep': resultado[11] or '',
-                'telefone': resultado[12] or '(00) 0000-0000',
-                'email': resultado[13] or 'contato@fgautopecas.com.br',
+                'endereco': resultado[8] or 'Avenida 01, 240 - Quadra 19 - Alto Turu',
+                'cidade': resultado[9] or 'São José de Ribamar',
+                'estado': resultado[10] or 'MA',
+                'cep': resultado[11] or '65122-344',
+                'telefone': resultado[12] or '(98) 8423-0576',
+                'email': resultado[13] or 'jaimendes27@gmail.com',
                 'website': resultado[14] or '',
-                'logo_path': resultado[15] or '',
+                'logo_path': resultado[15] or 'logo.jpg',
                 'observacoes': resultado[16] or ''
             }
             print(f"Configurações da empresa carregadas: {config['nome_empresa']}")
@@ -5867,22 +5908,22 @@ def obter_configuracoes_empresa():
 def obter_configuracoes_padrao():
     """Retorna configurações padrão da empresa"""
     return {
-        'nome_empresa': 'FG AUTO PEÇAS',
-        'cnpj': '',
-        'ie': '',
+        'nome_empresa': 'J-AUTO PEÇAS',
+        'cnpj': '58.776.125/0001-98',
+        'ie': '12.887955-6',
         'crt': '1',
-        'cnae': '',
-        'codigo_municipio_ibge': '',
+        'cnae': '4530703',
+        'codigo_municipio_ibge': '2111201',
         'ambiente_fiscal': 'homologacao',
         'serie_nfe': 1,
-        'endereco': 'Rua Exemplo, 123 - Centro',
-        'cidade': '',
-        'estado': '',
-        'cep': '',
-        'telefone': '(00) 0000-0000',
-        'email': 'contato@fgautopecas.com.br',
+        'endereco': 'Avenida 01, 240 - Quadra 19 - Alto Turu',
+        'cidade': 'São José de Ribamar',
+        'estado': 'MA',
+        'cep': '65122-344',
+        'telefone': '(98) 8423-0576',
+        'email': 'jaimendes27@gmail.com',
         'website': '',
-        'logo_path': '',
+        'logo_path': 'logo.jpg',
         'observacoes': ''
     }
 

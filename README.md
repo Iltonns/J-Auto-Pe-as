@@ -1,4 +1,4 @@
-# 🔧 AutoPeças Pro - Sistema Completo de Gestão Automotiva
+# 🔧 J-AUTO PEÇAS - Sistema Completo de Gestão Automotiva
 
 [![Versão](https://img.shields.io/badge/versão-2.0.0-blue.svg)](https://github.com/Iltonns/FG-Auto-pe-as)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://www.python.org/)
@@ -622,19 +622,19 @@ python test_sistema_completo.py
 ## 📞 Suporte e Contato
 
 ### **📧 Suporte Técnico**
-- **Email**: [suporte@autopecaspro.com](mailto:suporte@autopecaspro.com)
+- **Email**: [jaimendes27@gmail.com](mailto:jaimendes27@gmail.com)
 - **GitHub Issues**: [Reportar Bug](https://github.com/Iltonns/FG-Auto-pe-as/issues)
 - **Documentação**: [Wiki do Projeto](https://github.com/Iltonns/FG-Auto-pe-as/wiki)
 
 ### **💬 Comunidade**
-- **Discord**: [Servidor da Comunidade](https://discord.gg/autopecaspro)
-- **Telegram**: [Grupo de Usuários](https://t.me/autopecaspro)
+- **Discord**: [Servidor da Comunidade](https://discord.gg/jautopecas)
+- **Telegram**: [Grupo de Usuários](https://t.me/jautopecas)
 - **WhatsApp**: [Suporte Rápido](https://wa.me/5511999999999)
 
 ### **📱 Redes Sociais**
-- **Instagram**: [@autopecaspro](https://instagram.com/autopecaspro)
-- **YouTube**: [Canal AutoPeças Pro](https://youtube.com/autopecaspro)
-- **LinkedIn**: [Página da Empresa](https://linkedin.com/company/autopecaspro)
+- **Instagram**: [@jautopecas](https://instagram.com/jautopecas)
+- **YouTube**: [Canal J-AUTO PEÇAS](https://youtube.com/jautopecas)
+- **LinkedIn**: [Página da Empresa](https://linkedin.com/company/jautopecas)
 
 ## 📄 Licença e Termos
 
@@ -653,7 +653,7 @@ Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](
 ### **🏆 Desenvolvedor Principal**
 **Família AutoPeças**
 - 🐙 **GitHub**: [@Iltonns](https://github.com/Iltonns)
-- 📧 **Email**: [ilton@autopecaspro.com](mailto:ilton@autopecaspro.com)
+- 📧 **Email**: [jaimendes27@gmail.com](mailto:jaimendes27@gmail.com)
 - 💼 **LinkedIn**: [Perfil Profissional](https://linkedin.com/in/iltonns)
 
 ### **🤝 Contribuidores**
@@ -688,6 +688,6 @@ Este projeto é dedicado a todas as **famílias empreendedoras** do setor automo
 
 ---
 
-**© 2025 AutoPeças Pro - Todos os direitos reservados**
+**© 2025 J-AUTO PEÇAS - Todos os direitos reservados**
 
 </div>

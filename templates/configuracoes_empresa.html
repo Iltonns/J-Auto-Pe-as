@@ -165,7 +165,7 @@
                                     <label for="telefone" class="form-label">Telefone *</label>
                                     <input type="text" class="form-control" id="telefone" name="telefone" 
                                            value="{{ config.telefone }}" required 
-                                           placeholder="(00) 0000-0000">
+                                           placeholder="(98) 8423-0576">
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -310,7 +310,7 @@ document.getElementById('telefone').addEventListener('input', function(e) {
 function atualizarPrevia() {
     document.getElementById('preview-nome').textContent = document.getElementById('nome_empresa').value || 'Nome da Empresa';
     document.getElementById('preview-endereco').textContent = document.getElementById('endereco').value || 'Endereço';
-    document.getElementById('preview-telefone').textContent = 'Tel: ' + (document.getElementById('telefone').value || '(00) 0000-0000');
+    document.getElementById('preview-telefone').textContent = 'Tel: ' + (document.getElementById('telefone').value || '(98) 8423-0576');
     document.getElementById('preview-email').textContent = 'Email: ' + (document.getElementById('email').value || 'email@empresa.com');
     
     const cidade = document.getElementById('cidade').value;

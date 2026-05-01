@@ -3122,7 +3122,7 @@ def criar_cabecalho_empresa(doc, styles, config_empresa):
             logo_img = Image(logo_path, width=60, height=60)
             
             empresa_info = []
-            empresa_info.append(Paragraph(config_empresa.get('nome_empresa', 'FG AUTO PEÇAS'), 
+            empresa_info.append(Paragraph(config_empresa.get('nome_empresa', 'J-AUTO PEÇAS'), 
                                         ParagraphStyle('EmpresaTitle', parent=styles['Heading1'], 
                                                      fontSize=16, textColor=colors.HexColor('#1a237e'))))
             
@@ -3191,7 +3191,7 @@ def criar_cabecalho_texto_apenas(styles, config_empresa):
         textColor=colors.HexColor('#546e7a')
     )
     
-    story.append(Paragraph(config_empresa.get('nome_empresa', 'FG AUTO PEÇAS'), title_style))
+    story.append(Paragraph(config_empresa.get('nome_empresa', 'J-AUTO PEÇAS'), title_style))
     
     # Informações da empresa
     info_empresa = []
@@ -3215,7 +3215,7 @@ def criar_cabecalho_texto_apenas(styles, config_empresa):
 
 def criar_rodape_empresa(doc, config_empresa):
     """Cria rodapé com informações da empresa"""
-    rodape_texto = f"Relatório gerado pelo Sistema {config_empresa.get('nome_empresa', 'FG AUTO PEÇAS')} - {agora_br().strftime('%d/%m/%Y às %H:%M')}"
+    rodape_texto = f"Relatório gerado pelo Sistema {config_empresa.get('nome_empresa', 'J-AUTO PEÇAS')} - {agora_br().strftime('%d/%m/%Y às %H:%M')}"
     return rodape_texto
 
 def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecionado=None):
