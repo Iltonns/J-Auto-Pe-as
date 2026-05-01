@@ -33,6 +33,7 @@ DATABASE_URL = _database_url_com_timeout(DATABASE_URL)
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
 _fiscal_schema_checked = False
+_nfe_entrada_schema_checked = False
 _clientes_schema_checked = False
 _contas_receber_schema_checked = False
 
@@ -2015,10 +2016,14 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
                           codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None,
                           marca=None, fornecedor_id=None, ncm=None, unidade='UN',
                           xml_nfe_chave=None, xml_nfe_numero=None, xml_nfe_data=None,
-                          xml_produto_codigo=None, xml_conteudo=None, usuario_id=None, observacoes=None):
+                          xml_produto_codigo=None, xml_conteudo=None, usuario_id=None, observacoes=None,
+                          forcar_pendente=False, conn=None, cursor=None):
     """Adiciona uma nova movimentação e a aprova automaticamente se o produto já existir."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    local_conn = False
+    if conn is None or cursor is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        local_conn = True
 
     try:
         # 1. Verificar se o produto já existe (PRIORIDADE: Código do Fornecedor)
@@ -2036,7 +2041,7 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
                 produto_existente_id = result[0]
 
         # Determinar o status inicial
-        status_inicial = 'aprovada' if produto_existente_id else 'pendente'
+        status_inicial = 'pendente' if forcar_pendente else ('aprovada' if produto_existente_id else 'pendente')
 
         # 2. Calcular a margem de lucro
         if preco_custo and preco_custo > 0 and preco_venda > preco_custo:
@@ -2069,15 +2074,18 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
             # Chamar a lógica de aprovação diretamente
             aprovar_movimentacao(movimentacao_id, usuario_id, conn, cursor)
 
-        conn.commit()
+        if local_conn:
+            conn.commit()
         return movimentacao_id
 
     except Exception as e:
-        conn.rollback()
+        if local_conn:
+            conn.rollback()
         print(f"Erro em adicionar_movimentacao: {e}")
         raise
     finally:
-        conn.close()
+        if local_conn:
+            conn.close()
 
 def listar_movimentacoes(status=None, tipo_movimentacao=None):
     """Lista todas as movimentações, opcionalmente filtrando por status e tipo"""
@@ -4717,234 +4725,456 @@ def importar_produtos_de_xml(conteudo_xml):
             'erros': [str(e)]
         }
 
+def garantir_estrutura_nfe_entrada():
+    """Garante colunas e indices para rastreabilidade de NF-e de compra."""
+    global _nfe_entrada_schema_checked
+
+    if _nfe_entrada_schema_checked:
+        return True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        add_column_if_not_exists(cursor, conn, 'contas_pagar', "tipo_lancamento TEXT DEFAULT 'manual'")
+        add_column_if_not_exists(cursor, conn, 'contas_pagar', "nfe_chave TEXT")
+        add_column_if_not_exists(cursor, conn, 'contas_pagar', "nfe_numero TEXT")
+        add_column_if_not_exists(cursor, conn, 'contas_pagar', "nfe_parcela TEXT")
+        add_column_if_not_exists(cursor, conn, 'contas_pagar', "nfe_data_emissao DATE")
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_contas_pagar_nf_compra_parcela
+            ON contas_pagar (nfe_chave, COALESCE(nfe_parcela, '001'))
+            WHERE tipo_lancamento = 'nf_compra' AND nfe_chave IS NOT NULL
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_xml_nfe_chave ON movimentacoes(xml_nfe_chave)")
+        conn.commit()
+
+        _nfe_entrada_schema_checked = True
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao garantir estrutura de NF-e de entrada: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def _obter_texto_xml(elemento, tag, ns=None, default=None):
+    if elemento is None:
+        return default
+
+    no = elemento.find(tag, ns) if ns else elemento.find(tag)
+    if no is None or no.text is None:
+        return default
+
+    texto = str(no.text).strip()
+    return texto if texto else default
+
+
+def _to_float_xml(valor, default=0.0):
+    if valor is None:
+        return default
+    try:
+        return float(str(valor).strip().replace(',', '.'))
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_date_xml(valor):
+    if not valor:
+        return None
+
+    texto = str(valor).strip()
+    if not texto:
+        return None
+
+    try:
+        if 'T' in texto:
+            return datetime.fromisoformat(texto.replace('Z', '+00:00')).date()
+        return datetime.strptime(texto[:10], '%Y-%m-%d').date()
+    except Exception:
+        return None
+
+
+def _tpag_a_vista(codigo):
+    return codigo in {'01', '02', '17', '20'}
+
+
+def _extrair_dados_financeiros_nfe(root, ns, data_emissao, valor_total_nota):
+    """Monta parcelas de contas a pagar com base em cobr/dup ou pag/detPag."""
+    parcelas = []
+    tipo_geracao = 'sem_cobranca'
+    codigos_pagamento = []
+
+    # Cenario 1: cobranca parcelada no XML
+    duplicatas = root.findall('.//nfe:cobr/nfe:dup', ns)
+    if duplicatas:
+        tipo_geracao = 'cobr_dup'
+        for idx, dup in enumerate(duplicatas, start=1):
+            numero_parcela = _obter_texto_xml(dup, 'nfe:nDup', ns, f"{idx:03d}")
+            vencimento = _to_date_xml(_obter_texto_xml(dup, 'nfe:dVenc', ns)) or data_emissao or hoje_br()
+            valor_dup = _to_float_xml(_obter_texto_xml(dup, 'nfe:vDup', ns), 0.0)
+
+            if valor_dup <= 0:
+                continue
+
+            parcelas.append({
+                'numero': numero_parcela,
+                'data_vencimento': vencimento,
+                'valor': round(valor_dup, 2),
+            })
+
+        if parcelas:
+            return parcelas, tipo_geracao, codigos_pagamento
+
+    # Cenario 2: sem cobranca -> fallback em detPag
+    det_pagamentos = root.findall('.//nfe:pag/nfe:detPag', ns)
+    valor_detpag = 0.0
+
+    for det_pag in det_pagamentos:
+        codigo = (_obter_texto_xml(det_pag, 'nfe:tPag', ns, '') or '').zfill(2)
+        if codigo:
+            codigos_pagamento.append(codigo)
+        valor_detpag += _to_float_xml(_obter_texto_xml(det_pag, 'nfe:vPag', ns), 0.0)
+
+    valor_base = round(valor_detpag, 2) if valor_detpag > 0 else round(float(valor_total_nota or 0), 2)
+    if valor_base <= 0:
+        valor_base = 0.0
+
+    eh_a_vista = bool(codigos_pagamento) and all(_tpag_a_vista(cod) for cod in codigos_pagamento)
+    tipo_geracao = 'avista_detpag' if eh_a_vista else 'padrao_detpag'
+
+    parcelas.append({
+        'numero': '001',
+        'data_vencimento': data_emissao or hoje_br(),
+        'valor': valor_base,
+    })
+
+    return parcelas, tipo_geracao, codigos_pagamento
+
+
+def _nfe_entrada_duplicada(cursor, nfe_chave, nfe_numero=None, fornecedor_id=None):
+    if nfe_chave:
+        cursor.execute("""
+            SELECT id
+            FROM movimentacoes
+            WHERE origem = 'xml_nfe' AND xml_nfe_chave = %s
+            LIMIT 1
+        """, (nfe_chave,))
+        if cursor.fetchone():
+            return True
+
+        cursor.execute("""
+            SELECT id
+            FROM contas_pagar
+            WHERE tipo_lancamento = 'nf_compra' AND nfe_chave = %s
+            LIMIT 1
+        """, (nfe_chave,))
+        if cursor.fetchone():
+            return True
+
+    if nfe_numero and fornecedor_id:
+        cursor.execute("""
+            SELECT id
+            FROM movimentacoes
+            WHERE origem = 'xml_nfe' AND xml_nfe_numero = %s AND fornecedor_id = %s
+            LIMIT 1
+        """, (nfe_numero, fornecedor_id))
+        if cursor.fetchone():
+            return True
+
+    return False
+
+
+def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_geracao, codigos_pagamento):
+    contas_criadas = 0
+    contas_existentes = 0
+
+    descricao_base = f"NF Compra {dados_nfe['nfe_numero']}"
+    codigos_pag_txt = ','.join(codigos_pagamento) if codigos_pagamento else 'N/A'
+
+    for idx, parcela in enumerate(parcelas, start=1):
+        numero_parcela = str(parcela.get('numero') or f"{idx:03d}").strip() or f"{idx:03d}"
+        data_vencimento = parcela.get('data_vencimento') or dados_nfe['data_emissao'] or hoje_br()
+        valor_parcela = round(float(parcela.get('valor') or 0), 2)
+
+        if valor_parcela <= 0:
+            continue
+
+        cursor.execute("""
+            SELECT id
+            FROM contas_pagar
+            WHERE tipo_lancamento = 'nf_compra'
+              AND nfe_chave = %s
+              AND COALESCE(nfe_parcela, '001') = %s
+            LIMIT 1
+        """, (dados_nfe['nfe_chave'], numero_parcela))
+        if cursor.fetchone():
+            contas_existentes += 1
+            continue
+
+        observacoes = (
+            f"Gerado automaticamente pela importacao do XML da NF-e {dados_nfe['nfe_numero']} "
+            f"(chave {dados_nfe['nfe_chave']}). Tipo: {tipo_geracao}. tPag: {codigos_pag_txt}."
+        )
+
+        cursor.execute("""
+            INSERT INTO contas_pagar (
+                descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id,
+                tipo_lancamento, nfe_chave, nfe_numero, nfe_parcela, nfe_data_emissao, status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, 'nf_compra', %s, %s, %s, %s, 'pendente')
+        """, (
+            f"{descricao_base} - Parcela {numero_parcela}",
+            valor_parcela,
+            data_vencimento,
+            'NF de Compra',
+            observacoes,
+            fornecedor_id,
+            dados_nfe['nfe_chave'],
+            dados_nfe['nfe_numero'],
+            numero_parcela,
+            dados_nfe['data_emissao'],
+        ))
+        contas_criadas += 1
+
+    return contas_criadas, contas_existentes
+
+
 def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=1, usuario_id=None):
     """
-    Importa produtos de um arquivo XML de NFe criando movimentações pendentes de aprovação
-    ao invés de adicionar diretamente ao estoque
-    
-    Args:
-        conteudo_xml: Conteúdo do arquivo XML como string
-        margem_padrao: Margem de lucro padrão (%)
-        estoque_minimo: Estoque mínimo padrão
-        usuario_id: ID do usuário que está importando
-    
-    Returns:
-        Dict com informações sobre a importação
+    Importa XML de NF-e de compra criando pre-entrada de estoque (pendente)
+    e contas a pagar automaticas com rastreabilidade da nota fiscal.
     """
     import xml.etree.ElementTree as ET
-    
+
     movimentacoes_criadas = 0
     erros = []
     fornecedor_id = None
-    
+
+    if not garantir_estrutura_nfe_entrada():
+        return {
+            'sucesso': False,
+            'erro': 'Nao foi possivel preparar a estrutura de NF-e de entrada.',
+            'movimentacoes_criadas': 0,
+            'erros': ['Falha ao garantir colunas de rastreabilidade financeira.'],
+        }
+
     try:
-        # Parse do XML
         root = ET.fromstring(conteudo_xml)
-        
-        # Namespace da NFe
         ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
-        
-        # Extrair dados da NFe (chave, número, data)
+
         inf_nfe = root.find('.//nfe:infNFe', ns)
-        nfe_chave = inf_nfe.get('Id').replace('NFe', '') if inf_nfe is not None and inf_nfe.get('Id') else None
-        
+        nfe_chave = None
+        if inf_nfe is not None and inf_nfe.get('Id'):
+            nfe_chave = inf_nfe.get('Id').replace('NFe', '').strip()
+
         ide = root.find('.//nfe:ide', ns)
-        nfe_numero = ide.find('nfe:nNF', ns).text if ide is not None and ide.find('nfe:nNF', ns) is not None else None
-        
-        dhEmi = ide.find('nfe:dhEmi', ns) if ide is not None else None
-        nfe_data = None
-        if dhEmi is not None and dhEmi.text:
-            try:
-                from datetime import datetime
-                nfe_data = datetime.fromisoformat(dhEmi.text.replace('Z', '+00:00')).date()
-            except:
-                nfe_data = None
-        
-        # ===== EXTRAIR E CADASTRAR/ATUALIZAR FORNECEDOR =====
+        nfe_numero = _obter_texto_xml(ide, 'nfe:nNF', ns)
+        data_emissao = _to_date_xml(_obter_texto_xml(ide, 'nfe:dhEmi', ns))
+
         emit = root.find('.//nfe:emit', ns)
-        if emit is not None:
-            try:
-                # Extrair dados do emitente (fornecedor)
-                cnpj_fornecedor = emit.find('nfe:CNPJ', ns)
-                cnpj_fornecedor = cnpj_fornecedor.text if cnpj_fornecedor is not None else None
-                
-                nome_fornecedor = emit.find('nfe:xNome', ns)
-                nome_fornecedor = nome_fornecedor.text if nome_fornecedor is not None else None
-                
-                nome_fantasia = emit.find('nfe:xFant', ns)
-                nome_fantasia = nome_fantasia.text if nome_fantasia is not None else None
-                
-                # Dados de endereço
-                enderEmit = emit.find('nfe:enderEmit', ns)
-                endereco_completo = None
-                cidade = None
-                estado = None
-                cep = None
-                telefone = None
-                
-                if enderEmit is not None:
-                    xLgr = enderEmit.find('nfe:xLgr', ns)
-                    nro = enderEmit.find('nfe:nro', ns)
-                    xBairro = enderEmit.find('nfe:xBairro', ns)
-                    xCpl = enderEmit.find('nfe:xCpl', ns)
-                    
-                    cidade_elem = enderEmit.find('nfe:xMun', ns)
-                    cidade = cidade_elem.text if cidade_elem is not None else None
-                    
-                    estado_elem = enderEmit.find('nfe:UF', ns)
-                    estado = estado_elem.text if estado_elem is not None else None
-                    
-                    cep_elem = enderEmit.find('nfe:CEP', ns)
-                    cep = cep_elem.text if cep_elem is not None else None
-                    
-                    fone_elem = enderEmit.find('nfe:fone', ns)
-                    telefone = fone_elem.text if fone_elem is not None else None
-                    
-                    # Montar endereço completo
-                    partes_endereco = []
-                    if xLgr is not None:
-                        partes_endereco.append(xLgr.text)
-                    if nro is not None:
-                        partes_endereco.append(f"nº {nro.text}")
-                    if xCpl is not None and xCpl.text:
-                        partes_endereco.append(xCpl.text)
-                    if xBairro is not None:
-                        partes_endereco.append(xBairro.text)
-                    
-                    endereco_completo = ', '.join(partes_endereco) if partes_endereco else None
-                
-                # Buscar ou criar fornecedor usando validação robusta
-                if cnpj_fornecedor and nome_fornecedor:
-                    # Usar função robusta que evita duplicações
-                    resultado_fornecedor = adicionar_ou_atualizar_fornecedor_automatico(
-                        nome=nome_fornecedor,
-                        cnpj=cnpj_fornecedor,
-                        telefone=telefone,
-                        endereco=endereco_completo,
-                        cidade=cidade,
-                        estado=estado,
-                        cep=cep,
-                        observacoes=f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}"
-                    )
-                    
-                    if resultado_fornecedor['sucesso']:
-                        fornecedor_id = resultado_fornecedor['fornecedor_id']
-                        if resultado_fornecedor['criado']:
-                            print(f"DEBUG XML: Novo fornecedor criado: {nome_fornecedor} (ID: {fornecedor_id})")
-                        else:
-                            print(f"DEBUG XML: Fornecedor já existia: {nome_fornecedor} (ID: {fornecedor_id})")
-                    else:
-                        erros.append(f"Erro ao processar fornecedor {nome_fornecedor}: {resultado_fornecedor['mensagem']}")
-                        fornecedor_id = None
-                    
-            except Exception as e:
-                erros.append(f"Erro ao processar fornecedor: {str(e)}")
-        
-        # ===== BUSCAR PRODUTOS DO XML E CRIAR MOVIMENTAÇÕES =====
-        produtos_xml = root.findall('.//nfe:det', ns)
-        
-        if not produtos_xml:
-            raise ValueError("Nenhum produto encontrado no XML")
-        
-        for det in produtos_xml:
-            try:
-                # Extrair dados do produto
+        cnpj_fornecedor = _obter_texto_xml(emit, 'nfe:CNPJ', ns)
+        nome_fornecedor = _obter_texto_xml(emit, 'nfe:xNome', ns)
+        nome_fantasia = _obter_texto_xml(emit, 'nfe:xFant', ns)
+
+        total = root.find('.//nfe:total/nfe:ICMSTot', ns)
+        valor_total_nota = _to_float_xml(_obter_texto_xml(total, 'nfe:vNF', ns), 0.0)
+
+        if not nfe_numero:
+            raise ValueError('Numero da NF-e (nNF) nao encontrado no XML.')
+        if not nfe_chave:
+            raise ValueError('Chave de acesso da NF-e nao encontrada no XML.')
+
+        # Processar fornecedor
+        if emit is not None and nome_fornecedor:
+            ender_emit = emit.find('nfe:enderEmit', ns)
+            endereco_completo = None
+            cidade = _obter_texto_xml(ender_emit, 'nfe:xMun', ns)
+            estado = _obter_texto_xml(ender_emit, 'nfe:UF', ns)
+            cep = _obter_texto_xml(ender_emit, 'nfe:CEP', ns)
+            telefone = _obter_texto_xml(ender_emit, 'nfe:fone', ns)
+
+            if ender_emit is not None:
+                partes = []
+                x_lgr = _obter_texto_xml(ender_emit, 'nfe:xLgr', ns)
+                nro = _obter_texto_xml(ender_emit, 'nfe:nro', ns)
+                x_cpl = _obter_texto_xml(ender_emit, 'nfe:xCpl', ns)
+                x_bairro = _obter_texto_xml(ender_emit, 'nfe:xBairro', ns)
+                if x_lgr:
+                    partes.append(x_lgr)
+                if nro:
+                    partes.append(f"n {nro}")
+                if x_cpl:
+                    partes.append(x_cpl)
+                if x_bairro:
+                    partes.append(x_bairro)
+                endereco_completo = ', '.join(partes) if partes else None
+
+            resultado_fornecedor = adicionar_ou_atualizar_fornecedor_automatico(
+                nome=nome_fornecedor,
+                cnpj=cnpj_fornecedor,
+                telefone=telefone,
+                endereco=endereco_completo,
+                cidade=cidade,
+                estado=estado,
+                cep=cep,
+                observacoes=f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}",
+            )
+
+            if resultado_fornecedor.get('sucesso'):
+                fornecedor_id = resultado_fornecedor.get('fornecedor_id')
+            else:
+                erros.append(f"Erro ao processar fornecedor: {resultado_fornecedor.get('mensagem')}")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            if _nfe_entrada_duplicada(cursor, nfe_chave, nfe_numero, fornecedor_id):
+                conn.rollback()
+                return {
+                    'sucesso': False,
+                    'duplicada': True,
+                    'erro': f"A NF-e {nfe_numero} (chave {nfe_chave}) ja foi importada anteriormente.",
+                    'movimentacoes_criadas': 0,
+                    'contas_pagar_criadas': 0,
+                    'contas_pagar_existentes': 0,
+                    'nfe_numero': nfe_numero,
+                    'nfe_chave': nfe_chave,
+                    'erros': erros,
+                }
+
+            produtos_xml = root.findall('.//nfe:det', ns)
+            if not produtos_xml:
+                raise ValueError("Nenhum produto encontrado no XML.")
+
+            for det in produtos_xml:
                 prod = det.find('nfe:prod', ns)
                 if prod is None:
                     continue
-                
-                # Dados básicos do produto
-                codigo_produto = prod.find('nfe:cProd', ns)
-                codigo_produto = codigo_produto.text if codigo_produto is not None else ''
-                
-                codigo_ean = prod.find('nfe:cEAN', ns)
-                codigo_ean = codigo_ean.text if codigo_ean is not None else None
-                if codigo_ean in ['SEM GTIN', '', None]:
-                    codigo_ean = None
-                
-                nome_produto = prod.find('nfe:xProd', ns)
-                nome_produto = nome_produto.text if nome_produto is not None else ''
-                
-                valor_unitario = prod.find('nfe:vUnCom', ns)
-                valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
-                
-                quantidade = prod.find('nfe:qCom', ns)
-                quantidade = int(float(quantidade.text)) if quantidade is not None else 0
-                
-                ncm = prod.find('nfe:NCM', ns)
-                ncm = ncm.text if ncm is not None else ''
-                
-                unidade = prod.find('nfe:uCom', ns)
-                unidade = unidade.text if unidade is not None else 'UN'
-                
-                if not nome_produto:
-                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+
+                try:
+                    codigo_produto = _obter_texto_xml(prod, 'nfe:cProd', ns, '')
+                    codigo_ean = _obter_texto_xml(prod, 'nfe:cEAN', ns)
+                    if codigo_ean in ('SEM GTIN', '', None):
+                        codigo_ean = None
+
+                    nome_produto = _obter_texto_xml(prod, 'nfe:xProd', ns, '')
+                    quantidade = int(_to_float_xml(_obter_texto_xml(prod, 'nfe:qCom', ns), 0))
+                    valor_unitario = _to_float_xml(_obter_texto_xml(prod, 'nfe:vUnCom', ns), 0.0)
+                    valor_total_item = _to_float_xml(_obter_texto_xml(prod, 'nfe:vProd', ns), 0.0)
+                    ncm = _obter_texto_xml(prod, 'nfe:NCM', ns, '')
+                    unidade = _obter_texto_xml(prod, 'nfe:uCom', ns, 'UN')
+
+                    if not nome_produto:
+                        erros.append(f"Produto sem nome encontrado (codigo: {codigo_produto})")
+                        continue
+
+                    preco_custo = valor_unitario
+                    preco_venda = preco_custo + (preco_custo * margem_padrao / 100) if preco_custo > 0 else 0.0
+                    categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else "Geral"
+
+                    adicionar_movimentacao(
+                        nome=nome_produto,
+                        preco_venda=preco_venda,
+                        quantidade=quantidade,
+                        tipo_movimentacao='entrada',
+                        origem='xml_nfe',
+                        estoque_minimo=estoque_minimo,
+                        codigo_barras=codigo_ean,
+                        descricao=f"Importado da NFe {nfe_numero}",
+                        categoria=categoria,
+                        codigo_fornecedor=codigo_produto,
+                        preco_custo=preco_custo,
+                        margem_lucro=0,
+                        marca=None,
+                        fornecedor_id=fornecedor_id,
+                        ncm=ncm,
+                        unidade=unidade,
+                        xml_nfe_chave=nfe_chave,
+                        xml_nfe_numero=nfe_numero,
+                        xml_nfe_data=data_emissao,
+                        xml_produto_codigo=codigo_produto,
+                        usuario_id=usuario_id,
+                        observacoes=(
+                            f"Importado automaticamente de NFe {nfe_numero}. "
+                            f"Valor item XML: {valor_total_item:.2f}"
+                        ),
+                        forcar_pendente=True,
+                        conn=conn,
+                        cursor=cursor,
+                    )
+                    movimentacoes_criadas += 1
+                except Exception as e:
+                    erros.append(f"Erro ao criar movimentacao para produto {codigo_produto}: {str(e)}")
                     continue
-                
-                # Calcular preços
-                preco_custo = valor_unitario
-                preco_venda = preco_custo + (preco_custo * margem_padrao / 100) if preco_custo > 0 else 0.0
-                
-                # Determinar categoria baseada no NCM
-                categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else "Geral"
-                
-                # Criar movimentação pendente (margem será calculada automaticamente)
-                adicionar_movimentacao(
-                    nome=nome_produto,
-                    preco_venda=preco_venda,
-                    quantidade=quantidade,
-                    tipo_movimentacao='entrada',
-                    origem='xml_nfe',
-                    estoque_minimo=estoque_minimo,
-                    codigo_barras=codigo_ean,
-                    descricao=f"Importado da NFe {nfe_numero}",
-                    categoria=categoria,
-                    codigo_fornecedor=codigo_produto,
-                    preco_custo=preco_custo,
-                    margem_lucro=0,  # Será calculado automaticamente pela função
-                    marca=None,
-                    fornecedor_id=fornecedor_id,
-                    ncm=ncm,
-                    unidade=unidade,
-                    xml_nfe_chave=nfe_chave,
-                    xml_nfe_numero=nfe_numero,
-                    xml_nfe_data=nfe_data,
-                    xml_produto_codigo=codigo_produto,
-                    usuario_id=usuario_id,
-                    observacoes=f"Importado automaticamente de NFe {nfe_numero}"
-                )
-                
-                movimentacoes_criadas += 1
-                
-            except Exception as e:
-                erros.append(f"Erro ao criar movimentação para produto {codigo_produto}: {str(e)}")
-                continue
-        
+
+            parcelas, tipo_geracao_financeiro, codigos_pagamento = _extrair_dados_financeiros_nfe(
+                root=root,
+                ns=ns,
+                data_emissao=data_emissao,
+                valor_total_nota=valor_total_nota,
+            )
+
+            dados_nfe = {
+                'nfe_numero': nfe_numero,
+                'nfe_chave': nfe_chave,
+                'data_emissao': data_emissao,
+                'cnpj_fornecedor': cnpj_fornecedor,
+                'nome_fornecedor': nome_fornecedor,
+                'valor_total_nota': round(valor_total_nota, 2),
+            }
+
+            contas_pagar_criadas, contas_pagar_existentes = _criar_contas_pagar_nfe(
+                cursor=cursor,
+                fornecedor_id=fornecedor_id,
+                dados_nfe=dados_nfe,
+                parcelas=parcelas,
+                tipo_geracao=tipo_geracao_financeiro,
+                codigos_pagamento=codigos_pagamento,
+            )
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
         return {
             'sucesso': True,
             'movimentacoes_criadas': movimentacoes_criadas,
+            'contas_pagar_criadas': contas_pagar_criadas,
+            'contas_pagar_existentes': contas_pagar_existentes,
             'fornecedor_id': fornecedor_id,
             'nfe_numero': nfe_numero,
+            'nfe_chave': nfe_chave,
+            'tipo_geracao_financeiro': tipo_geracao_financeiro,
+            'parcelas_detectadas': len(parcelas),
+            'dados_nfe': dados_nfe,
             'erros': erros,
-            'total_produtos_xml': len(produtos_xml)
+            'total_produtos_xml': len(produtos_xml),
         }
-        
+
     except ET.ParseError as e:
         return {
             'sucesso': False,
             'erro': f'Erro ao analisar XML: {str(e)}',
             'movimentacoes_criadas': 0,
-            'erros': [f'XML inválido: {str(e)}']
+            'contas_pagar_criadas': 0,
+            'erros': [f'XML invalido: {str(e)}'],
         }
     except Exception as e:
         return {
             'sucesso': False,
             'erro': f'Erro geral: {str(e)}',
             'movimentacoes_criadas': 0,
-            'erros': [str(e)]
+            'contas_pagar_criadas': 0,
+            'erros': [str(e)],
         }
 
-# FUNÇÕES DE RELATÓRIOS
 
 def gerar_relatorio_vendas(data_inicio=None, data_fim=None, cliente_id=None):
     """Gera relatório de vendas por período e/ou cliente"""
@@ -7321,3 +7551,4 @@ if __name__ == "__main__":
     criar_usuario_admin()
     popular_dados_exemplo()
     print("Banco de dados inicializado com sucesso!")
+

@@ -206,7 +206,7 @@ def load_user_access_context():
     g.user_permissions = {}
     g.user_is_active = True
 
-    if request.endpoint == 'static' or not current_user.is_authenticated:
+    if request.endpoint in ('static', 'favicon') or not current_user.is_authenticated:
         return
 
     try:
@@ -267,7 +267,7 @@ def utility_processor():
 def check_user_active():
     """Verifica se o usuário logado ainda está ativo antes de cada requisição"""
     # Lista de rotas que não precisam dessa verificação
-    excluded_routes = ['login', 'logout', 'static']
+    excluded_routes = ['login', 'logout', 'static', 'favicon']
     
     # Se não for uma rota excluída e o usuário estiver autenticado
     if request.endpoint not in excluded_routes and current_user.is_authenticated:
@@ -278,6 +278,11 @@ def check_user_active():
             return redirect(url_for('login'))
 
 # ROTAS DE AUTENTICAÇÃO
+@app.route('/favicon.ico')
+def favicon():
+    """Serve o favicon no caminho padrão esperado pelos navegadores."""
+    return app.send_static_file('favicon.ico')
+
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -2154,24 +2159,42 @@ def importar_xml_movimentacoes_route():
                     estoque_minimo=estoque_minimo_padrao,
                     usuario_id=current_user.id
                 )
-                
+
                 if resultado['sucesso']:
                     if resultado['movimentacoes_criadas'] > 0:
                         flash(f"Importação concluída! {resultado['movimentacoes_criadas']} movimentação(ões) criada(s) da NFe {resultado.get('nfe_numero', '')}.", 'success')
                         flash('As movimentações estão pendentes de aprovação. Revise e aprove cada uma.', 'info')
+
+                        contas_criadas = resultado.get('contas_pagar_criadas', 0)
+                        contas_existentes = resultado.get('contas_pagar_existentes', 0)
+                        parcelas_detectadas = resultado.get('parcelas_detectadas', 0)
+                        tipo_financeiro = resultado.get('tipo_geracao_financeiro', 'padrao')
+
+                        if contas_criadas > 0:
+                            flash(
+                                f"Financeiro automático: {contas_criadas} conta(s) a pagar criada(s) ({parcelas_detectadas} parcela(s), regra: {tipo_financeiro}).",
+                                'success'
+                            )
+                        elif contas_existentes > 0:
+                            flash(
+                                f"Financeiro já existente para esta NF-e: {contas_existentes} parcela(s) detectada(s) e mantida(s).",
+                                'info'
+                            )
                     else:
                         flash('Nenhuma movimentação foi criada.', 'warning')
-                    
+
                     # Mostrar erros se houver
                     if resultado['erros']:
                         for erro in resultado['erros'][:5]:
                             flash(f"Aviso: {erro}", 'warning')
-                        
+
                         if len(resultado['erros']) > 5:
                             flash(f"... e mais {len(resultado['erros']) - 5} erro(s)", 'warning')
                 else:
-                    flash(f"Erro ao processar XML: {resultado.get('erro', 'Erro desconhecido')}", 'error')
-                    
+                    if resultado.get('duplicada'):
+                        flash(resultado.get('erro', 'NF-e já importada anteriormente.'), 'warning')
+                    else:
+                        flash(f"Erro ao processar XML: {resultado.get('erro', 'Erro desconhecido')}", 'error')
             except UnicodeDecodeError:
                 flash('Erro: Arquivo XML com codificação inválida.', 'error')
             except Exception as e:
@@ -4281,3 +4304,4 @@ if __name__ == '__main__':
     
     # Rodar a aplicação
     app.run(debug=True, host='0.0.0.0', port=5000)
+
