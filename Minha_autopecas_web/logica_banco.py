@@ -176,6 +176,34 @@ def _resolver_tenant_fallback(cursor, tenant_preferido=None):
         return tenant_resolvido
     return _obter_tenant_padrao_id(cursor)
 
+def _resolver_tenant_id_clientes(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operações do módulo de clientes.
+    Prioridade: parâmetro explícito > contexto Flask (g/session) > fallback de tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id não informado para operação do módulo de clientes.")
+
 def add_column_if_not_exists(cursor, conn, table_name, column_definition):
     """Adiciona uma coluna em uma tabela se ela não existir"""
     try:
@@ -1923,93 +1951,111 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
     return lancamentos
 
 # FUNÇÕES DE CLIENTES
-def listar_clientes():
+def listar_clientes(tenant_id=None):
     """Lista todos os clientes"""
     garantir_colunas_clientes()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, nome, telefone, email, cpf_cnpj, endereco,
-               COALESCE(tipo_pessoa, 'F') as tipo_pessoa, 
-               COALESCE(razao_social, '') as razao_social, 
-               COALESCE(inscricao_estadual, '') as inscricao_estadual,
-               COALESCE(rua, '') as rua, 
-               COALESCE(numero, '') as numero, 
-               COALESCE(complemento, '') as complemento,
-               COALESCE(bairro, '') as bairro, 
-               COALESCE(cidade, '') as cidade, 
-               COALESCE(estado, '') as estado, 
-               COALESCE(cep, '') as cep
-        FROM clientes
-        ORDER BY nome
-    ''')
-    
-    clientes = []
-    for row in cursor.fetchall():
-        clientes.append({
-            'id': row[0],
-            'nome': row[1],
-            'telefone': row[2],
-            'email': row[3],
-            'cpf_cnpj': row[4],
-            'endereco': row[5],
-            'tipo_pessoa': row[6],
-            'razao_social': row[7],
-            'inscricao_estadual': row[8],
-            'rua': row[9],
-            'numero': row[10],
-            'complemento': row[11],
-            'bairro': row[12],
-            'cidade': row[13],
-            'estado': row[14],
-            'cep': row[15]
-        })
-    
-    conn.close()
-    return clientes
 
-def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=None, 
-                     tipo_pessoa='F', razao_social=None, inscricao_estadual=None, 
-                     rua=None, numero=None, complemento=None, bairro=None, 
-                     cidade=None, estado=None, cep=None):
+    try:
+        tenant_resolvido = _resolver_tenant_id_clientes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
+        cursor.execute('''
+            SELECT id, nome, telefone, email, cpf_cnpj, endereco,
+                   COALESCE(tipo_pessoa, 'F') as tipo_pessoa,
+                   COALESCE(razao_social, '') as razao_social,
+                   COALESCE(inscricao_estadual, '') as inscricao_estadual,
+                   COALESCE(rua, '') as rua,
+                   COALESCE(numero, '') as numero,
+                   COALESCE(complemento, '') as complemento,
+                   COALESCE(bairro, '') as bairro,
+                   COALESCE(cidade, '') as cidade,
+                   COALESCE(estado, '') as estado,
+                   COALESCE(cep, '') as cep
+            FROM clientes
+            WHERE tenant_id = %s
+            ORDER BY nome
+        ''', (tenant_resolvido,))
+
+        clientes = []
+        for row in cursor.fetchall():
+            clientes.append({
+                'id': row[0],
+                'nome': row[1],
+                'telefone': row[2],
+                'email': row[3],
+                'cpf_cnpj': row[4],
+                'endereco': row[5],
+                'tipo_pessoa': row[6],
+                'razao_social': row[7],
+                'inscricao_estadual': row[8],
+                'rua': row[9],
+                'numero': row[10],
+                'complemento': row[11],
+                'bairro': row[12],
+                'cidade': row[13],
+                'estado': row[14],
+                'cep': row[15]
+            })
+
+        return clientes
+    finally:
+        conn.close()
+
+def adicionar_cliente(nome, telefone=None, email=None, cpf_cnpj=None, endereco=None,
+                     tipo_pessoa='F', razao_social=None, inscricao_estadual=None,
+                     rua=None, numero=None, complemento=None, bairro=None,
+                     cidade=None, estado=None, cep=None, tenant_id=None):
     """Adiciona um novo cliente"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_clientes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Tenant não resolvido para cadastro de cliente")
+
         # Tentar inserir com todas as colunas
         cursor.execute('''
             INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
                                  razao_social, inscricao_estadual, rua, numero, complemento, 
-                                 bairro, cidade, estado, cep)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                 bairro, cidade, estado, cep, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
-               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep))
+               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, tenant_resolvido))
     except Exception as e:
         # Se falhar, tentar com apenas as colunas básicas (fallback)
         print(f"Insert com colunas novaspfalhou: {e}")
         cursor.execute('''
-            INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (nome, telefone, email, cpf_cnpj, endereco))
+        ''', (nome, telefone, email, cpf_cnpj, endereco, tenant_resolvido))
     
     cliente_id = cursor.fetchone()[0]
     conn.commit()
     conn.close()
     return cliente_id
 
-def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=None, 
-                   tipo_pessoa='F', razao_social=None, inscricao_estadual=None, 
-                   rua=None, numero=None, complemento=None, bairro=None, 
-                   cidade=None, estado=None, cep=None):
+def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=None,
+                   tipo_pessoa='F', razao_social=None, inscricao_estadual=None,
+                   rua=None, numero=None, complemento=None, bairro=None,
+                   cidade=None, estado=None, cep=None, tenant_id=None):
     """Edita um cliente existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_clientes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
         # Tentar atualizar com todas as colunas
         cursor.execute('''
             UPDATE clientes 
@@ -2017,30 +2063,39 @@ def editar_cliente(id, nome, telefone=None, email=None, cpf_cnpj=None, endereco=
                 tipo_pessoa = %s, razao_social = %s, inscricao_estadual = %s, 
                 rua = %s, numero = %s, complemento = %s, bairro = %s, 
                 cidade = %s, estado = %s, cep = %s
-            WHERE id = %s
+            WHERE id = %s AND tenant_id = %s
         ''', (nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, razao_social, 
-               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, id))
+               inscricao_estadual, rua, numero, complemento, bairro, cidade, estado, cep, id, tenant_resolvido))
     except Exception as e:
         # Se falhar, tentar com apenas as colunas básicas (fallback)
         print(f"Update com colunas novas falhou: {e}")
         cursor.execute('''
             UPDATE clientes 
             SET nome = %s, telefone = %s, email = %s, cpf_cnpj = %s, endereco = %s
-            WHERE id = %s
-        ''', (nome, telefone, email, cpf_cnpj, endereco, id))
-    
-    conn.commit()
-    conn.close()
-    return True
+            WHERE id = %s AND tenant_id = %s
+        ''', (nome, telefone, email, cpf_cnpj, endereco, id, tenant_resolvido))
 
-def deletar_cliente(id):
+    conn.commit()
+    atualizado = cursor.rowcount > 0
+    conn.close()
+    return atualizado
+
+def deletar_cliente(id, tenant_id=None):
     """Deleta um cliente"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM clientes WHERE id = %s", (id,))
-    conn.commit()
-    conn.close()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_clientes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
+        cursor.execute("DELETE FROM clientes WHERE id = %s AND tenant_id = %s", (id, tenant_resolvido))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
 
 # FUNÇÕES DE PRODUTOS
 def listar_produtos(page=1, per_page=10):
