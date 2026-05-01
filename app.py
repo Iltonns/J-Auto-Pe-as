@@ -1,5 +1,5 @@
 # SISTEMA DE AUTOPEÇAS - FAMÍLIA
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
 import json
@@ -143,6 +143,50 @@ class User(UserMixin):
         self.id = str(user_data['id'])
         self.username = user_data['username']
         self.email = user_data.get('email', '')
+        tenant_id = user_data.get('tenant_id', 1)
+        try:
+            self.tenant_id = int(tenant_id) if tenant_id is not None else 1
+        except (TypeError, ValueError):
+            self.tenant_id = 1
+
+DEFAULT_TENANT_ID = 1
+PUBLIC_ENDPOINTS = {
+    'login',
+    'logout',
+    'favicon',
+    'recuperar_senha',
+    'static',
+    'api_fiscal_nfe_webhook',
+    'webhook_fiscal_nfe_route'
+}
+
+def _normalize_tenant_id(raw_tenant_id):
+    """Normaliza tenant_id para inteiro positivo ou None."""
+    try:
+        tenant_id = int(raw_tenant_id)
+        return tenant_id if tenant_id > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+def _is_public_endpoint(endpoint):
+    """Identifica endpoints públicos que não exigem contexto de tenant autenticado."""
+    if not endpoint:
+        return False
+    return endpoint in PUBLIC_ENDPOINTS
+
+def get_current_tenant_id():
+    """Retorna o tenant atual da sessão/autenticação (fallback temporário: tenant padrão id=1)."""
+    tenant_id = None
+
+    if has_request_context():
+        tenant_id = getattr(g, 'current_tenant_id', None)
+        if tenant_id is None:
+            tenant_id = session.get('tenant_id')
+        if tenant_id is None and current_user.is_authenticated:
+            tenant_id = getattr(current_user, 'tenant_id', None)
+
+    tenant_id = _normalize_tenant_id(tenant_id)
+    return tenant_id if tenant_id is not None else DEFAULT_TENANT_ID
 
 def _montar_mapa_permissoes(user_data):
     """Monta um mapa de permissoes do usuario para cache na request atual."""
@@ -168,7 +212,7 @@ def has_permission_cached(permission):
 
     permissions = getattr(g, 'user_permissions', None)
     if permissions is None:
-        return verificar_permissao(current_user.id, permission)
+        return verificar_permissao(current_user.id, permission, get_current_tenant_id())
 
     return permissions.get('admin', False) or permissions.get(permission, False)
 
@@ -176,6 +220,9 @@ def has_permission_cached(permission):
 @app.before_request
 def check_session_validity():
     """Verifica se a sessão do usuário ainda é válida (não foi substituída por outro login)"""
+    if _is_public_endpoint(request.endpoint):
+        return
+
     if current_user.is_authenticated:
         user_id = current_user.id
         current_session_id = session.get('session_id')
@@ -192,10 +239,68 @@ def check_session_validity():
 
 @login_manager.user_loader
 def load_user(user_id):
-    user_data = buscar_usuario_por_id(int(user_id))
+    user_data = buscar_usuario_por_id(
+        int(user_id),
+        tenant_id=session.get('tenant_id'),
+        permitir_global=True
+    )
     if user_data and user_data.get('ativo', False):
         return User(user_data)
     return None
+
+@app.before_request
+def ensure_tenant_context():
+    """
+    Camada central de contexto multi-tenant para requests autenticadas.
+    Garante tenant_id coerente em session/current_user e disponível em g.
+    """
+    g.current_tenant_id = DEFAULT_TENANT_ID
+
+    if _is_public_endpoint(request.endpoint) or not current_user.is_authenticated:
+        return
+
+    user_tenant_id = _normalize_tenant_id(getattr(current_user, 'tenant_id', None))
+    session_tenant_id = _normalize_tenant_id(session.get('tenant_id'))
+
+    if user_tenant_id is None and session_tenant_id is None:
+        resolved_tenant_id = DEFAULT_TENANT_ID
+        app.logger.warning(
+            "tenant_id ausente para usuario autenticado id=%s em %s; aplicando fallback temporario tenant_id=%s.",
+            current_user.id,
+            request.endpoint,
+            DEFAULT_TENANT_ID
+        )
+    elif user_tenant_id is None:
+        resolved_tenant_id = session_tenant_id
+        app.logger.warning(
+            "tenant_id ausente no current_user id=%s em %s; sincronizando com sessao tenant_id=%s.",
+            current_user.id,
+            request.endpoint,
+            resolved_tenant_id
+        )
+    else:
+        resolved_tenant_id = user_tenant_id
+        if session_tenant_id is None:
+            app.logger.warning(
+                "tenant_id ausente na sessao do usuario id=%s em %s; sincronizando para tenant_id=%s.",
+                current_user.id,
+                request.endpoint,
+                resolved_tenant_id
+            )
+        elif session_tenant_id != user_tenant_id:
+            app.logger.warning(
+                "tenant_id inconsistente (sessao=%s, usuario=%s) para usuario id=%s em %s; priorizando tenant do usuario.",
+                session_tenant_id,
+                user_tenant_id,
+                current_user.id,
+                request.endpoint
+            )
+
+    session['tenant_id'] = resolved_tenant_id
+    g.current_tenant_id = resolved_tenant_id
+
+    if getattr(current_user, 'tenant_id', None) != resolved_tenant_id:
+        current_user.tenant_id = resolved_tenant_id
 
 @app.before_request
 def load_user_access_context():
@@ -205,8 +310,10 @@ def load_user_access_context():
     """
     g.user_permissions = {}
     g.user_is_active = True
+    if not hasattr(g, 'current_tenant_id'):
+        g.current_tenant_id = get_current_tenant_id()
 
-    if request.endpoint in ('static', 'favicon') or not current_user.is_authenticated:
+    if _is_public_endpoint(request.endpoint) or not current_user.is_authenticated:
         return
 
     try:
@@ -215,7 +322,7 @@ def load_user_access_context():
         g.user_is_active = False
         return
 
-    user_data = buscar_usuario_por_id(user_id)
+    user_data = buscar_usuario_por_id(user_id, tenant_id=get_current_tenant_id())
     if not user_data:
         g.user_is_active = False
         return
@@ -266,11 +373,8 @@ def utility_processor():
 @app.before_request
 def check_user_active():
     """Verifica se o usuário logado ainda está ativo antes de cada requisição"""
-    # Lista de rotas que não precisam dessa verificação
-    excluded_routes = ['login', 'logout', 'static', 'favicon']
-    
-    # Se não for uma rota excluída e o usuário estiver autenticado
-    if request.endpoint not in excluded_routes and current_user.is_authenticated:
+    # Se não for rota pública e o usuário estiver autenticado
+    if not _is_public_endpoint(request.endpoint) and current_user.is_authenticated:
         if not getattr(g, 'user_is_active', True):
             # Usuário foi inativado, fazer logout automaticamente
             logout_user()
@@ -295,7 +399,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        user_data = verificar_usuario(username, password)
+        user_data = verificar_usuario(username, password, tenant_id=session.get('tenant_id'))
         if user_data:
             user = User(user_data)
             login_user(user)
@@ -304,6 +408,7 @@ def login():
             import uuid
             session_id = str(uuid.uuid4())
             session['session_id'] = session_id
+            session['tenant_id'] = user.tenant_id
             
             # Armazenar esta sessão como a sessão ativa do usuário
             # Isso automaticamente invalida qualquer sessão anterior
@@ -353,17 +458,26 @@ def recuperar_senha():
             return render_template('recuperar_senha.html')
         
         # Buscar usuário por email
-        usuario = buscar_usuario_por_email(email)
+        usuario = buscar_usuario_por_email(
+            email,
+            tenant_id=get_current_tenant_id(),
+            permitir_global=True
+        )
         if not usuario:
             flash('Email não encontrado em nosso sistema!', 'error')
             return render_template('recuperar_senha.html')
         
         # Atualizar senha
-        if atualizar_senha_usuario(usuario['id'], nova_senha):
-            flash('Senha atualizada com sucesso! Você já pode fazer login.', 'success')
+        success, mensagem = atualizar_senha_usuario(
+            usuario['id'],
+            nova_senha,
+            tenant_id=get_current_tenant_id()
+        )
+        if success:
+            flash(mensagem or 'Senha atualizada com sucesso! Você já pode fazer login.', 'success')
             return redirect(url_for('login'))
         else:
-            flash('Erro ao atualizar senha. Tente novamente.', 'error')
+            flash(mensagem or 'Erro ao atualizar senha. Tente novamente.', 'error')
     
     return render_template('recuperar_senha.html')
 
@@ -394,7 +508,15 @@ def criar_usuario_route():
         # Usar o ID do usuário atual como created_by
         created_by = current_user.id
         
-        success, message = criar_usuario(username, password, nome_completo, email, permissoes, created_by)
+        success, message = criar_usuario(
+            username,
+            password,
+            nome_completo,
+            email,
+            permissoes,
+            created_by=created_by,
+            tenant_id=get_current_tenant_id()
+        )
         
         if success:
             flash(message, 'success')
@@ -415,7 +537,7 @@ def usuarios():
         flash('Acesso negado. Você não tem permissão para gerenciar usuários.', 'error')
         return redirect(url_for('dashboard'))
     
-    usuarios_lista = listar_usuarios()
+    usuarios_lista = listar_usuarios(get_current_tenant_id())
     return render_template('usuarios.html', usuarios=usuarios_lista)
 
 @app.route('/usuarios/editar/<int:user_id>', methods=['POST'])
@@ -443,7 +565,14 @@ def editar_usuario_route(user_id):
             'contas_receber': request.form.get('permissao_contas_receber') == 'on'
         }
         
-        success, message = editar_usuario(user_id, nome_completo, email, permissoes, ativo)
+        success, message = editar_usuario(
+            user_id,
+            nome_completo,
+            email,
+            permissoes,
+            ativo,
+            tenant_id=get_current_tenant_id()
+        )
         
         if success:
             flash(message, 'success')
@@ -464,12 +593,12 @@ def deletar_usuario_route(user_id):
         return redirect(url_for('dashboard'))
     
     # Não permitir que o usuário delete a si mesmo
-    if user_id == current_user.id:
+    if user_id == int(current_user.id):
         flash('Você não pode desativar sua própria conta.', 'error')
         return redirect(url_for('usuarios'))
     
     try:
-        success, message = deletar_usuario(user_id)
+        success, message = deletar_usuario(user_id, tenant_id=get_current_tenant_id())
         
         if success:
             flash(message, 'success')
@@ -488,7 +617,7 @@ def trocar_senha_usuario_route(user_id):
     try:
         # Apenas admins podem trocar senha de outros usuários
         # Usuários podem trocar sua própria senha
-        if user_id != current_user.id and not has_permission_cached('admin'):
+        if user_id != int(current_user.id) and not has_permission_cached('admin'):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         nova_senha = request.form.get('nova_senha')
@@ -504,13 +633,22 @@ def trocar_senha_usuario_route(user_id):
         
         # Se o usuário está trocando sua própria senha, exigir senha atual
         # Admins podem trocar senha de outros sem senha atual
-        if user_id == current_user.id:
+        if user_id == int(current_user.id):
             if not senha_atual:
                 return jsonify({'success': False, 'message': 'Senha atual é obrigatória'}), 400
-            success, message = atualizar_senha_usuario(user_id, nova_senha, senha_atual)
+            success, message = atualizar_senha_usuario(
+                user_id,
+                nova_senha,
+                senha_atual,
+                tenant_id=get_current_tenant_id()
+            )
         else:
             # Admin trocando senha de outro usuário
-            success, message = atualizar_senha_usuario(user_id, nova_senha)
+            success, message = atualizar_senha_usuario(
+                user_id,
+                nova_senha,
+                tenant_id=get_current_tenant_id()
+            )
         
         if success:
             flash(message, 'success')
@@ -525,7 +663,7 @@ def trocar_senha_usuario_route(user_id):
 @app.route('/configuracoes-empresa')
 @required_permission('admin')
 def configuracoes_empresa():
-    config = obter_configuracoes_empresa()
+    config = obter_configuracoes_empresa(get_current_tenant_id())
     return render_template('configuracoes_empresa.html', config=config)
 
 @app.route('/configuracoes-empresa/atualizar', methods=['POST'])
@@ -551,7 +689,7 @@ def atualizar_configuracoes_empresa_route():
             'observacoes': request.form['observacoes']
         }
         
-        if atualizar_configuracoes_empresa(dados):
+        if atualizar_configuracoes_empresa(dados, get_current_tenant_id()):
             flash('Configurações da empresa atualizadas com sucesso!', 'success')
         else:
             flash('Erro ao atualizar configurações da empresa!', 'error')
@@ -2324,7 +2462,7 @@ def visualizar_venda(venda_id):
         if not venda:
             flash('Venda não encontrada!', 'error')
             return redirect(url_for('vendas'))
-        config_empresa = obter_configuracoes_empresa()
+        config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
         nfe = obter_nfe_por_venda(venda_id)
         return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa, nfe=nfe)
     except Exception as e:
@@ -2458,7 +2596,7 @@ def recibo_venda(venda_id):
             return redirect(url_for('vendas'))
         
         # Buscar configurações da empresa
-        empresa = obter_configuracoes_empresa()
+        empresa = obter_configuracoes_empresa(get_current_tenant_id())
         
         return render_template('recibo_venda.html', venda=venda, empresa=empresa)
     
@@ -2471,7 +2609,7 @@ def recibo_venda(venda_id):
 def api_configuracoes_empresa():
     try:
         print("API: Buscando configurações da empresa")
-        config = obter_configuracoes_empresa()
+        config = obter_configuracoes_empresa(get_current_tenant_id())
         print(f"API: Configurações carregadas: {config.get('nome_empresa', 'N/A')}")
         return jsonify(config)
     except Exception as e:
@@ -2658,7 +2796,7 @@ def contas_a_pagar_hoje():
     }
     
     # Buscar configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa()
+    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     return render_template('contas_a_pagar_hoje.html', 
                          contas=contas, 
@@ -2806,7 +2944,7 @@ def contas_a_receber_hoje():
     }
     
     # Buscar configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa()
+    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     return render_template('contas_a_receber_hoje.html', 
                          contas=contas, 
@@ -2977,7 +3115,7 @@ def visualizar_orcamento(id):
         flash('Orçamento não encontrado', 'error')
         return redirect(url_for('orcamentos'))
     
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     return render_template('visualizar_orcamento.html', orcamento=orcamento, config_empresa=config_empresa)
 
 @app.route('/orcamentos/<int:id>/editar')
@@ -3150,7 +3288,7 @@ def relatorio_estoque():
     relatorio = gerar_relatorio_estoque()
     
     # Obter configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa()
+    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     return render_template('relatorios/estoque.html', 
                          relatorio=relatorio,
@@ -3311,7 +3449,7 @@ def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecio
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -3419,7 +3557,7 @@ def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, statu
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -3551,7 +3689,7 @@ def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -3685,7 +3823,7 @@ def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None,
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -3796,7 +3934,7 @@ def criar_pdf_estoque(relatorio):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
 
     # Verificar se há erro no relatório
     if relatorio.get('erro'):
@@ -4002,7 +4140,7 @@ def criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
 
     # Formatar data
     data_formatada = datetime.strptime(data, '%Y-%m-%d').strftime('%d/%m/%Y')
@@ -4122,7 +4260,7 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa()
+    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
 
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
