@@ -82,6 +82,100 @@ def get_db_connection():
         print(f"Erro ao conectar ao banco de dados: {e}")
         raise
 
+def _normalizar_tenant_id(tenant_id):
+    """Normaliza tenant_id para inteiro positivo ou None."""
+    try:
+        tenant_id = int(tenant_id)
+        return tenant_id if tenant_id > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+def _obter_tenant_padrao_id(cursor):
+    """
+    Resolve o tenant padrão sem fixar ID.
+    Prioriza slug do produto e depois o primeiro tenant cadastrado.
+    """
+    try:
+        cursor.execute("SELECT id FROM tenants WHERE slug = %s ORDER BY id LIMIT 1", ('erp-auto-pecas',))
+        row = cursor.fetchone()
+        if row:
+            return int(row[0])
+
+        cursor.execute("SELECT id FROM tenants ORDER BY id LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            return int(row[0])
+    except Exception:
+        # Compatibilidade com ambientes ainda sem tabela tenants
+        return None
+
+    return None
+
+def _resolver_tenant_id_configuracoes(tenant_id=None):
+    """
+    Resolve tenant_id para funções de configuracoes_empresa:
+    - usa parâmetro explícito quando informado;
+    - em request Flask usa g.current_tenant_id/session['tenant_id'].
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    raise ValueError("tenant_id não informado para acesso a configuracoes_empresa.")
+
+def _resolver_tenant_id_usuarios(tenant_id=None, permitir_global=False):
+    """
+    Resolve tenant_id para operações do módulo de usuários.
+    Usa parâmetro explícito, depois contexto Flask (g/session).
+    Quando permitir_global=True, retorna None se não conseguir resolver.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id não informado para operação do módulo de usuários.")
+
+def _resolver_tenant_fallback(cursor, tenant_preferido=None):
+    """
+    Resolve um tenant de fallback sem hardcode:
+    tenant informado > tenant padrão por slug > primeiro tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_preferido)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+    return _obter_tenant_padrao_id(cursor)
+
 def add_column_if_not_exists(cursor, conn, table_name, column_definition):
     """Adiciona uma coluna em uma tabela se ela não existir"""
     try:
@@ -449,43 +543,20 @@ def init_db():
         )
     ''')
     
-    # Inserir configuração padrão se não existir
-    cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute('''
-            INSERT INTO configuracoes_empresa (nome_empresa, cnpj, endereco, cidade, estado, cep, telefone, email)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (
-            'J-AUTO PEÇAS',
-            '58.776.125/0001-98',
-            'Avenida 01, 240 - Quadra 19 - Alto Turu',
-            'São José de Ribamar',
-            'MA',
-            '65122-344',
-            '(98) 8423-0576',
-            'jaimendes27@gmail.com'
-        ))
+    # Inserir configuração padrão por tenant se não existir
+    tenant_padrao_id = _obter_tenant_padrao_id(cursor)
+    if tenant_padrao_id is not None:
+        cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa WHERE tenant_id = %s", (tenant_padrao_id,))
     else:
-        cursor.execute('''
-            SELECT id, nome_empresa
-            FROM configuracoes_empresa
-            ORDER BY id DESC
-            LIMIT 1
-        ''')
-        config_atual = cursor.fetchone()
-        if config_atual and (config_atual[1] or '').strip().upper() == 'FG AUTO PEÇAS':
+        cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa WHERE tenant_id IS NULL")
+
+    if cursor.fetchone()[0] == 0:
+        if tenant_padrao_id is not None:
             cursor.execute('''
-                UPDATE configuracoes_empresa
-                SET nome_empresa = %s,
-                    cnpj = %s,
-                    endereco = %s,
-                    cidade = %s,
-                    estado = %s,
-                    cep = %s,
-                    telefone = %s,
-                    email = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
+                INSERT INTO configuracoes_empresa (
+                    nome_empresa, cnpj, endereco, cidade, estado, cep, telefone, email, tenant_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 'J-AUTO PEÇAS',
                 '58.776.125/0001-98',
@@ -495,8 +566,93 @@ def init_db():
                 '65122-344',
                 '(98) 8423-0576',
                 'jaimendes27@gmail.com',
-                config_atual[0]
+                tenant_padrao_id
             ))
+        else:
+            cursor.execute('''
+                INSERT INTO configuracoes_empresa (
+                    nome_empresa, cnpj, endereco, cidade, estado, cep, telefone, email
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                'J-AUTO PEÇAS',
+                '58.776.125/0001-98',
+                'Avenida 01, 240 - Quadra 19 - Alto Turu',
+                'São José de Ribamar',
+                'MA',
+                '65122-344',
+                '(98) 8423-0576',
+                'jaimendes27@gmail.com'
+            ))
+    else:
+        if tenant_padrao_id is not None:
+            cursor.execute('''
+                SELECT id, nome_empresa
+                FROM configuracoes_empresa
+                WHERE tenant_id = %s
+                ORDER BY id DESC
+                LIMIT 1
+            ''', (tenant_padrao_id,))
+        else:
+            cursor.execute('''
+                SELECT id, nome_empresa
+                FROM configuracoes_empresa
+                WHERE tenant_id IS NULL
+                ORDER BY id DESC
+                LIMIT 1
+            ''')
+
+        config_atual = cursor.fetchone()
+        if config_atual and (config_atual[1] or '').strip().upper() == 'FG AUTO PEÇAS':
+            if tenant_padrao_id is not None:
+                cursor.execute('''
+                    UPDATE configuracoes_empresa
+                    SET nome_empresa = %s,
+                        cnpj = %s,
+                        endereco = %s,
+                        cidade = %s,
+                        estado = %s,
+                        cep = %s,
+                        telefone = %s,
+                        email = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND tenant_id = %s
+                ''', (
+                    'J-AUTO PEÇAS',
+                    '58.776.125/0001-98',
+                    'Avenida 01, 240 - Quadra 19 - Alto Turu',
+                    'São José de Ribamar',
+                    'MA',
+                    '65122-344',
+                    '(98) 8423-0576',
+                    'jaimendes27@gmail.com',
+                    config_atual[0],
+                    tenant_padrao_id
+                ))
+            else:
+                cursor.execute('''
+                    UPDATE configuracoes_empresa
+                    SET nome_empresa = %s,
+                        cnpj = %s,
+                        endereco = %s,
+                        cidade = %s,
+                        estado = %s,
+                        cep = %s,
+                        telefone = %s,
+                        email = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND tenant_id IS NULL
+                ''', (
+                    'J-AUTO PEÇAS',
+                    '58.776.125/0001-98',
+                    'Avenida 01, 240 - Quadra 19 - Alto Turu',
+                    'São José de Ribamar',
+                    'MA',
+                    '65122-344',
+                    '(98) 8423-0576',
+                    'jaimendes27@gmail.com',
+                    config_atual[0]
+                ))
     
     # Tabela de movimentações de produtos (para aprovação antes de ir ao estoque)
     cursor.execute('''
@@ -682,37 +838,50 @@ def criar_usuario_admin():
     """Cria um usuário administrador padrão se não existir"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
-    if cursor.fetchone()[0] == 0:
-        password_hash = generate_password_hash('admin123')
-        cursor.execute('''
-            INSERT INTO usuarios (
-                username, password_hash, nome_completo, email, 
-                permissao_vendas, permissao_estoque, permissao_clientes,
-                permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', ('admin', password_hash, 'Administrador do Sistema', 'admin@autopecas.com',
-              True, True, True, True, True, True, True))  # Admin tem todas as permissões
+    try:
+        tenant_id = _resolver_tenant_fallback(cursor)
+        if tenant_id is None:
+            raise ValueError("Nenhum tenant encontrado para criar usuário administrador padrão.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE username = %s AND tenant_id = %s ORDER BY id LIMIT 1",
+            ('admin', tenant_id)
+        )
+        admin_existente = cursor.fetchone()
+
+        if admin_existente:
+            admin_id = admin_existente[0]
+            cursor.execute('''
+                UPDATE usuarios SET
+                    nome_completo = COALESCE(nome_completo, 'Administrador do Sistema'),
+                    permissao_vendas = TRUE,
+                    permissao_estoque = TRUE,
+                    permissao_clientes = TRUE,
+                    permissao_financeiro = TRUE,
+                    permissao_caixa = TRUE,
+                    permissao_relatorios = TRUE,
+                    permissao_admin = TRUE
+                WHERE id = %s AND tenant_id = %s
+            ''', (admin_id, tenant_id))
+        else:
+            password_hash = generate_password_hash('admin123')
+            cursor.execute('''
+                INSERT INTO usuarios (
+                    username, password_hash, nome_completo, email,
+                    permissao_vendas, permissao_estoque, permissao_clientes,
+                    permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                    tenant_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                'admin', password_hash, 'Administrador do Sistema', 'admin@autopecas.com',
+                True, True, True, True, True, True, True,
+                tenant_id
+            ))  # Admin tem todas as permissões
+
         conn.commit()
-    else:
-        # Atualizar usuário admin existente para ter todas as permissões
-        cursor.execute('''
-            UPDATE usuarios SET 
-                nome_completo = COALESCE(nome_completo, 'Administrador do Sistema'),
-                permissao_vendas = TRUE,
-                permissao_estoque = TRUE,
-                permissao_clientes = TRUE,
-                permissao_financeiro = TRUE,
-                permissao_caixa = TRUE,
-                permissao_relatorios = TRUE,
-                permissao_admin = TRUE
-            WHERE username = 'admin'
-        ''')
-        conn.commit()
-    
-    conn.close()
+    finally:
+        conn.close()
 
 def popular_dados_exemplo():
     """Popula o banco com dados de exemplo se estiver vazio"""
@@ -776,7 +945,14 @@ def popular_dados_exemplo():
             ''', fornecedor)
         
         # Verificar se há usuário para as vendas
-        cursor.execute("SELECT id FROM usuarios WHERE username = 'admin'")
+        tenant_id_admin = _resolver_tenant_fallback(cursor)
+        if tenant_id_admin is not None:
+            cursor.execute(
+                "SELECT id FROM usuarios WHERE username = %s AND tenant_id = %s ORDER BY id LIMIT 1",
+                ('admin', tenant_id_admin)
+            )
+        else:
+            cursor.execute("SELECT id FROM usuarios WHERE username = 'admin'")
         admin_user = cursor.fetchone()
         
         if admin_user:
@@ -831,43 +1007,103 @@ def popular_dados_exemplo():
     conn.close()
 
 # FUNÇÕES DE USUÁRIOS
-def verificar_usuario(username, password):
-    """Verifica se o usuário e senha estão corretos e se o usuário está ativo"""
+def verificar_usuario(username, password, tenant_id=None):
+    """
+    Verifica usuário/senha e status ativo.
+    Para manter compatibilidade do login, quando tenant não é resolvido
+    a busca pode ocorrer em escopo global (permitir_global=True).
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, password_hash, ativo FROM usuarios WHERE username = %s", (username,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user and check_password_hash(user[1], password):
-        # Verificar se o usuário está ativo
-        if user[2]:  # ativo = True
-            return {'id': user[0], 'username': username}
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+
+        if tenant_resolvido is not None:
+            cursor.execute(
+                '''
+                SELECT id, password_hash, ativo, tenant_id
+                FROM usuarios
+                WHERE username = %s
+                  AND (tenant_id = %s OR tenant_id IS NULL)
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (username, tenant_resolvido)
+            )
         else:
+            # Escopo global somente para compatibilidade de autenticação sem contexto de tenant.
+            cursor.execute(
+                '''
+                SELECT id, password_hash, ativo, tenant_id
+                FROM usuarios
+                WHERE username = %s
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (username,)
+            )
+
+        user = cursor.fetchone()
+        if not user:
+            return None
+
+        if not check_password_hash(user[1], password):
+            return None
+
+        if not user[2]:
             # Usuário existe mas está inativo
             return False
-    return None
 
-def buscar_usuario_por_id(user_id):
-    """Busca um usuário pelo ID"""
+        tenant_usuario = _normalizar_tenant_id(user[3])
+        if tenant_usuario is None:
+            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+
+        return {'id': user[0], 'username': username, 'tenant_id': tenant_usuario}
+    finally:
+        conn.close()
+
+def buscar_usuario_por_id(user_id, tenant_id=None, permitir_global=False):
+    """Busca um usuário pelo ID, respeitando o tenant quando disponível."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, username, email, nome_completo, ativo,
-               permissao_vendas, permissao_estoque, permissao_clientes,
-               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-               permissao_contas_pagar, permissao_contas_receber
-        FROM usuarios WHERE id = %s
-    ''', (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=permitir_global)
+
+        if tenant_resolvido is not None:
+            cursor.execute('''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       permissao_contas_pagar, permissao_contas_receber, tenant_id
+                FROM usuarios
+                WHERE id = %s AND (tenant_id = %s OR tenant_id IS NULL)
+                LIMIT 1
+            ''', (user_id, tenant_resolvido))
+        else:
+            # Escopo global somente quando explicitamente permitido (compatibilidade).
+            cursor.execute('''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       permissao_contas_pagar, permissao_contas_receber, tenant_id
+                FROM usuarios
+                WHERE id = %s
+                LIMIT 1
+            ''', (user_id,))
+
+        user = cursor.fetchone()
+        if not user:
+            return None
+
+        tenant_usuario = _normalizar_tenant_id(user[14] if len(user) > 14 else None)
+        if tenant_usuario is None:
+            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+
         return {
-            'id': user[0], 
-            'username': user[1], 
+            'id': user[0],
+            'username': user[1],
             'email': user[2],
             'nome_completo': user[3] or '',
             'ativo': user[4],
@@ -879,28 +1115,57 @@ def buscar_usuario_por_id(user_id):
             'permissao_relatorios': user[10],
             'permissao_admin': user[11],
             'permissao_contas_pagar': user[12] if len(user) > 12 else False,
-            'permissao_contas_receber': user[13] if len(user) > 13 else False
+            'permissao_contas_receber': user[13] if len(user) > 13 else False,
+            'tenant_id': tenant_usuario
         }
-    return None
+    finally:
+        conn.close()
 
-def buscar_usuario_por_email(email):
-    """Busca um usuário pelo email"""
+def buscar_usuario_por_email(email, tenant_id=None, permitir_global=False):
+    """Busca um usuário pelo email, respeitando tenant quando disponível."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, username, email, nome_completo, ativo,
-               permissao_vendas, permissao_estoque, permissao_clientes,
-               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin
-        FROM usuarios WHERE email = %s AND ativo = TRUE
-    ''', (email,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=permitir_global)
+
+        if tenant_resolvido is not None:
+            cursor.execute('''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       tenant_id
+                FROM usuarios
+                WHERE email = %s
+                  AND ativo = TRUE
+                  AND (tenant_id = %s OR tenant_id IS NULL)
+                ORDER BY id
+                LIMIT 1
+            ''', (email, tenant_resolvido))
+        else:
+            # Escopo global somente quando explicitamente permitido.
+            cursor.execute('''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       tenant_id
+                FROM usuarios
+                WHERE email = %s AND ativo = TRUE
+                ORDER BY id
+                LIMIT 1
+            ''', (email,))
+
+        user = cursor.fetchone()
+        if not user:
+            return None
+
+        tenant_usuario = _normalizar_tenant_id(user[12] if len(user) > 12 else None)
+        if tenant_usuario is None:
+            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+
         return {
-            'id': user[0], 
-            'username': user[1], 
+            'id': user[0],
+            'username': user[1],
             'email': user[2],
             'nome_completo': user[3] or '',
             'ativo': user[4],
@@ -910,9 +1175,11 @@ def buscar_usuario_por_email(email):
             'permissao_financeiro': user[8],
             'permissao_caixa': user[9],
             'permissao_relatorios': user[10],
-            'permissao_admin': user[11]
+            'permissao_admin': user[11],
+            'tenant_id': tenant_usuario
         }
-    return None
+    finally:
+        conn.close()
 
 def validar_senha_segura(senha):
     """
@@ -934,7 +1201,7 @@ def validar_senha_segura(senha):
     
     return True, "Senha válida"
 
-def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None):
+def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None, tenant_id=None):
     """
     Atualiza a senha de um usuário
     Se senha_atual for fornecida, valida antes de atualizar
@@ -948,9 +1215,17 @@ def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None):
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False, "Tenant não resolvido para atualização de senha"
+
         # Se senha_atual foi fornecida, validar
         if senha_atual is not None:
-            cursor.execute('SELECT password_hash FROM usuarios WHERE id = %s', (user_id,))
+            cursor.execute(
+                'SELECT password_hash FROM usuarios WHERE id = %s AND tenant_id = %s',
+                (user_id, tenant_resolvido)
+            )
             result = cursor.fetchone()
             if not result:
                 return False, "Usuário não encontrado"
@@ -961,8 +1236,10 @@ def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None):
         # Atualizar senha
         password_hash = generate_password_hash(nova_senha)
         cursor.execute('''
-            UPDATE usuarios SET password_hash = %s WHERE id = %s
-        ''', (password_hash, user_id))
+            UPDATE usuarios
+            SET password_hash = %s
+            WHERE id = %s AND tenant_id = %s
+        ''', (password_hash, user_id, tenant_resolvido))
         
         conn.commit()
         success = cursor.rowcount > 0
@@ -978,7 +1255,7 @@ def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None):
     finally:
         conn.close()
 
-def criar_usuario(username, password, nome_completo, email, permissoes=None, created_by=None):
+def criar_usuario(username, password, nome_completo, email, permissoes=None, created_by=None, tenant_id=None):
     """Cria um novo usuário com permissões específicas"""
     if permissoes is None:
         permissoes = {
@@ -1002,13 +1279,24 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False, "Tenant não resolvido para criação de usuário"
+
         # Verificar se username já existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = %s", (username,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE username = %s AND tenant_id = %s",
+            (username, tenant_resolvido)
+        )
         if cursor.fetchone()[0] > 0:
             return False, "Nome de usuário já existe"
         
         # Verificar se email já existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = %s", (email,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE email = %s AND tenant_id = %s",
+            (email, tenant_resolvido)
+        )
         if cursor.fetchone()[0] > 0:
             return False, "Email já está em uso"
         
@@ -1019,9 +1307,9 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
                 username, password_hash, nome_completo, email,
                 permissao_vendas, permissao_estoque, permissao_clientes,
                 permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                permissao_contas_pagar, permissao_contas_receber, created_by
+                permissao_contas_pagar, permissao_contas_receber, created_by, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             username, password_hash, nome_completo, email,
             permissoes.get('vendas', True),
@@ -1033,7 +1321,8 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
             permissoes.get('admin', False),
             permissoes.get('contas_pagar', False),
             permissoes.get('contas_receber', False),
-            created_by
+            created_by,
+            tenant_resolvido
         ))
         
         conn.commit()
@@ -1045,49 +1334,63 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
     finally:
         conn.close()
 
-def listar_usuarios():
+def listar_usuarios(tenant_id=None):
     """Lista todos os usuários do sistema"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, username, nome_completo, email, ativo,
-               permissao_vendas, permissao_estoque, permissao_clientes,
-               permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-               permissao_contas_pagar, permissao_contas_receber, created_at
-        FROM usuarios
-        ORDER BY nome_completo
-    ''')
-    
-    usuarios = []
-    for row in cursor.fetchall():
-        usuarios.append({
-            'id': row[0],
-            'username': row[1],
-            'nome_completo': row[2] or '',
-            'email': row[3],
-            'ativo': row[4],
-            'permissao_vendas': row[5],
-            'permissao_estoque': row[6],
-            'permissao_clientes': row[7],
-            'permissao_financeiro': row[8],
-            'permissao_caixa': row[9],
-            'permissao_relatorios': row[10],
-            'permissao_admin': row[11],
-            'permissao_contas_pagar': row[12] if len(row) > 12 else False,
-            'permissao_contas_receber': row[13] if len(row) > 13 else False,
-            'created_at': row[14] if len(row) > 14 else row[12]
-        })
-    
-    conn.close()
-    return usuarios
 
-def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ativo=None):
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
+        cursor.execute('''
+            SELECT id, username, nome_completo, email, ativo,
+                   permissao_vendas, permissao_estoque, permissao_clientes,
+                   permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                   permissao_contas_pagar, permissao_contas_receber, created_at, tenant_id
+            FROM usuarios
+            WHERE tenant_id = %s
+            ORDER BY nome_completo
+        ''', (tenant_resolvido,))
+
+        usuarios = []
+        for row in cursor.fetchall():
+            usuarios.append({
+                'id': row[0],
+                'username': row[1],
+                'nome_completo': row[2] or '',
+                'email': row[3],
+                'ativo': row[4],
+                'permissao_vendas': row[5],
+                'permissao_estoque': row[6],
+                'permissao_clientes': row[7],
+                'permissao_financeiro': row[8],
+                'permissao_caixa': row[9],
+                'permissao_relatorios': row[10],
+                'permissao_admin': row[11],
+                'permissao_contas_pagar': row[12] if len(row) > 12 else False,
+                'permissao_contas_receber': row[13] if len(row) > 13 else False,
+                'created_at': row[14] if len(row) > 14 else row[12],
+                'tenant_id': row[15] if len(row) > 15 else tenant_resolvido
+            })
+
+        return usuarios
+    finally:
+        conn.close()
+
+def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ativo=None, tenant_id=None):
     """Edita um usuário existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False, "Tenant não resolvido para edição de usuário"
+
         # Construir query de update dinamicamente
         updates = []
         params = []
@@ -1098,7 +1401,10 @@ def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ati
         
         if email is not None:
             # Verificar se email já existe em outro usuário
-            cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = %s AND id != %s", (email, user_id))
+            cursor.execute(
+                "SELECT COUNT(*) FROM usuarios WHERE email = %s AND id != %s AND tenant_id = %s",
+                (email, user_id, tenant_resolvido)
+            )
             if cursor.fetchone()[0] > 0:
                 return False, "Email já está em uso por outro usuário"
             updates.append("email = %s")
@@ -1117,7 +1423,8 @@ def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ati
             return False, "Nenhuma alteração especificada"
         
         params.append(user_id)
-        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = %s"
+        params.append(tenant_resolvido)
+        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = %s AND tenant_id = %s"
         
         cursor.execute(query, params)
         conn.commit()
@@ -1132,13 +1439,21 @@ def editar_usuario(user_id, nome_completo=None, email=None, permissoes=None, ati
     finally:
         conn.close()
 
-def deletar_usuario(user_id):
+def deletar_usuario(user_id, tenant_id=None):
     """Deleta um usuário (marca como inativo)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        cursor.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (user_id,))
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False, "Tenant não resolvido para desativação de usuário"
+
+        cursor.execute(
+            "UPDATE usuarios SET ativo = FALSE WHERE id = %s AND tenant_id = %s",
+            (user_id, tenant_resolvido)
+        )
         conn.commit()
         
         if cursor.rowcount > 0:
@@ -1151,19 +1466,34 @@ def deletar_usuario(user_id):
     finally:
         conn.close()
 
-def verificar_permissao(user_id, permissao):
+def verificar_permissao(user_id, permissao, tenant_id=None):
     """Verifica se um usuário tem uma permissão específica"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute(f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = TRUE", (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        # Admin tem todas as permissões
-        return result[1] or result[0]
-    return False
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+
+        if tenant_resolvido is not None:
+            cursor.execute(
+                f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND tenant_id = %s AND ativo = TRUE",
+                (user_id, tenant_resolvido)
+            )
+        else:
+            # Compatibilidade global quando tenant não puder ser resolvido.
+            cursor.execute(
+                f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = TRUE",
+                (user_id,)
+            )
+
+        result = cursor.fetchone()
+        if result:
+            # Admin tem todas as permissões
+            return result[1] or result[0]
+        return False
+    finally:
+        conn.close()
 
 # FUNÇÕES DE CAIXA
 def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
@@ -6091,9 +6421,10 @@ def sincronizar_lancamentos_com_contas(usuario_id):
         conn.close()
 
 # FUNÇÕES DE CONFIGURAÇÕES DA EMPRESA
-def obter_configuracoes_empresa():
+def obter_configuracoes_empresa(tenant_id=None):
     """Obtém as configurações da empresa"""
     garantir_estrutura_fiscal()
+    tenant_id = _resolver_tenant_id_configuracoes(tenant_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -6112,10 +6443,11 @@ def obter_configuracoes_empresa():
             SELECT nome_empresa, cnpj, ie, crt, cnae, codigo_municipio_ibge,
                    ambiente_fiscal, serie_nfe,
                    endereco, cidade, estado, cep, telefone, email, website, logo_path, observacoes
-            FROM configuracoes_empresa 
-            ORDER BY id DESC 
+            FROM configuracoes_empresa
+            WHERE tenant_id = %s
+            ORDER BY id DESC
             LIMIT 1
-        ''')
+        ''', (tenant_id,))
         
         resultado = cursor.fetchone()
         if resultado:
@@ -6174,48 +6506,58 @@ def obter_configuracoes_padrao():
         'observacoes': ''
     }
 
-def atualizar_configuracoes_empresa(dados):
+def atualizar_configuracoes_empresa(dados, tenant_id=None):
     """Atualiza as configurações da empresa"""
     garantir_estrutura_fiscal()
+    tenant_id = _resolver_tenant_id_configuracoes(tenant_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Verificar se já existe configuração
-        cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa")
+        # Verificar se já existe configuração para o tenant atual
+        cursor.execute("SELECT COUNT(*) FROM configuracoes_empresa WHERE tenant_id = %s", (tenant_id,))
         existe = cursor.fetchone()[0] > 0
         
         if existe:
-            # Atualizar existente
+            # Atualizar configuração existente do tenant atual
             cursor.execute('''
                 UPDATE configuracoes_empresa SET
                     nome_empresa = %s, cnpj = %s, ie = %s, crt = %s, cnae = %s, codigo_municipio_ibge = %s,
                     ambiente_fiscal = %s, serie_nfe = %s,
                     endereco = %s, cidade = %s, estado = %s, cep = %s, telefone = %s, email = %s, 
                     website = %s, observacoes = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = (SELECT id FROM configuracoes_empresa ORDER BY id DESC LIMIT 1)
+                WHERE id = (
+                    SELECT id FROM configuracoes_empresa
+                    WHERE tenant_id = %s
+                    ORDER BY id DESC
+                    LIMIT 1
+                )
+                AND tenant_id = %s
             ''', (
                 dados.get('nome_empresa', ''), dados.get('cnpj', ''), dados.get('ie', ''), dados.get('crt', '1'),
                 dados.get('cnae', ''), dados.get('codigo_municipio_ibge', ''),
                 dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
                 dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
                 dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
-                dados.get('observacoes', '')
+                dados.get('observacoes', ''),
+                tenant_id,
+                tenant_id
             ))
         else:
-            # Inserir nova
+            # Inserir nova configuração para o tenant atual
             cursor.execute('''
                 INSERT INTO configuracoes_empresa (
                     nome_empresa, cnpj, ie, crt, cnae, codigo_municipio_ibge, ambiente_fiscal, serie_nfe,
-                    endereco, cidade, estado, cep, telefone, email, website, observacoes
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    endereco, cidade, estado, cep, telefone, email, website, observacoes, tenant_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 dados.get('nome_empresa', ''), dados.get('cnpj', ''), dados.get('ie', ''), dados.get('crt', '1'),
                 dados.get('cnae', ''), dados.get('codigo_municipio_ibge', ''),
                 dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
                 dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
                 dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
-                dados.get('observacoes', '')
+                dados.get('observacoes', ''),
+                tenant_id
             ))
         
         conn.commit()
