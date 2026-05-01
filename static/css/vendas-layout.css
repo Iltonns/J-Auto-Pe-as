@@ -1,4 +1,4 @@
-/* ===== ESTILOS MODERNOS PARA ÁREA DE VENDAS ===== */
+﻿/* ===== ESTILOS MODERNOS PARA ÁREA DE VENDAS ===== */
 
 /* Usando a paleta de cores do sistema automotive-theme */
 :root {
@@ -116,7 +116,7 @@
 
 #busca_produto:focus {
     border-color: var(--primary-blue);
-    box-shadow: 0 0 0 0.2rem rgba(41, 98, 255, 0.15);
+    box-shadow: 0 0 0 0.2rem rgba(200, 155, 60, 0.15);
     outline: none;
 }
 
@@ -151,7 +151,7 @@
 }
 
 .btn-finalizar {
-    background: linear-gradient(135deg, #ff6d00 0%, #ff8c00 100%) !important;
+    background: linear-gradient(135deg, #d4af63 0%, #a67c2d 100%) !important;
     color: white !important;
     font-size: 1.1rem;
     padding: 0.8rem 2rem;
@@ -159,10 +159,10 @@
 }
 
 .btn-finalizar:hover:not(:disabled) {
-    background: linear-gradient(135deg, #ff8c00 0%, #ffa500 100%) !important;
+    background: linear-gradient(135deg, #e0bf79 0%, #b78a35 100%) !important;
     color: white !important;
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(255, 109, 0, 0.4) !important;
+    box-shadow: 0 4px 15px rgba(200, 155, 60, 0.4) !important;
 }
 
 .btn-finalizar:disabled {
@@ -291,7 +291,7 @@
 
 .produto-rapido:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(41, 98, 255, 0.15);
+    box-shadow: 0 8px 25px rgba(200, 155, 60, 0.15);
     border-color: var(--primary-blue);
 }
 
@@ -440,7 +440,7 @@
 }
 
 .produto-resultado:hover {
-    background-color: rgba(26, 35, 126, 0.05) !important;
+    background-color: rgba(18, 20, 23, 0.05) !important;
     transform: translateX(2px);
     box-shadow: inset 3px 0 0 var(--primary-blue);
 }
@@ -563,7 +563,7 @@
 
 .filtros-internos .form-control-sm:focus {
     border-color: var(--primary-blue);
-    box-shadow: 0 0 0 0.2rem rgba(41, 98, 255, 0.15);
+    box-shadow: 0 0 0 0.2rem rgba(200, 155, 60, 0.15);
 }
 
 /* Tabela de vendas melhorada */
@@ -657,7 +657,7 @@
 }
 
 .badge-itens {
-    background: linear-gradient(135deg, #17a2b8 0%, #007bff 100%);
+    background: linear-gradient(135deg, #5b6672 0%, #c89b3c 100%);
     color: white;
     padding: 0.5rem 0.75rem;
     border-radius: 12px;
@@ -750,13 +750,13 @@
 }
 
 .btn-visualizar {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    background: linear-gradient(135deg, #d4af63 0%, #a67c2d 100%);
     color: white;
 }
 
 .btn-visualizar:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(200, 155, 60, 0.35);
 }
 
 .btn-imprimir {
@@ -1200,4 +1200,6 @@
 .vendas-shell .produto-resultado:hover {
     background: #fff !important;
 }
+
+
 

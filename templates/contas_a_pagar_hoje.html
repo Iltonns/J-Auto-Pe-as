@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Contas a Pagar - Sistema de Autopeças{% endblock %}
 {% block page_title %}Gestão de Contas a Pagar{% endblock %}
@@ -36,7 +36,7 @@
 }
 
 .table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.05);
+    background-color: rgba(200, 155, 60, 0.05);
 }
 
 .badge-prazo {
@@ -100,7 +100,7 @@
     }
     
     .table th {
-        background-color: #2962ff !important;
+        background-color: #c89b3c !important;
         color: white !important;
         font-weight: bold !important;
     }
@@ -148,7 +148,7 @@
     }
     
     .stats-for-print .stat-box {
-        border: 2px solid #2962ff;
+        border: 2px solid #c89b3c;
         padding: 15px;
         margin: 5px;
         border-radius: 8px;
@@ -164,7 +164,7 @@
     .stats-for-print .stat-value {
         font-size: 18px;
         font-weight: bold;
-        color: #2962ff;
+        color: #c89b3c;
     }
     
     .stats-for-print .stat-value.total {
@@ -231,13 +231,13 @@
                 {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                     <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
                 {% else %}
-                    <div style="width: 150px; height: 80px; background: #2962ff; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    <div style="width: 150px; height: 80px; background: #c89b3c; color: white; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <i class="fas fa-building fa-3x"></i>
                     </div>
                 {% endif %}
             </div>
             <div style="flex: 0 0 50%; text-align: center; padding: 0 15px;">
-                <h2 style="color: #2962ff; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                <h2 style="color: #c89b3c; margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
                     {{ configuracoes_empresa.nome_empresa if configuracoes_empresa else 'J-AUTO PEÇAS' }}
                 </h2>
                 <p style="margin: 3px 0; font-size: 11px;">{{ configuracoes_empresa.endereco if configuracoes_empresa and configuracoes_empresa.endereco else 'Av. 01, 608 - Conj. Hab. Parana' }}</p>
@@ -250,8 +250,8 @@
                 <p style="margin: 3px 0; font-size: 11px;"><strong>Total de Registros:</strong> {{ contas|length if contas else 0 }}</p>
             </div>
         </div>
-        <hr style="margin: 15px 0; border: none; border-top: 3px solid #2962ff;">
-        <h3 style="text-align: center; color: #2962ff; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE CONTAS A PAGAR</h3>
+        <hr style="margin: 15px 0; border: none; border-top: 3px solid #c89b3c;">
+        <h3 style="text-align: center; color: #c89b3c; font-size: 18px; font-weight: bold; margin: 15px 0;">RELATÓRIO DETALHADO DE CONTAS A PAGAR</h3>
         <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
             <p style="margin: 0; font-size: 10px; text-align: center;">
                 <strong>Período de Análise:</strong> {{ filtro_atual.upper() }} | 
@@ -264,18 +264,18 @@
     
     <!-- Resumo de Totais para PDF -->
     <div class="stats-for-print" style="display: none;">
-        <div style="background: linear-gradient(135deg, #2962ff 0%, #1e40af 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
+        <div style="background: linear-gradient(135deg, #c89b3c 0%, #8c6a2a 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin-bottom: 15px;">
             <h4 style="margin: 0; font-size: 16px; text-align: center;">
                 <i class="fas fa-chart-bar"></i> RESUMO FINANCEIRO - CONTAS A PAGAR
             </h4>
         </div>
         <div class="row" style="display: flex; flex-wrap: wrap; margin: 0;">
             <div class="col-6" style="width: 50%; padding: 5px;">
-                <div class="stat-box" style="border: 2px solid #2962ff; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
+                <div class="stat-box" style="border: 2px solid #c89b3c; padding: 15px; border-radius: 8px; background: #f8f9fa; text-align: center;">
                     <div class="stat-label" style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 8px;">
                         <i class="fas fa-list-ol"></i> TOTAL DE CONTAS
                     </div>
-                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #2962ff;">
+                    <div class="stat-value" style="font-size: 20px; font-weight: bold; color: #c89b3c;">
                         {{ estatisticas.total_contas }}
                     </div>
                 </div>
@@ -321,7 +321,7 @@
                     {% if configuracoes_empresa and configuracoes_empresa.logo_url %}
                         <img src="{{ configuracoes_empresa.logo_url }}" alt="Logo" class="img-fluid" style="max-height: 100px; border-radius: 8px; background: white; padding: 10px;">
                     {% else %}
-                        <div style="width: 100px; height: 100px; background: white; color: #2962ff; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
+                        <div style="width: 100px; height: 100px; background: white; color: #c89b3c; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 0 auto;">
                             <i class="fas fa-building fa-3x"></i>
                         </div>
                     {% endif %}
@@ -360,7 +360,7 @@
                     <p class="text-muted mb-0">Gestão completa das suas obrigações financeiras</p>
                 </div>
                 <div class="no-print">
-                    <button class="btn me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #2962ff; color: white; border: none;">
+                    <button class="btn me-2" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #c89b3c; color: white; border: none;">
                         <i class="fas fa-plus me-2"></i>Nova Conta
                     </button>
                     <a href="{{ url_for('exportar_contas_a_pagar_pdf', filtro=filtro_atual, data_inicio=request.args.get('data_inicio'), data_fim=request.args.get('data_fim'), status=status_atual) }}" class="btn btn-danger me-2" target="_blank">
@@ -633,7 +633,7 @@
                                 </tr>
                                 {% endfor %}
                                 <!-- Linha de Totalização -->
-                                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #2962ff;">
+                                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #c89b3c;">
                                     <td colspan="4" class="text-end" style="padding: 12px;">
                                         <strong style="font-size: 14px;">TOTAL GERAL:</strong>
                                     </td>
@@ -662,7 +662,7 @@
                             Não há contas para o período selecionado.
                         {% endif %}
                     </p>
-                    <button class="btn" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #2962ff; color: white; border: none;">
+                    <button class="btn" data-bs-toggle="modal" data-bs-target="#modalNovaConta" style="background-color: #c89b3c; color: white; border: none;">
                         <i class="fas fa-plus me-2"></i>Adicionar Nova Conta
                     </button>
                 </div>
@@ -673,8 +673,8 @@
     
     <!-- Informações Adicionais para PDF -->
     <div class="print-only" style="display: none; margin-top: 30px; page-break-before: avoid;">
-        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #2962ff;">
-            <h5 style="color: #2962ff; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #c89b3c;">
+            <h5 style="color: #c89b3c; margin: 0 0 10px 0; font-size: 12px; font-weight: bold;">
                 <i class="fas fa-info-circle"></i> INFORMAÇÕES DO RELATÓRIO
             </h5>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 9px;">
@@ -696,7 +696,7 @@
                 <strong>Legenda de Status:</strong> 
                 <span style="color: #d32f2f;">● VENCIDO</span> | 
                 <span style="color: #f57c00;">● VENCE HOJE</span> | 
-                <span style="color: #2962ff;">● EM DIA</span>
+                <span style="color: #c89b3c;">● EM DIA</span>
             </p>
             <p style="margin: 5px 0 0 0; text-align: center;">
                 Este relatório foi gerado automaticamente pelo Sistema de Gestão de Autopeças
@@ -710,7 +710,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('adicionar_conta_pagar_route') }}">
-                <div class="modal-header text-white" style="background-color: #2962ff;">
+                <div class="modal-header text-white" style="background-color: #c89b3c;">
                     <h5 class="modal-title">
                         <i class="fas fa-plus me-2"></i>Nova Conta a Pagar
                     </h5>
@@ -773,7 +773,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn" style="background-color: #2962ff; color: white; border: none;">
+                    <button type="submit" class="btn" style="background-color: #c89b3c; color: white; border: none;">
                         <i class="fas fa-save me-2"></i>Salvar Conta
                     </button>
                 </div>
@@ -787,7 +787,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" id="formEditarConta">
-                <div class="modal-header text-white" style="background-color: #2962ff;">
+                <div class="modal-header text-white" style="background-color: #c89b3c;">
                     <h5 class="modal-title">
                         <i class="fas fa-edit me-2"></i>Editar Conta a Pagar
                     </h5>
@@ -851,7 +851,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn" style="background-color: #2962ff; color: white; border: none;">
+                    <button type="submit" class="btn" style="background-color: #c89b3c; color: white; border: none;">
                         <i class="fas fa-save me-2"></i>Salvar Alterações
                     </button>
                 </div>
@@ -864,7 +864,7 @@
 <div class="modal fade" id="modalDetalhes" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #2962ff;">
+            <div class="modal-header text-white" style="background-color: #c89b3c;">
                 <h5 class="modal-title">
                     <i class="fas fa-eye me-2"></i>Detalhes da Conta a Pagar
                 </h5>
@@ -1050,3 +1050,4 @@ function imprimirRelatorio() {
 
 </script>
 {% endblock %}
+

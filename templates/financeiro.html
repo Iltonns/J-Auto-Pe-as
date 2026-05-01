@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Financeiro - Sistema Autopeças{% endblock %}
 
@@ -23,7 +23,7 @@
             <a href="{{ url_for('contas_a_receber_hoje') }}" class="btn btn-outline-success me-2">
                 <i class="fas fa-coins me-2"></i>Contas a Receber
             </a>
-            <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal" style="background-color: #1a237e; color: white; border: none;">
+            <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#novoLancamentoModal" style="background-color: #121417; color: white; border: none;">
                 <i class="fas fa-plus me-2"></i>Novo Lançamento
             </button>
         </div>
@@ -308,7 +308,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="formEditarLancamento" method="POST">
-                <div class="modal-header text-white" style="background-color: #1a237e;">
+                <div class="modal-header text-white" style="background-color: #121417;">
                     <h5 class="modal-title">
                         <i class="fas fa-edit me-2"></i>
                         Editar Lançamento Financeiro
@@ -377,7 +377,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn" style="background-color: #1a237e; color: white; border: none;">
+                    <button type="submit" class="btn" style="background-color: #121417; color: white; border: none;">
                         <i class="fas fa-save me-2"></i>Salvar Alterações
                     </button>
                 </div>
@@ -391,7 +391,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="formMarcarPago" method="POST">
-                <div class="modal-header text-white" style="background-color: #1a237e;">
+                <div class="modal-header text-white" style="background-color: #121417;">
                     <h5 class="modal-title">
                         <i class="fas fa-check me-2"></i>
                         <span id="tituloMarcarPago">Marcar como Pago</span>
@@ -434,7 +434,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('novo_lancamento_financeiro') }}">
-                <div class="modal-header text-white" style="background-color: #1a237e;">
+                <div class="modal-header text-white" style="background-color: #121417;">
                     <h5 class="modal-title">
                         <i class="fas fa-plus me-2"></i>
                         Novo Lançamento Financeiro
@@ -520,7 +520,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn" style="background-color: #1a237e; color: white; border: none;">
+                    <button type="submit" class="btn" style="background-color: #121417; color: white; border: none;">
                         <i class="fas fa-save me-2"></i>Salvar Lançamento
                     </button>
                 </div>
@@ -600,3 +600,4 @@ function deletarLancamento(id, tipo) {
 }
 </script>
 {% endblock %}
+

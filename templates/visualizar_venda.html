@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Detalhes da Venda #{{ venda.id }} - Sistema de Autopeças{% endblock %}
 {% block page_title %}Detalhes da Venda #{{ venda.id }}{% endblock %}
@@ -71,7 +71,7 @@
     }
     
     .valor-destaque {
-        color: #1a237e;
+        color: #121417;
         font-size: 1.2rem;
     }
     
@@ -114,7 +114,7 @@
     .item-quantidade {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #1a237e;
+        color: #121417;
     }
     
     .item-preco {
@@ -265,7 +265,7 @@
     
     .resumo-financeiro {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border: 2px solid #1a237e;
+        border: 2px solid #121417;
         border-radius: 10px;
         padding: 20px;
     }
@@ -273,11 +273,11 @@
     .total-final {
         font-size: 2rem;
         font-weight: bold;
-        color: #1a237e;
+        color: #121417;
         text-align: center;
         margin-top: 15px;
         padding-top: 15px;
-        border-top: 2px solid #1a237e;
+        border-top: 2px solid #121417;
     }
 
     .alert-info-custom {
@@ -565,7 +565,7 @@
 <div class="modal fade" id="modalConfirmarDelecao" tabindex="-1" aria-labelledby="modalConfirmarDelecaoLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #1a237e;">
+            <div class="modal-header text-white" style="background-color: #121417;">
                 <h5 class="modal-title" id="modalConfirmarDelecaoLabel">
                     <i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão
                 </h5>
@@ -719,3 +719,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+

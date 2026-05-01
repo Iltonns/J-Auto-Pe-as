@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Produtos - Sistema de Autopeças{% endblock %}
 {% block page_title %}🔧 Gerenciamento de Produtos{% endblock %}
@@ -150,7 +150,7 @@
     
     .form-control:focus {
         border-color: #80bdff;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        box-shadow: 0 0 0 0.2rem rgba(200, 155, 60, 0.25);
     }
     
     /* Cards de Estatísticas Melhorados */
@@ -392,7 +392,7 @@
     
     .product-photo:hover {
         transform: scale(1.05);
-        border-color: #1a237e;
+        border-color: #121417;
     }
     
     .modal-product-photo {
@@ -459,8 +459,8 @@
     
     /* Estilo para campo de busca */
     #buscaProdutos:focus {
-        border-color: #1a237e;
-        box-shadow: 0 0 0 0.2rem rgba(26, 35, 126, 0.25);
+        border-color: #121417;
+        box-shadow: 0 0 0 0.2rem rgba(18, 20, 23, 0.25);
     }
 </style>
 {% endblock %}
@@ -686,7 +686,7 @@
 <div class="modal fade" id="modalAdicionarProduto" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #1a237e;">
+            <div class="modal-header text-white" style="background-color: #121417;">
                 <h5 class="modal-title">
                     <i class="fas fa-plus me-2"></i>Adicionar Novo Produto
                 </h5>
@@ -870,7 +870,7 @@
 <div class="modal fade" id="modalEditarProduto" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #1a237e;">
+            <div class="modal-header text-white" style="background-color: #121417;">
                 <h5 class="modal-title">
                     <i class="fas fa-edit me-2"></i>Editar Produto
                 </h5>
@@ -1063,7 +1063,7 @@
 <div class="modal fade" id="modalImportarXML" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #1a237e;">
+            <div class="modal-header text-white" style="background-color: #121417;">
                 <h5 class="modal-title">
                     <i class="fas fa-file-import me-2"></i>Importar Produtos via XML de NFe
                 </h5>
@@ -1173,7 +1173,7 @@
 <div class="modal fade" id="modalNovoFornecedor" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header text-white" style="background-color: #1a237e;">
+            <div class="modal-header text-white" style="background-color: #121417;">
                 <h5 class="modal-title">
                     <i class="fas fa-truck me-2"></i>Cadastrar Novo Fornecedor
                 </h5>
@@ -1337,7 +1337,7 @@ function visualizarProduto(id) {
                 <div class="modal fade" id="modalVisualizarProduto" tabindex="-1">
                     <div class="modal-dialog modal-lg">
                         <div class="modal-content">
-                            <div class="modal-header text-white" style="background-color: #1a237e;">
+                            <div class="modal-header text-white" style="background-color: #121417;">
                                 <h5 class="modal-title">
                                     <i class="fas fa-eye me-2"></i>Detalhes do Produto #${produto.id}
                                 </h5>
@@ -1502,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="modal fade" id="modalAmpliiarFoto" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content">
-                                <div class="modal-header text-white" style="background-color: #1a237e;">
+                                <div class="modal-header text-white" style="background-color: #121417;">
                                     <h5 class="modal-title">Foto do Produto</h5>
                                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                 </div>
@@ -1894,3 +1894,4 @@ function mostrarAlerta(mensagem, tipo) {
 }
 </script>
 {% endblock %}
+

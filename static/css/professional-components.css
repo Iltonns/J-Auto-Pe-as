@@ -33,7 +33,7 @@
 .btn-primary:hover,
 .btn-primary:focus {
     background: var(--gradient-primary);
-    box-shadow: 0 8px 18px rgba(24, 75, 122, 0.24);
+    box-shadow: 0 8px 18px rgba(166, 124, 45, 0.32);
 }
 
 .btn-success {
@@ -83,9 +83,9 @@
 }
 
 .status-pendente {
-    background: #fff7ed;
-    color: #9a3412;
-    border: 1px solid #fdba74;
+    background: #f8f2e5;
+    color: #7a5b1f;
+    border: 1px solid #d4af63;
 }
 
 .status-pago,
@@ -137,5 +137,5 @@ select.form-control:focus,
 textarea.form-control:focus,
 .form-select:focus {
     border-color: var(--brand-500);
-    box-shadow: 0 0 0 .2rem rgba(35, 103, 165, .15);
+    box-shadow: 0 0 0 .2rem rgba(200, 155, 60, 0.22);
 }

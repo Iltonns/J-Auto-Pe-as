@@ -1,12 +1,12 @@
 body {
-    background: radial-gradient(circle at 20% -10%, #dbeafe 0%, transparent 28%),
-                radial-gradient(circle at 85% 0%, #ffedd5 0%, transparent 24%),
+    background: radial-gradient(circle at 20% -10%, rgba(212, 175, 99, 0.12) 0%, transparent 28%),
+                radial-gradient(circle at 85% 0%, rgba(29, 35, 42, 0.08) 0%, transparent 24%),
                 var(--neutral-050) !important;
 }
 
 .sidebar {
-    background: linear-gradient(180deg, #0f2742 0%, #1e293b 100%) !important;
-    box-shadow: 0 6px 24px rgba(15, 39, 66, .28);
+    background: linear-gradient(180deg, var(--brand-900) 0%, var(--neutral-800) 100%) !important;
+    box-shadow: 0 6px 24px rgba(11, 13, 16, 0.36);
 }
 
 .sidebar::before {
@@ -37,14 +37,14 @@ body {
 }
 
 .sidebar .nav-link.active {
-    background: linear-gradient(135deg, rgba(249,115,22,.95) 0%, rgba(234,88,12,.95) 100%);
-    box-shadow: 0 10px 18px rgba(234, 88, 12, .32);
+    background: linear-gradient(135deg, rgba(212, 175, 99, 0.95) 0%, rgba(166, 124, 45, 0.95) 100%);
+    box-shadow: 0 10px 18px rgba(166, 124, 45, 0.35);
 }
 
 .sidebar .section-title {
     margin: 12px 14px 6px;
     font-size: .72rem;
-    color: #fdba74;
+    color: var(--accent-500);
 }
 
 .top-navbar {

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Orçamento {{ orcamento.numero_orcamento }} - Sistema de Autopeças{% endblock %}
 
@@ -10,7 +10,7 @@
             <img src="{{ url_for('static', filename=config_empresa.logo_path) }}" alt="Logo da Loja" style="max-height: 80px; max-width: 200px;">
         </div>
         <div class="col-8 text-end">
-            <h3 style="margin: 0; color: #007bff;">{{ config_empresa.nome_empresa }}</h3>
+            <h3 style="margin: 0; color: #c89b3c;">{{ config_empresa.nome_empresa }}</h3>
             <p style="margin: 0; font-size: 14px;">
                 {{ config_empresa.endereco }}<br>
                 {% if config_empresa.cidade and config_empresa.estado %}
@@ -23,7 +23,7 @@
             </p>
         </div>
     </div>
-    <hr style="border-top: 2px solid #007bff;">
+    <hr style="border-top: 2px solid #c89b3c;">
 </div>
 
 <div class="container-fluid">

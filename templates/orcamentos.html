@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Orçamento Rápido - Sistema de Auto Peças{% endblock %}
 
@@ -11,7 +11,7 @@
 }
 
 .orcamento-card {
-    border-left: 4px solid #007bff;
+    border-left: 4px solid #c89b3c;
 }
 
 .btn-add-item {
@@ -29,7 +29,7 @@
 }
 
 .item-counter {
-    background: linear-gradient(45deg, #007bff, #0056b3);
+    background: linear-gradient(45deg, #c89b3c, #a67c2d);
     color: white;
     border-radius: 50%;
     width: 24px;
@@ -61,7 +61,7 @@
     width: 20px;
     height: 20px;
     border: 2px solid #f3f3f3;
-    border-top: 2px solid #007bff;
+    border-top: 2px solid #c89b3c;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -637,7 +637,7 @@ function calcularTotal() {
     if (quantidadeItens === 0) {
         contador.style.background = '#6c757d';
     } else if (quantidadeItens <= 3) {
-        contador.style.background = 'linear-gradient(45deg, #007bff, #0056b3)';
+        contador.style.background = 'linear-gradient(45deg, #c89b3c, #a67c2d)';
     } else if (quantidadeItens <= 6) {
         contador.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
     } else {
