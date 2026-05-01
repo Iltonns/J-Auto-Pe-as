@@ -1035,7 +1035,7 @@ def debug_vendas():
 @app.route('/clientes')
 @login_required
 def clientes():
-    clientes_lista = listar_clientes()
+    clientes_lista = listar_clientes(get_current_tenant_id())
     return render_template('clientes.html', clientes=clientes_lista)
 
 @app.route('/clientes/adicionar', methods=['POST'], endpoint='adicionar_cliente')
@@ -1058,9 +1058,24 @@ def adicionar_cliente_route():
     cep = request.form.get('cep')
     
     try:
-        adicionar_cliente(nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
-                         razao_social, inscricao_estadual, rua, numero, complemento, 
-                         bairro, cidade, estado, cep)
+        adicionar_cliente(
+            nome,
+            telefone,
+            email,
+            cpf_cnpj,
+            endereco,
+            tipo_pessoa,
+            razao_social,
+            inscricao_estadual,
+            rua,
+            numero,
+            complemento,
+            bairro,
+            cidade,
+            estado,
+            cep,
+            tenant_id=get_current_tenant_id()
+        )
         flash('Cliente adicionado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar cliente: {str(e)}', 'error')
@@ -1087,10 +1102,29 @@ def editar_cliente_route(id):
     cep = request.form.get('cep')
     
     try:
-        editar_cliente(id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
-                      razao_social, inscricao_estadual, rua, numero, complemento, 
-                      bairro, cidade, estado, cep)
-        flash('Cliente editado com sucesso!', 'success')
+        atualizado = editar_cliente(
+            id,
+            nome,
+            telefone,
+            email,
+            cpf_cnpj,
+            endereco,
+            tipo_pessoa,
+            razao_social,
+            inscricao_estadual,
+            rua,
+            numero,
+            complemento,
+            bairro,
+            cidade,
+            estado,
+            cep,
+            tenant_id=get_current_tenant_id()
+        )
+        if atualizado:
+            flash('Cliente editado com sucesso!', 'success')
+        else:
+            flash('Cliente não encontrado para o tenant atual.', 'warning')
     except Exception as e:
         flash(f'Erro ao editar cliente: {str(e)}', 'error')
     
@@ -1100,8 +1134,11 @@ def editar_cliente_route(id):
 @login_required
 def deletar_cliente_route(id):
     try:
-        deletar_cliente(id)
-        flash('Cliente excluído com sucesso!', 'success')
+        removido = deletar_cliente(id, tenant_id=get_current_tenant_id())
+        if removido:
+            flash('Cliente excluído com sucesso!', 'success')
+        else:
+            flash('Cliente não encontrado para o tenant atual.', 'warning')
     except Exception as e:
         flash(f'Erro ao excluir cliente: {str(e)}', 'error')
     
