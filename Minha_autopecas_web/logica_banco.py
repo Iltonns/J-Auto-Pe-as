@@ -337,6 +337,13 @@ def _resolver_tenant_id_orcamentos(tenant_id=None, permitir_global=True):
     """
     return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
 
+def _resolver_tenant_id_fiscal(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes fiscais (NF-e).
+    Reaproveita a mesma estrategia de contexto de vendas.
+    """
+    return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -8628,7 +8635,7 @@ def garantir_estrutura_fiscal():
                 serie INTEGER NOT NULL DEFAULT 1,
                 ultimo_numero INTEGER NOT NULL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (ano, serie)
+                tenant_id INTEGER DEFAULT 1
             )
         ''')
 
@@ -8654,6 +8661,7 @@ def garantir_estrutura_fiscal():
                 data_autorizacao TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tenant_id INTEGER DEFAULT 1,
                 FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
                 FOREIGN KEY (emitida_por) REFERENCES usuarios (id)
             )
@@ -8682,6 +8690,7 @@ def garantir_estrutura_fiscal():
                 valor_unitario DECIMAL(12,4) NOT NULL,
                 valor_total DECIMAL(12,4) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tenant_id INTEGER DEFAULT 1,
                 FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
                 FOREIGN KEY (produto_id) REFERENCES produtos (id)
             )
@@ -8699,14 +8708,45 @@ def garantir_estrutura_fiscal():
                 response_json JSONB,
                 usuario_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tenant_id INTEGER DEFAULT 1,
                 FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
                 FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
             )
         ''')
 
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_numeracao', "tenant_id INTEGER DEFAULT 1")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe', "tenant_id INTEGER DEFAULT 1")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_itens', "tenant_id INTEGER DEFAULT 1")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_eventos', "tenant_id INTEGER DEFAULT 1")
+
+        cursor.execute(
+            "UPDATE fiscal_nfe_numeracao SET tenant_id = 1 WHERE tenant_id IS NULL"
+        )
+        cursor.execute(
+            "UPDATE fiscal_nfe SET tenant_id = 1 WHERE tenant_id IS NULL"
+        )
+        cursor.execute(
+            "UPDATE fiscal_nfe_itens SET tenant_id = 1 WHERE tenant_id IS NULL"
+        )
+        cursor.execute(
+            "UPDATE fiscal_nfe_eventos SET tenant_id = 1 WHERE tenant_id IS NULL"
+        )
+
+        cursor.execute(
+            "ALTER TABLE fiscal_nfe_numeracao DROP CONSTRAINT IF EXISTS fiscal_nfe_numeracao_ano_serie_key"
+        )
+        cursor.execute("DROP INDEX IF EXISTS fiscal_nfe_numeracao_ano_serie_key")
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_fiscal_nfe_numeracao_tenant_ano_serie ON fiscal_nfe_numeracao(tenant_id, ano, serie)"
+        )
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_status ON fiscal_nfe(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_venda_id ON fiscal_nfe(venda_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_eventos_nfe_id ON fiscal_nfe_eventos(nfe_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_numeracao_tenant_id ON fiscal_nfe_numeracao(tenant_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_tenant_id ON fiscal_nfe(tenant_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_itens_tenant_id ON fiscal_nfe_itens(tenant_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fiscal_nfe_eventos_tenant_id ON fiscal_nfe_eventos(tenant_id)")
 
         conn.commit()
         _fiscal_schema_checked = True
@@ -8719,7 +8759,7 @@ def garantir_estrutura_fiscal():
         conn.close()
 
 
-def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None):
+def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None, tenant_id=None):
     """
     Reserva o proximo numero de NF-e de forma transacional.
     Se conn/cursor forem passados, usa a mesma transacao.
@@ -8733,15 +8773,20 @@ def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None):
         cursor = conn.cursor()
         close_conn = True
 
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        raise ValueError("Nao foi possivel resolver tenant_id para reservar numeracao de NF-e.")
+
     try:
         cursor.execute(
             '''
             SELECT id, ultimo_numero
             FROM fiscal_nfe_numeracao
-            WHERE ano = %s AND serie = %s
+            WHERE ano = %s AND serie = %s AND tenant_id = %s
             FOR UPDATE
             ''',
-            (ano, serie)
+            (ano, serie, tenant_resolvido)
         )
         row = cursor.fetchone()
 
@@ -8752,18 +8797,18 @@ def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None):
                 '''
                 UPDATE fiscal_nfe_numeracao
                 SET ultimo_numero = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
+                WHERE id = %s AND tenant_id = %s
                 ''',
-                (proximo, numeracao_id)
+                (proximo, numeracao_id, tenant_resolvido)
             )
         else:
             proximo = 1
             cursor.execute(
                 '''
-                INSERT INTO fiscal_nfe_numeracao (ano, serie, ultimo_numero)
-                VALUES (%s, %s, %s)
+                INSERT INTO fiscal_nfe_numeracao (ano, serie, ultimo_numero, tenant_id)
+                VALUES (%s, %s, %s, %s)
                 ''',
-                (ano, serie, proximo)
+                (ano, serie, proximo, tenant_resolvido)
             )
 
         if close_conn:
@@ -8779,7 +8824,7 @@ def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None):
             conn.close()
 
 
-def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
+def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id, tenant_id):
     """Registra snapshot fiscal dos itens da venda na NF-e."""
     cursor.execute(
         '''
@@ -8788,15 +8833,18 @@ def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
                p.aliquota_icms, p.aliquota_pis, p.aliquota_cofins,
                iv.quantidade, iv.preco_unitario, iv.subtotal
         FROM itens_venda iv
-        JOIN produtos p ON p.id = iv.produto_id
-        WHERE iv.venda_id = %s
+        JOIN produtos p ON p.id = iv.produto_id AND p.tenant_id = iv.tenant_id
+        WHERE iv.venda_id = %s AND iv.tenant_id = %s
         ORDER BY iv.id
         ''',
-        (venda_id,)
+        (venda_id, tenant_id)
     )
     itens = cursor.fetchall()
 
-    cursor.execute("DELETE FROM fiscal_nfe_itens WHERE nfe_id = %s", (nfe_id,))
+    cursor.execute(
+        "DELETE FROM fiscal_nfe_itens WHERE nfe_id = %s AND tenant_id = %s",
+        (nfe_id, tenant_id)
+    )
 
     for item in itens:
         if hasattr(item, 'get'):
@@ -8844,24 +8892,24 @@ def _registrar_snapshot_itens_nfe(cursor, nfe_id, venda_id):
                 nfe_id, venda_item_id, produto_id, descricao, ncm, cest, cfop, unidade,
                 origem_mercadoria, csosn, cst_icms, cst_pis, cst_cofins,
                 aliquota_icms, aliquota_pis, aliquota_cofins,
-                quantidade, valor_unitario, valor_total
+                quantidade, valor_unitario, valor_total, tenant_id
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s,
-                %s, %s, %s
+                %s, %s, %s, %s
             )
             ''',
             (
                 nfe_id, venda_item_id, produto_id, descricao, ncm, cest, cfop, unidade,
                 origem_mercadoria, csosn, cst_icms, cst_pis, cst_cofins,
                 aliquota_icms, aliquota_pis, aliquota_cofins,
-                quantidade, valor_unitario, valor_total
+                quantidade, valor_unitario, valor_total, tenant_id
             )
         )
 
 
-def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologacao', serie=1):
+def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologacao', serie=1, tenant_id=None):
     """Cria rascunho fiscal para uma venda e retorna os dados da NF-e."""
     if not garantir_estrutura_fiscal():
         return {'sucesso': False, 'erro': 'Nao foi possivel inicializar a estrutura fiscal.'}
@@ -8870,38 +8918,59 @@ def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologac
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        cursor.execute("SELECT id FROM vendas WHERE id = %s", (venda_id,))
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para criar rascunho NF-e.")
+
+        cursor.execute(
+            "SELECT id FROM vendas WHERE id = %s AND tenant_id = %s",
+            (venda_id, tenant_resolvido)
+        )
         venda = cursor.fetchone()
         if not venda:
             return {'sucesso': False, 'erro': f'Venda {venda_id} nao encontrada.'}
+
+        if usuario_id is not None:
+            cursor.execute(
+                "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+                (usuario_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                return {'sucesso': False, 'erro': 'Usuario de emissao nao pertence ao tenant da venda.'}
 
         cursor.execute(
             '''
             SELECT *
             FROM fiscal_nfe
-            WHERE venda_id = %s
+            WHERE venda_id = %s AND tenant_id = %s
             LIMIT 1
             ''',
-            (venda_id,)
+            (venda_id, tenant_resolvido)
         )
         existente = cursor.fetchone()
         if existente:
-            _registrar_snapshot_itens_nfe(cursor, existente['id'], venda_id)
+            _registrar_snapshot_itens_nfe(cursor, existente['id'], venda_id, tenant_resolvido)
             conn.commit()
             return {'sucesso': True, 'criada': False, 'nfe': dict(existente)}
 
-        numero_nfe = reservar_proximo_numero_nfe(serie=serie, conn=conn, cursor=cursor)
+        numero_nfe = reservar_proximo_numero_nfe(
+            serie=serie,
+            conn=conn,
+            cursor=cursor,
+            tenant_id=tenant_resolvido
+        )
         cursor.execute(
             '''
             INSERT INTO fiscal_nfe (
-                venda_id, numero, serie, ambiente, status, emitida_por, data_emissao
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                venda_id, numero, serie, ambiente, status, emitida_por, data_emissao, tenant_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             ''',
-            (venda_id, numero_nfe, serie, ambiente, 'rascunho', usuario_id, agora_br())
+            (venda_id, numero_nfe, serie, ambiente, 'rascunho', usuario_id, agora_br(), tenant_resolvido)
         )
         nfe = cursor.fetchone()
-        _registrar_snapshot_itens_nfe(cursor, nfe['id'], venda_id)
+        _registrar_snapshot_itens_nfe(cursor, nfe['id'], venda_id, tenant_resolvido)
         conn.commit()
         return {'sucesso': True, 'criada': True, 'nfe': dict(nfe)}
     except Exception as e:
@@ -8911,7 +8980,7 @@ def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologac
         conn.close()
 
 
-def obter_nfe_por_venda(venda_id):
+def obter_nfe_por_venda(venda_id, tenant_id=None, permitir_global=False):
     """Retorna os dados da NF-e vinculada a venda."""
     if not garantir_estrutura_fiscal():
         return None
@@ -8920,15 +8989,29 @@ def obter_nfe_por_venda(venda_id):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        cursor.execute(
-            '''
-            SELECT *
-            FROM fiscal_nfe
-            WHERE venda_id = %s
-            LIMIT 1
-            ''',
-            (venda_id,)
-        )
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+
+        if tenant_resolvido is not None:
+            cursor.execute(
+                '''
+                SELECT *
+                FROM fiscal_nfe
+                WHERE venda_id = %s AND tenant_id = %s
+                LIMIT 1
+                ''',
+                (venda_id, tenant_resolvido)
+            )
+        else:
+            cursor.execute(
+                '''
+                SELECT *
+                FROM fiscal_nfe
+                WHERE venda_id = %s
+                LIMIT 1
+                ''',
+                (venda_id,)
+            )
+
         nfe = cursor.fetchone()
         if not nfe:
             return None
@@ -8940,7 +9023,7 @@ def obter_nfe_por_venda(venda_id):
         conn.close()
 
 
-def obter_nfe_por_id(nfe_id):
+def obter_nfe_por_id(nfe_id, tenant_id=None, permitir_global=False):
     """Retorna os dados da NF-e por ID."""
     if not garantir_estrutura_fiscal():
         return None
@@ -8948,7 +9031,11 @@ def obter_nfe_por_id(nfe_id):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s", (nfe_id,))
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+        if tenant_resolvido is not None:
+            cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s AND tenant_id = %s", (nfe_id, tenant_resolvido))
+        else:
+            cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s", (nfe_id,))
         nfe = cursor.fetchone()
         return dict(nfe) if nfe else None
     except Exception as e:
@@ -8958,7 +9045,7 @@ def obter_nfe_por_id(nfe_id):
         conn.close()
 
 
-def atualizar_dados_nfe(nfe_id, **campos):
+def atualizar_dados_nfe(nfe_id, tenant_id=None, permitir_global=False, **campos):
     """Atualiza campos da fiscal_nfe dinamicamente."""
     if not campos:
         return True
@@ -8992,10 +9079,16 @@ def atualizar_dados_nfe(nfe_id, **campos):
     updates.append("updated_at = CURRENT_TIMESTAMP")
     params.append(nfe_id)
 
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+    if tenant_resolvido is not None:
+        params.append(tenant_resolvido)
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         query = f"UPDATE fiscal_nfe SET {', '.join(updates)} WHERE id = %s"
+        if tenant_resolvido is not None:
+            query += " AND tenant_id = %s"
         cursor.execute(query, params)
         conn.commit()
         return cursor.rowcount > 0
@@ -9008,7 +9101,7 @@ def atualizar_dados_nfe(nfe_id, **campos):
 
 
 def registrar_evento_nfe(nfe_id, tipo_evento, status='registrado', protocolo=None, justificativa=None,
-                         request_json=None, response_json=None, usuario_id=None):
+                         request_json=None, response_json=None, usuario_id=None, tenant_id=None):
     """Registra um evento fiscal da NF-e."""
     if not garantir_estrutura_fiscal():
         return False
@@ -9016,18 +9109,39 @@ def registrar_evento_nfe(nfe_id, tipo_evento, status='registrado', protocolo=Non
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para registrar evento de NF-e.")
+
+        cursor.execute(
+            "SELECT id FROM fiscal_nfe WHERE id = %s AND tenant_id = %s",
+            (nfe_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("NF-e nao pertence ao tenant informado para registro de evento.")
+
+        if usuario_id is not None:
+            cursor.execute(
+                "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+                (usuario_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Usuario do evento fiscal nao pertence ao tenant atual.")
+
         cursor.execute(
             '''
             INSERT INTO fiscal_nfe_eventos (
                 nfe_id, tipo_evento, status, protocolo, justificativa,
-                request_json, response_json, usuario_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                request_json, response_json, usuario_id, tenant_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''',
             (
                 nfe_id, tipo_evento, status, protocolo, justificativa,
                 psycopg2.extras.Json(request_json) if request_json is not None else None,
                 psycopg2.extras.Json(response_json) if response_json is not None else None,
-                usuario_id
+                usuario_id,
+                tenant_resolvido
             )
         )
         conn.commit()
@@ -9040,7 +9154,7 @@ def registrar_evento_nfe(nfe_id, tipo_evento, status='registrado', protocolo=Non
         conn.close()
 
 
-def obter_itens_nfe(nfe_id):
+def obter_itens_nfe(nfe_id, tenant_id=None, permitir_global=False):
     """Retorna os itens fiscais de uma NF-e."""
     if not garantir_estrutura_fiscal():
         return []
@@ -9048,15 +9162,27 @@ def obter_itens_nfe(nfe_id):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cursor.execute(
-            '''
-            SELECT *
-            FROM fiscal_nfe_itens
-            WHERE nfe_id = %s
-            ORDER BY id
-            ''',
-            (nfe_id,)
-        )
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+        if tenant_resolvido is not None:
+            cursor.execute(
+                '''
+                SELECT *
+                FROM fiscal_nfe_itens
+                WHERE nfe_id = %s AND tenant_id = %s
+                ORDER BY id
+                ''',
+                (nfe_id, tenant_resolvido)
+            )
+        else:
+            cursor.execute(
+                '''
+                SELECT *
+                FROM fiscal_nfe_itens
+                WHERE nfe_id = %s
+                ORDER BY id
+                ''',
+                (nfe_id,)
+            )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     except Exception as e:
@@ -9066,7 +9192,7 @@ def obter_itens_nfe(nfe_id):
         conn.close()
 
 
-def obter_dados_venda_para_nfe(venda_id):
+def obter_dados_venda_para_nfe(venda_id, tenant_id=None):
     """Carrega dados fiscais completos da venda, emitente, destinatario e itens."""
     if not garantir_estrutura_fiscal():
         return {'sucesso': False, 'erro': 'Estrutura fiscal indisponivel.'}
@@ -9075,6 +9201,11 @@ def obter_dados_venda_para_nfe(venda_id):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return {'sucesso': False, 'erro': 'Nao foi possivel resolver tenant_id para dados fiscais da venda.'}
+
         cursor.execute(
             '''
             SELECT
@@ -9096,10 +9227,10 @@ def obter_dados_venda_para_nfe(venda_id):
                 COALESCE(to_jsonb(c)->>'cep', '') AS cliente_cep,
                 COALESCE(to_jsonb(c)->>'codigo_municipio_ibge', '') AS cliente_codigo_municipio_ibge
             FROM vendas v
-            LEFT JOIN clientes c ON c.id = v.cliente_id
-            WHERE v.id = %s
+            LEFT JOIN clientes c ON c.id = v.cliente_id AND c.tenant_id = v.tenant_id
+            WHERE v.id = %s AND v.tenant_id = %s
             ''',
-            (venda_id,)
+            (venda_id, tenant_resolvido)
         )
         venda = cursor.fetchone()
         if not venda:
@@ -9127,9 +9258,11 @@ def obter_dados_venda_para_nfe(venda_id):
                     ELSE 1
                 END AS serie_nfe
             FROM configuracoes_empresa cfg
+            WHERE cfg.tenant_id = %s
             ORDER BY cfg.id DESC
             LIMIT 1
-            '''
+            ''',
+            (tenant_resolvido,)
         )
         empresa = cursor.fetchone()
         if not empresa:
@@ -9153,11 +9286,11 @@ def obter_dados_venda_para_nfe(venda_id):
                 COALESCE(to_jsonb(p)->>'aliquota_pis', '0')::DECIMAL AS aliquota_pis,
                 COALESCE(to_jsonb(p)->>'aliquota_cofins', '0')::DECIMAL AS aliquota_cofins
             FROM itens_venda iv
-            LEFT JOIN produtos p ON p.id = iv.produto_id
-            WHERE iv.venda_id = %s
+            LEFT JOIN produtos p ON p.id = iv.produto_id AND p.tenant_id = iv.tenant_id
+            WHERE iv.venda_id = %s AND iv.tenant_id = %s
             ORDER BY iv.id
             ''',
-            (venda_id,)
+            (venda_id, tenant_resolvido)
         )
         itens = cursor.fetchall()
 
@@ -9173,7 +9306,7 @@ def obter_dados_venda_para_nfe(venda_id):
         conn.close()
 
 
-def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=None):
+def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=None, tenant_id=None, permitir_global=True):
     """
     Atualiza NF-e por webhook de provedor externo.
     Permite buscar por nfe_id ou venda_id.
@@ -9184,14 +9317,18 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
     if not nfe_id and not venda_id:
         return {'sucesso': False, 'erro': 'Informe nfe_id ou venda_id.'}
 
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+
     nfe = None
     if nfe_id:
-        nfe = obter_nfe_por_id(nfe_id)
+        nfe = obter_nfe_por_id(nfe_id, tenant_id=tenant_resolvido, permitir_global=permitir_global)
     elif venda_id:
-        nfe = obter_nfe_por_venda(venda_id)
+        nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_resolvido, permitir_global=permitir_global)
 
     if not nfe:
         return {'sucesso': False, 'erro': 'NF-e nao encontrada.'}
+    if venda_id and nfe.get('venda_id') and str(nfe.get('venda_id')) != str(venda_id):
+        return {'sucesso': False, 'erro': 'NF-e nao corresponde a venda informada.'}
 
     campos = {'response_json': payload or {}}
     if status:
@@ -9223,7 +9360,13 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
     if status == 'autorizada':
         campos['data_autorizacao'] = agora_br()
 
-    sucesso = atualizar_dados_nfe(nfe['id'], **campos)
+    tenant_evento = tenant_resolvido if tenant_resolvido is not None else nfe.get('tenant_id')
+    sucesso = atualizar_dados_nfe(
+        nfe['id'],
+        tenant_id=tenant_evento,
+        permitir_global=permitir_global,
+        **campos
+    )
     if not sucesso:
         return {'sucesso': False, 'erro': 'Falha ao atualizar dados da NF-e.'}
 
@@ -9233,7 +9376,8 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
         status=status or 'processado',
         protocolo=protocolo,
         justificativa=motivo,
-        response_json=payload or {}
+        response_json=payload or {},
+        tenant_id=tenant_evento
     )
 
     return {'sucesso': True, 'nfe_id': nfe['id']}

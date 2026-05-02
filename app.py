@@ -2577,7 +2577,7 @@ def visualizar_venda(venda_id):
             flash('Venda não encontrada!', 'error')
             return redirect(url_for('vendas'))
         config_empresa = obter_configuracoes_empresa(tenant_id)
-        nfe = obter_nfe_por_venda(venda_id)
+        nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_id)
         return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa, nfe=nfe)
     except Exception as e:
         flash(f'Erro ao carregar venda: {str(e)}', 'error')
@@ -2635,7 +2635,8 @@ def emitir_nfe_venda_route(venda_id):
         return redirect(url_for('visualizar_venda', venda_id=venda_id))
 
     try:
-        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id))
+        tenant_id = get_current_tenant_id()
+        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id), tenant_id=tenant_id)
     except Exception as e:
         print(f"Erro ao emitir NF-e da venda {venda_id}: {e}")
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -2667,7 +2668,7 @@ def api_nfe_por_venda(venda_id):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
 
     try:
-        resultado = consultar_nfe_por_venda(venda_id)
+        resultado = consultar_nfe_por_venda(venda_id, tenant_id=get_current_tenant_id())
     except Exception as e:
         print(f"Erro ao consultar NF-e da venda {venda_id}: {e}")
         return jsonify({'sucesso': False, 'mensagem': 'Falha interna ao consultar NF-e.'}), 500
@@ -2687,7 +2688,8 @@ def webhook_fiscal_nfe_route():
             token = auth[7:].strip()
 
     try:
-        resultado = processar_webhook_nfe(payload, token=token)
+        tenant_id = payload.get('tenant_id') if isinstance(payload, dict) else None
+        resultado = processar_webhook_nfe(payload, token=token, tenant_id=tenant_id)
     except Exception as e:
         print(f"Erro inesperado no webhook fiscal NF-e: {e}")
         resultado = {'sucesso': False, 'erro': 'Falha interna ao processar webhook fiscal.', 'status_code': 500}

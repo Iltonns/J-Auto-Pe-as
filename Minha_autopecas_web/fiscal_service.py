@@ -295,7 +295,7 @@ def _emitir_nfe_provider_http(payload):
     }
 
 
-def emitir_nfe_para_venda(venda_id, usuario_id):
+def emitir_nfe_para_venda(venda_id, usuario_id, tenant_id=None):
     ambiente = os.getenv('NFE_AMBIENTE', 'homologacao').strip().lower() or 'homologacao'
     provider = os.getenv('NFE_PROVIDER', 'mock').strip().lower() or 'mock'
 
@@ -310,6 +310,7 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
         usuario_id=usuario_id,
         ambiente=ambiente,
         serie=serie,
+        tenant_id=tenant_id,
     )
 
     if not rascunho.get('sucesso'):
@@ -320,26 +321,39 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
         }
 
     nfe = rascunho['nfe']
-    dados = obter_dados_venda_para_nfe(venda_id)
+    tenant_contexto = tenant_id if tenant_id is not None else nfe.get('tenant_id')
+    dados = obter_dados_venda_para_nfe(venda_id, tenant_id=tenant_contexto)
 
     if not dados.get('sucesso'):
-        atualizar_dados_nfe(nfe['id'], status='rejeitada', motivo_status=dados.get('erro'))
+        atualizar_dados_nfe(
+            nfe['id'],
+            tenant_id=tenant_contexto,
+            status='rejeitada',
+            motivo_status=dados.get('erro')
+        )
         return {
             'sucesso': False,
             'status': 'rejeitada',
-            'nfe': _serializar_nfe(obter_nfe_por_venda(venda_id)),
+            'nfe': _serializar_nfe(obter_nfe_por_venda(venda_id, tenant_id=tenant_contexto)),
             'mensagem': dados.get('erro', 'Nao foi possivel carregar dados da venda para NF-e.'),
         }
 
     erros = validar_dados_fiscais(dados)
     if erros:
         motivo = ' | '.join(erros)
-        atualizar_dados_nfe(nfe['id'], status='rejeitada', motivo_status=motivo)
-        registrar_evento_nfe(nfe['id'], tipo_evento='validacao', status='rejeitada', justificativa=motivo, usuario_id=usuario_id)
+        atualizar_dados_nfe(nfe['id'], tenant_id=tenant_contexto, status='rejeitada', motivo_status=motivo)
+        registrar_evento_nfe(
+            nfe['id'],
+            tipo_evento='validacao',
+            status='rejeitada',
+            justificativa=motivo,
+            usuario_id=usuario_id,
+            tenant_id=tenant_contexto
+        )
         return {
             'sucesso': False,
             'status': 'rejeitada',
-            'nfe': _serializar_nfe(obter_nfe_por_venda(venda_id)),
+            'nfe': _serializar_nfe(obter_nfe_por_venda(venda_id, tenant_id=tenant_contexto)),
             'erros_validacao': erros,
             'mensagem': 'Falha de validacao fiscal. Corrija os dados e tente novamente.',
         }
@@ -348,6 +362,7 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
 
     atualizar_dados_nfe(
         nfe['id'],
+        tenant_id=tenant_contexto,
         status='enviada',
         payload_json=payload,
         data_emissao=datetime.utcnow(),
@@ -379,7 +394,7 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
     if status_final == 'autorizada':
         atualizar['data_autorizacao'] = datetime.utcnow()
 
-    atualizar_dados_nfe(nfe['id'], **atualizar)
+    atualizar_dados_nfe(nfe['id'], tenant_id=tenant_contexto, **atualizar)
 
     registrar_evento_nfe(
         nfe['id'],
@@ -390,9 +405,10 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
         request_json=payload,
         response_json=resposta.get('response_payload'),
         usuario_id=usuario_id,
+        tenant_id=tenant_contexto,
     )
 
-    nfe_atualizada = obter_nfe_por_venda(venda_id)
+    nfe_atualizada = obter_nfe_por_venda(venda_id, tenant_id=tenant_contexto)
 
     return {
         'sucesso': bool(resposta.get('sucesso')),
@@ -402,8 +418,8 @@ def emitir_nfe_para_venda(venda_id, usuario_id):
     }
 
 
-def consultar_nfe_por_venda(venda_id):
-    nfe = obter_nfe_por_venda(venda_id)
+def consultar_nfe_por_venda(venda_id, tenant_id=None):
+    nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_id)
     if not nfe:
         return {'sucesso': False, 'mensagem': 'NF-e ainda não gerada para esta venda.'}
 
@@ -413,7 +429,7 @@ def consultar_nfe_por_venda(venda_id):
     }
 
 
-def processar_webhook_nfe(payload, token=None):
+def processar_webhook_nfe(payload, token=None, tenant_id=None):
     token_esperado = os.getenv('NFE_WEBHOOK_TOKEN', '').strip()
     if token_esperado and token != token_esperado:
         return {'sucesso': False, 'erro': 'Token de webhook inválido.', 'status_code': 401}
@@ -431,6 +447,8 @@ def processar_webhook_nfe(payload, token=None):
             venda_id=venda_id,
             status=status,
             payload=payload,
+            tenant_id=tenant_id,
+            permitir_global=tenant_id is None,
         )
     except Exception as e:
         print(f"Erro ao atualizar NF-e por webhook: {e}")
