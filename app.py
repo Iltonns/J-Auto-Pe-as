@@ -1440,8 +1440,13 @@ def vincular_movimentacao_route(movimentacao_id, produto_id):
     try:
         # Importar a função aqui para evitar dependência circular
         from Minha_autopecas_web.logica_banco import vincular_produto_nfe
-        
-        sucesso, mensagem = vincular_produto_nfe(movimentacao_id, produto_id, current_user.id)
+
+        sucesso, mensagem = vincular_produto_nfe(
+            movimentacao_id,
+            produto_id,
+            current_user.id,
+            tenant_id=get_current_tenant_id()
+        )
         
         if sucesso:
             return jsonify({'success': True, 'message': mensagem})
@@ -1918,14 +1923,15 @@ def importar_produtos_xml_route():
 @required_permission('estoque')
 def movimentacoes():
     """Tela de gerenciamento de movimentações de produtos - Agrupadas por NFe"""
+    tenant_id = get_current_tenant_id()
     # Listar NFes agrupadas
-    todas_nfes = listar_nfes_agrupadas()
+    todas_nfes = listar_nfes_agrupadas(tenant_id=tenant_id)
     pendentes = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'pendente']
     aprovadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'aprovada']
     rejeitadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] in ['cancelada', 'rejeitada']]  # Compatibilidade
     
     # Listar fornecedores para o formulário
-    fornecedores_lista = listar_fornecedores()
+    fornecedores_lista = listar_fornecedores(tenant_id=tenant_id)
     
     return render_template('movimentacoes.html',
                          nfes=todas_nfes,
@@ -1939,8 +1945,9 @@ def movimentacoes():
 @required_permission('estoque')
 def visualizar_nfe(nfe_numero):
     """Visualiza os produtos de uma NFe específica"""
-    produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero)
-    fornecedores_lista = listar_fornecedores()
+    tenant_id = get_current_tenant_id()
+    produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero, tenant_id=tenant_id)
+    fornecedores_lista = listar_fornecedores(tenant_id=tenant_id)
     
     # Pegar informações da primeira movimentação para exibir dados da NFe
     nfe_info = produtos[0] if produtos else None
@@ -1961,7 +1968,7 @@ def visualizar_nfe(nfe_numero):
 def aprovar_nfe_route(nfe_numero):
     """Aprova todos os produtos de uma NFe"""
     try:
-        resultado = aprovar_nfe_completa(nfe_numero, current_user.id)
+        resultado = aprovar_nfe_completa(nfe_numero, current_user.id, tenant_id=get_current_tenant_id())
         if resultado['sucesso']:
             flash(f"NFe aprovada com sucesso! {resultado['total_aprovados']} produtos adicionados ao estoque.", 'success')
         else:
@@ -1978,7 +1985,12 @@ def cancelar_nfe_route(nfe_numero):
     """Cancela todos os produtos de uma NFe (permite deletar depois)"""
     try:
         motivo = request.form.get('motivo_cancelamento', 'Não especificado')
-        resultado = cancelar_nfe_completa(nfe_numero, current_user.id, motivo)
+        resultado = cancelar_nfe_completa(
+            nfe_numero,
+            current_user.id,
+            motivo,
+            tenant_id=get_current_tenant_id()
+        )
         if resultado['sucesso']:
             flash(f"NFe cancelada com sucesso! {resultado['total_cancelados']} produtos cancelados. Você pode deletá-los agora.", 'warning')
         else:
@@ -1997,8 +2009,12 @@ def deletar_nfe_route(nfe_numero):
         from Minha_autopecas_web.logica_banco import listar_produtos_por_nfe, deletar_movimentacao
         
         # Buscar produtos da NFe
-        produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero if not nfe_numero.startswith('MANUAL-') else None,
-                                          nfe_identificador=nfe_numero if nfe_numero.startswith('MANUAL-') else None)
+        tenant_id = get_current_tenant_id()
+        produtos = listar_produtos_por_nfe(
+            nfe_numero=nfe_numero if not nfe_numero.startswith('MANUAL-') else None,
+            nfe_identificador=nfe_numero if nfe_numero.startswith('MANUAL-') else None,
+            tenant_id=tenant_id
+        )
         
         total_deletados = 0
         erros = 0
@@ -2006,7 +2022,7 @@ def deletar_nfe_route(nfe_numero):
         for produto in produtos:
             if produto['status'] == 'cancelada':
                 try:
-                    deletar_movimentacao(produto['id'])
+                    deletar_movimentacao(produto['id'], tenant_id=tenant_id)
                     total_deletados += 1
                 except Exception as e:
                     print(f"[ERRO] Falha ao deletar movimentação {produto['id']}: {str(e)}")
@@ -2108,7 +2124,8 @@ def adicionar_movimentacao_route():
             marca=marca if marca else None,
             fornecedor_id=fornecedor_id,
             usuario_id=current_user.id,
-            observacoes=request.form.get('observacoes', '')
+            observacoes=request.form.get('observacoes', ''),
+            tenant_id=get_current_tenant_id()
         )
         
         flash('Movimentação criada com sucesso! Aguardando aprovação.', 'success')
@@ -2127,7 +2144,7 @@ def obter_dados_movimentacao(id):
     """Retorna os dados de uma movimentação em formato JSON para edição via AJAX"""
     try:
         print(f"[DEBUG] Buscando movimentação ID: {id}")  # Log de debug
-        movimentacao = obter_movimentacao_por_id(id)
+        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
         
         if not movimentacao:
             print(f"[DEBUG] Movimentação {id} não encontrada")
@@ -2178,7 +2195,7 @@ def editar_movimentacao_route(id):
                 return default
 
         # Verificar se movimentação existe
-        movimentacao_atual = obter_movimentacao_por_id(id)
+        movimentacao_atual = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
         if not movimentacao_atual:
             flash('Movimentação não encontrada!', 'error')
             return redirect(url_for('movimentacoes'))
@@ -2240,7 +2257,8 @@ def editar_movimentacao_route(id):
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id
+            fornecedor_id=fornecedor_id,
+            tenant_id=get_current_tenant_id()
         )
         
         if sucesso:
@@ -2258,7 +2276,7 @@ def editar_movimentacao_route(id):
         
         # Tentar redirecionar de volta para a NFe mesmo em caso de erro
         try:
-            movimentacao_atual = obter_movimentacao_por_id(id)
+            movimentacao_atual = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
             if movimentacao_atual:
                 nfe_numero = movimentacao_atual.get('xml_nfe_numero') or f"MANUAL-{movimentacao_atual.get('id')}"
                 return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
@@ -2274,10 +2292,10 @@ def aprovar_movimentacao_route(id):
     """Aprova uma movimentação e adiciona ao estoque"""
     try:
         # Obter dados da movimentação antes de aprovar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id)
+        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
-        produto_id = aprovar_movimentacao(id, current_user.id)
+        produto_id = aprovar_movimentacao(id, current_user.id, tenant_id=get_current_tenant_id())
         flash(f'Produto aprovado com sucesso! Adicionado ao estoque (ID: #{produto_id}).', 'success')
         
         # Redirecionar de volta para a página da NFe
@@ -2296,11 +2314,11 @@ def cancelar_movimentacao_route(id):
     """Cancela uma movimentação (permite deletar depois)"""
     try:
         # Obter dados da movimentação antes de cancelar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id)
+        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
         motivo = request.form.get('motivo_cancelamento', 'Não especificado')
-        cancelar_movimentacao(id, current_user.id, motivo)
+        cancelar_movimentacao(id, current_user.id, motivo, tenant_id=get_current_tenant_id())
         flash('Produto cancelado com sucesso! Você pode deletá-lo agora se desejar.', 'warning')
         
         # Redirecionar de volta para a página da NFe
@@ -2327,10 +2345,10 @@ def deletar_movimentacao_route(id):
     """Deleta uma movimentação pendente"""
     try:
         # Obter dados da movimentação antes de deletar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id)
+        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
-        deletar_movimentacao(id)
+        deletar_movimentacao(id, tenant_id=get_current_tenant_id())
         flash('Produto deletado com sucesso!', 'success')
         
         # Redirecionar de volta para a página da NFe
@@ -2373,7 +2391,8 @@ def importar_xml_movimentacoes_route():
                     conteudo_xml=conteudo_xml,
                     margem_padrao=margem_padrao,
                     estoque_minimo=estoque_minimo_padrao,
-                    usuario_id=current_user.id
+                    usuario_id=current_user.id,
+                    tenant_id=get_current_tenant_id()
                 )
 
                 if resultado['sucesso']:
