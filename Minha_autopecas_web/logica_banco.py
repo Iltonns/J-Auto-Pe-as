@@ -323,6 +323,13 @@ def _resolver_tenant_id_contas(tenant_id=None, permitir_global=True):
     """
     return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
 
+def _resolver_tenant_id_financeiro_caixa(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes de financeiro/caixa.
+    Reaproveita a mesma estrategia de contexto de vendas.
+    """
+    return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -1728,48 +1735,85 @@ def verificar_permissao(user_id, permissao, tenant_id=None):
         conn.close()
 
 # FUNÇÕES DE CAIXA
-def abrir_caixa(usuario_id, saldo_inicial=0, observacoes=""):
+def abrir_caixa(usuario_id, saldo_inicial=0, observacoes="", tenant_id=None):
     """Abre uma nova sessão de caixa"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para abrir caixa.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
         # Verificar se já existe caixa aberto
-        cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+        cursor.execute(
+            "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
         if cursor.fetchone()[0] > 0:
             return False, "Já existe um caixa aberto. Feche o caixa atual antes de abrir um novo."
         
         cursor.execute('''
             INSERT INTO caixa_sessoes (
-                data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura
+                data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura, tenant_id
             )
-            VALUES (%s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
-        ''', (agora_br(), saldo_inicial, usuario_id, observacoes))
+        ''', (agora_br(), saldo_inicial, usuario_id, observacoes, tenant_resolvido))
         
         sessao_id = cursor.fetchone()[0]
         conn.commit()
         return True, f"Caixa aberto com sucesso. Sessão: {sessao_id}"
         
     except Exception as e:
+        conn.rollback()
         return False, f"Erro ao abrir caixa: {str(e)}"
     finally:
         conn.close()
 
-def fechar_caixa(usuario_id, observacoes=""):
+def fechar_caixa(usuario_id, observacoes="", tenant_id=None):
     """Fecha a sessão de caixa atual"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para fechar caixa.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
         # Buscar caixa aberto
-        cursor.execute("SELECT id, saldo_inicial FROM caixa_sessoes WHERE status = 'aberto'")
+        cursor.execute(
+            '''
+            SELECT id, saldo_inicial, data_abertura
+            FROM caixa_sessoes
+            WHERE status = 'aberto' AND tenant_id = %s
+            ORDER BY data_abertura DESC
+            LIMIT 1
+            ''',
+            (tenant_resolvido,)
+        )
         caixa = cursor.fetchone()
         
         if not caixa:
             return False, "Não há caixa aberto para fechar."
         
-        caixa_id, saldo_inicial = caixa
+        caixa_id, saldo_inicial, data_abertura = caixa
         
         # Calcular totais de entradas e saídas
         cursor.execute('''
@@ -1777,10 +1821,9 @@ def fechar_caixa(usuario_id, observacoes=""):
                 COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor ELSE 0 END), 0) as total_entradas,
                 COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as total_saidas
             FROM caixa_movimentacoes 
-            WHERE data_movimentacao >= (
-                SELECT data_abertura FROM caixa_sessoes WHERE id = %s
-            )
-        ''', (caixa_id,))
+            WHERE data_movimentacao >= %s
+              AND tenant_id = %s
+        ''', (data_abertura, tenant_resolvido))
         
         totais = cursor.fetchone()
         total_entradas = totais[0] if totais else 0
@@ -1797,166 +1840,245 @@ def fechar_caixa(usuario_id, observacoes=""):
                 usuario_fechamento = %s,
                 observacoes_fechamento = %s,
                 status = 'fechado'
-            WHERE id = %s
-        ''', (agora_br(), saldo_final, total_entradas, total_saidas, usuario_id, observacoes, caixa_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (agora_br(), saldo_final, total_entradas, total_saidas, usuario_id, observacoes, caixa_id, tenant_resolvido))
         
         conn.commit()
         return True, f"Caixa fechado com sucesso. Saldo final: R$ {saldo_final:,.2f}"
         
     except Exception as e:
+        conn.rollback()
         return False, f"Erro ao fechar caixa: {str(e)}"
     finally:
         conn.close()
 
-def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, venda_id=None, conta_pagar_id=None, conta_receber_id=None, observacoes=""):
+def registrar_movimentacao_caixa(tipo, categoria, descricao, valor, usuario_id, venda_id=None, conta_pagar_id=None, conta_receber_id=None, observacoes="", tenant_id=None):
     """Registra uma movimentação no caixa"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para registrar movimentacao de caixa.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
+        if venda_id is not None:
+            cursor.execute(
+                "SELECT id FROM vendas WHERE id = %s AND tenant_id = %s",
+                (venda_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Venda informada nao pertence ao tenant atual.")
+
+        if conta_pagar_id is not None:
+            cursor.execute(
+                "SELECT id FROM contas_pagar WHERE id = %s AND tenant_id = %s",
+                (conta_pagar_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Conta a pagar informada nao pertence ao tenant atual.")
+
+        if conta_receber_id is not None:
+            cursor.execute(
+                "SELECT id FROM contas_receber WHERE id = %s AND tenant_id = %s",
+                (conta_receber_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Conta a receber informada nao pertence ao tenant atual.")
+
         # Verificar se há caixa aberto
-        cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+        cursor.execute(
+            "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
         if cursor.fetchone()[0] == 0:
             return False, "Não há caixa aberto. Abra o caixa antes de registrar movimentações."
         
         cursor.execute('''
             INSERT INTO caixa_movimentacoes (
                 tipo, categoria, descricao, valor, usuario_id, 
-                venda_id, conta_pagar_id, conta_receber_id, observacoes, data_movimentacao
+                venda_id, conta_pagar_id, conta_receber_id, observacoes, data_movimentacao, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (tipo, categoria, descricao, valor, usuario_id, venda_id, conta_pagar_id, conta_receber_id, observacoes, agora_br()))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (tipo, categoria, descricao, valor, usuario_id, venda_id, conta_pagar_id, conta_receber_id, observacoes, agora_br(), tenant_resolvido))
         
         conn.commit()
         return True, "Movimentação registrada com sucesso"
         
     except Exception as e:
+        conn.rollback()
         return False, f"Erro ao registrar movimentação: {str(e)}"
     finally:
         conn.close()
 
-def obter_status_caixa():
+def obter_status_caixa(tenant_id=None):
     """Obtém o status atual do caixa"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura
-        FROM caixa_sessoes 
-        WHERE status = 'aberto'
-        ORDER BY data_abertura DESC
-        LIMIT 1
-    ''')
-    
-    caixa_aberto = cursor.fetchone()
-    
-    if not caixa_aberto:
-        conn.close()
-        return None
-    
-    caixa_id, data_abertura, saldo_inicial, usuario_abertura, observacoes = caixa_aberto
-    
-    # Converter data_abertura de UTC para Brasil
-    data_abertura = converter_utc_para_br(data_abertura)
-    
-    # Buscar nome do usuário
-    cursor.execute("SELECT nome_completo, username FROM usuarios WHERE id = %s", (usuario_abertura,))
-    usuario = cursor.fetchone()
-    nome_usuario = usuario[0] if usuario and usuario[0] else usuario[1] if usuario else "Usuário desconhecido"
-    
-    # Calcular movimentações do dia
-    cursor.execute('''
-        SELECT 
-            COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor ELSE 0 END), 0) as total_entradas,
-            COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as total_saidas,
-            COUNT(*) as total_movimentacoes
-        FROM caixa_movimentacoes 
-        WHERE data_movimentacao >= %s
-    ''', (data_abertura,))
-    
-    movimentacoes = cursor.fetchone()
-    total_entradas = movimentacoes[0] if movimentacoes else 0
-    total_saidas = movimentacoes[1] if movimentacoes else 0
-    total_movimentacoes = movimentacoes[2] if movimentacoes else 0
-    saldo_atual = saldo_inicial + total_entradas - total_saidas
-    
-    conn.close()
-    
-    return {
-        'caixa_id': caixa_id,
-        'data_abertura': data_abertura,
-        'saldo_inicial': saldo_inicial,
-        'saldo_atual': saldo_atual,
-        'total_entradas': total_entradas,
-        'total_saidas': total_saidas,
-        'total_movimentacoes': total_movimentacoes,
-        'usuario_abertura': nome_usuario,
-        'observacoes': observacoes
-    }
+    try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para obter status de caixa.")
 
-def caixa_esta_aberto():
+        cursor.execute('''
+            SELECT id, data_abertura, saldo_inicial, usuario_abertura, observacoes_abertura
+            FROM caixa_sessoes
+            WHERE status = 'aberto' AND tenant_id = %s
+            ORDER BY data_abertura DESC
+            LIMIT 1
+        ''', (tenant_resolvido,))
+        
+        caixa_aberto = cursor.fetchone()
+        if not caixa_aberto:
+            return None
+        
+        caixa_id, data_abertura, saldo_inicial, usuario_abertura, observacoes = caixa_aberto
+        
+        # Converter data_abertura de UTC para Brasil
+        data_abertura_local = converter_utc_para_br(data_abertura)
+        
+        # Buscar nome do usuário
+        cursor.execute(
+            "SELECT nome_completo, username FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_abertura, tenant_resolvido)
+        )
+        usuario = cursor.fetchone()
+        nome_usuario = usuario[0] if usuario and usuario[0] else usuario[1] if usuario else "Usuário desconhecido"
+        
+        # Calcular movimentações do dia
+        cursor.execute('''
+            SELECT 
+                COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor ELSE 0 END), 0) as total_entradas,
+                COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as total_saidas,
+                COUNT(*) as total_movimentacoes
+            FROM caixa_movimentacoes
+            WHERE data_movimentacao >= %s
+              AND tenant_id = %s
+        ''', (data_abertura, tenant_resolvido))
+        
+        movimentacoes = cursor.fetchone()
+        total_entradas = movimentacoes[0] if movimentacoes else 0
+        total_saidas = movimentacoes[1] if movimentacoes else 0
+        total_movimentacoes = movimentacoes[2] if movimentacoes else 0
+        saldo_atual = saldo_inicial + total_entradas - total_saidas
+        
+        return {
+            'caixa_id': caixa_id,
+            'data_abertura': data_abertura_local,
+            'saldo_inicial': saldo_inicial,
+            'saldo_atual': saldo_atual,
+            'total_entradas': total_entradas,
+            'total_saidas': total_saidas,
+            'total_movimentacoes': total_movimentacoes,
+            'usuario_abertura': nome_usuario,
+            'observacoes': observacoes
+        }
+    finally:
+        conn.close()
+
+def caixa_esta_aberto(tenant_id=None):
     """Verifica se há um caixa aberto no momento"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para verificar status do caixa.")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
         resultado = cursor.fetchone()
         return resultado[0] > 0 if resultado else False
     finally:
         conn.close()
 
-def listar_movimentacoes_caixa(limit=50):
+def listar_movimentacoes_caixa(limit=50, tenant_id=None):
     """Lista as movimentações do caixa atual"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Buscar data de abertura do caixa atual
-    cursor.execute("SELECT data_abertura FROM caixa_sessoes WHERE status = 'aberto' ORDER BY data_abertura DESC LIMIT 1")
-    caixa_aberto = cursor.fetchone()
-    
-    if not caixa_aberto:
-        conn.close()
-        return []
-    
-    data_abertura = caixa_aberto[0]
-    
-    cursor.execute('''
-        SELECT cm.*, u.nome_completo, u.username
-        FROM caixa_movimentacoes cm
-        JOIN usuarios u ON cm.usuario_id = u.id
-        WHERE cm.data_movimentacao >= %s
-        ORDER BY cm.data_movimentacao DESC
-        LIMIT %s
-    ''', (data_abertura, limit))
-    
-    movimentacoes = []
-    for row in cursor.fetchall():
-        movimentacoes.append({
-            'id': row[0],
-            'tipo': row[1],
-            'categoria': row[2],
-            'descricao': row[3],
-            'valor': row[4],
-            'data_movimentacao': converter_utc_para_br(row[5]),
-            'usuario_id': row[6],
-            'venda_id': row[7],
-            'conta_pagar_id': row[8],
-            'conta_receber_id': row[9],
-            'observacoes': row[10],
-            'usuario_nome': row[11] if row[11] else row[12]
-        })
-    
-    conn.close()
-    return movimentacoes
+    try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para listar movimentacoes de caixa.")
 
-def obter_movimentacoes_caixa(data):
+        # Buscar data de abertura do caixa atual
+        cursor.execute(
+            '''
+            SELECT data_abertura
+            FROM caixa_sessoes
+            WHERE status = 'aberto' AND tenant_id = %s
+            ORDER BY data_abertura DESC
+            LIMIT 1
+            ''',
+            (tenant_resolvido,)
+        )
+        caixa_aberto = cursor.fetchone()
+        
+        if not caixa_aberto:
+            return []
+        
+        data_abertura = caixa_aberto[0]
+        
+        cursor.execute('''
+            SELECT
+                cm.id, cm.tipo, cm.categoria, cm.descricao, cm.valor, cm.data_movimentacao,
+                cm.usuario_id, cm.venda_id, cm.conta_pagar_id, cm.conta_receber_id, cm.observacoes,
+                u.nome_completo, u.username
+            FROM caixa_movimentacoes cm
+            JOIN usuarios u ON cm.usuario_id = u.id AND u.tenant_id = cm.tenant_id
+            WHERE cm.data_movimentacao >= %s
+              AND cm.tenant_id = %s
+            ORDER BY cm.data_movimentacao DESC
+            LIMIT %s
+        ''', (data_abertura, tenant_resolvido, limit))
+        
+        movimentacoes = []
+        for row in cursor.fetchall():
+            movimentacoes.append({
+                'id': row[0],
+                'tipo': row[1],
+                'categoria': row[2],
+                'descricao': row[3],
+                'valor': row[4],
+                'data_movimentacao': converter_utc_para_br(row[5]),
+                'usuario_id': row[6],
+                'venda_id': row[7],
+                'conta_pagar_id': row[8],
+                'conta_receber_id': row[9],
+                'observacoes': row[10],
+                'usuario_nome': row[11] if row[11] else row[12]
+            })
+        
+        return movimentacoes
+    finally:
+        conn.close()
+
+def obter_movimentacoes_caixa(data, tenant_id=None):
     """Obtém as movimentações do caixa para uma data específica"""
     from datetime import datetime, timedelta
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para obter movimentacoes de caixa.")
+
         # Converter string de data para objeto datetime
         if isinstance(data, str):
             data_obj = datetime.strptime(data, '%Y-%m-%d')
@@ -1968,12 +2090,16 @@ def obter_movimentacoes_caixa(data):
         data_fim = data_inicio + timedelta(days=1)
         
         cursor.execute('''
-            SELECT cm.*, u.nome_completo, u.username
+            SELECT
+                cm.id, cm.tipo, cm.categoria, cm.descricao, cm.valor, cm.data_movimentacao,
+                cm.usuario_id, cm.venda_id, cm.conta_pagar_id, cm.conta_receber_id, cm.observacoes,
+                u.nome_completo, u.username
             FROM caixa_movimentacoes cm
-            JOIN usuarios u ON cm.usuario_id = u.id
+            JOIN usuarios u ON cm.usuario_id = u.id AND u.tenant_id = cm.tenant_id
             WHERE cm.data_movimentacao >= %s AND cm.data_movimentacao < %s
+              AND cm.tenant_id = %s
             ORDER BY cm.data_movimentacao DESC
-        ''', (data_inicio, data_fim))
+        ''', (data_inicio, data_fim, tenant_resolvido))
         
         movimentacoes = []
         for row in cursor.fetchall():
@@ -1999,17 +2125,30 @@ def obter_movimentacoes_caixa(data):
     finally:
         conn.close()
 
-def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", auto_criar_conta=True):
+def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamento, usuario_id, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", auto_criar_conta=True, tenant_id=None):
     """Cria um lançamento financeiro (receita ou despesa) e automaticamente cria a conta correspondente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para criar lancamento financeiro.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
         # Verificar se já existe lançamento similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM lancamentos_financeiros 
-            WHERE tipo = %s AND descricao = %s AND valor = %s AND data_lancamento = %s AND status = 'pendente'
-        ''', (tipo, descricao, valor, data_lancamento))
+            WHERE tipo = %s AND descricao = %s AND valor = %s AND data_lancamento = %s
+              AND status = 'pendente' AND tenant_id = %s
+        ''', (tipo, descricao, valor, data_lancamento, tenant_resolvido))
         
         lancamento_existente = cursor.fetchone()
         if lancamento_existente:
@@ -2019,11 +2158,11 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
         cursor.execute('''
             INSERT INTO lancamentos_financeiros (
                 tipo, categoria, descricao, valor, data_lancamento, 
-                data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes
+                data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (tipo, categoria, descricao, valor, data_lancamento, data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes))
+        ''', (tipo, categoria, descricao, valor, data_lancamento, data_vencimento, fornecedor_cliente, numero_documento, usuario_id, observacoes, tenant_resolvido))
         
         lancamento_id = cursor.fetchone()[0]
         conn.commit()
@@ -2035,17 +2174,20 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Buscar fornecedor pelo nome se informado
                     fornecedor_id = None
                     if fornecedor_cliente:
-                        cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        cursor.execute(
+                            'SELECT id FROM fornecedores WHERE nome LIKE %s AND tenant_id = %s LIMIT 1',
+                            (f'%{fornecedor_cliente}%', tenant_resolvido)
+                        )
                         fornecedor_result = cursor.fetchone()
                         if fornecedor_result:
                             fornecedor_id = fornecedor_result[0]
                     
                     # Criar conta a pagar
                     cursor.execute('''
-                        INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id, tenant_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
+                    ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id, tenant_resolvido))
                     
                     conta_id = cursor.fetchone()[0]
                     
@@ -2053,8 +2195,8 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     cursor.execute('''
                         UPDATE lancamentos_financeiros 
                         SET conta_pagar_id = %s
-                        WHERE id = %s
-                    ''', (conta_id, lancamento_id))
+                        WHERE id = %s AND tenant_id = %s
+                    ''', (conta_id, lancamento_id, tenant_resolvido))
                     
                     conn.commit()
                     return True, f"Lançamento criado (ID: {lancamento_id}) e conta a pagar criada automaticamente (ID: {conta_id})"
@@ -2063,17 +2205,20 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     # Buscar cliente pelo nome se informado
                     cliente_id = None
                     if fornecedor_cliente:
-                        cursor.execute('SELECT id FROM clientes WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                        cursor.execute(
+                            'SELECT id FROM clientes WHERE nome LIKE %s AND tenant_id = %s LIMIT 1',
+                            (f'%{fornecedor_cliente}%', tenant_resolvido)
+                        )
                         cliente_result = cursor.fetchone()
                         if cliente_result:
                             cliente_id = cliente_result[0]
                     
                     # Criar conta a receber
                     cursor.execute('''
-                        INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_id)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+                    ''', (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_resolvido))
                     
                     conta_id = cursor.fetchone()[0]
                     
@@ -2081,8 +2226,8 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
                     cursor.execute('''
                         UPDATE lancamentos_financeiros 
                         SET conta_receber_id = %s
-                        WHERE id = %s
-                    ''', (conta_id, lancamento_id))
+                        WHERE id = %s AND tenant_id = %s
+                    ''', (conta_id, lancamento_id, tenant_resolvido))
                     
                     conn.commit()
                     return True, f"Lançamento criado (ID: {lancamento_id}) e conta a receber criada automaticamente (ID: {conta_id})"
@@ -2099,11 +2244,16 @@ def criar_lancamento_financeiro(tipo, categoria, descricao, valor, data_lancamen
     finally:
         conn.close()
 
-def listar_lancamentos_financeiros(tipo=None, status='pendente'):
+def listar_lancamentos_financeiros(tipo=None, status='pendente', tenant_id=None):
     """Lista lançamentos financeiros"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+    tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar lancamentos financeiros.")
+
     query = '''
         SELECT lf.id, lf.tipo, lf.categoria, lf.descricao, lf.valor, 
                lf.data_lancamento, lf.data_vencimento, lf.data_pagamento, 
@@ -2112,10 +2262,10 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente'):
                lf.conta_pagar_id, lf.conta_receber_id,
                u.nome_completo, u.username
         FROM lancamentos_financeiros lf
-        JOIN usuarios u ON lf.usuario_id = u.id
-        WHERE 1=1
+        JOIN usuarios u ON lf.usuario_id = u.id AND u.tenant_id = lf.tenant_id
+        WHERE lf.tenant_id = %s
     '''
-    params = []
+    params = [tenant_resolvido]
     
     if tipo:
         query += " AND lf.tipo = %s"
@@ -7258,7 +7408,7 @@ def listar_produtos_por_fornecedor(fornecedor_id, tenant_id=None):
     finally:
         conn.close()
 
-def sincronizar_lancamentos_com_contas(usuario_id):
+def sincronizar_lancamentos_com_contas(usuario_id, tenant_id=None):
     """Sincroniza lançamentos financeiros existentes criando as contas correspondentes"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -7266,12 +7416,28 @@ def sincronizar_lancamentos_com_contas(usuario_id):
     resultado = {"despesas": 0, "receitas": 0, "erros": []}
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para sincronizar lancamentos com contas.")
+
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+            (usuario_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
         # Buscar lançamentos de despesa sem conta a pagar correspondente
         cursor.execute('''
             SELECT id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes
             FROM lancamentos_financeiros 
-            WHERE tipo = 'despesa' AND conta_pagar_id IS NULL AND data_vencimento IS NOT NULL AND status = 'pendente'
-        ''')
+            WHERE tipo = 'despesa'
+              AND conta_pagar_id IS NULL
+              AND data_vencimento IS NOT NULL
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
         
         despesas = cursor.fetchall()
         
@@ -7282,17 +7448,20 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Buscar fornecedor pelo nome se informado
                 fornecedor_id = None
                 if fornecedor_cliente:
-                    cursor.execute('SELECT id FROM fornecedores WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    cursor.execute(
+                        'SELECT id FROM fornecedores WHERE nome LIKE %s AND tenant_id = %s LIMIT 1',
+                        (f'%{fornecedor_cliente}%', tenant_resolvido)
+                    )
                     fornecedor_result = cursor.fetchone()
                     if fornecedor_result:
                         fornecedor_id = fornecedor_result[0]
                 
                 # Criar conta a pagar
                 cursor.execute('''
-                    INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_financeiro_id, tenant_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id))
+                ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, lancamento_id, tenant_resolvido))
                 
                 conta_id = cursor.fetchone()[0]
                 
@@ -7300,8 +7469,8 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 cursor.execute('''
                     UPDATE lancamentos_financeiros 
                     SET conta_pagar_id = %s
-                    WHERE id = %s
-                ''', (conta_id, lancamento_id))
+                    WHERE id = %s AND tenant_id = %s
+                ''', (conta_id, lancamento_id, tenant_resolvido))
                 
                 resultado["despesas"] += 1
                 
@@ -7312,8 +7481,12 @@ def sincronizar_lancamentos_com_contas(usuario_id):
         cursor.execute('''
             SELECT id, categoria, descricao, valor, data_vencimento, fornecedor_cliente, observacoes
             FROM lancamentos_financeiros 
-            WHERE tipo = 'receita' AND conta_receber_id IS NULL AND data_vencimento IS NOT NULL AND status = 'pendente'
-        ''')
+            WHERE tipo = 'receita'
+              AND conta_receber_id IS NULL
+              AND data_vencimento IS NOT NULL
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
         
         receitas = cursor.fetchall()
         
@@ -7324,17 +7497,20 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 # Buscar cliente pelo nome se informado
                 cliente_id = None
                 if fornecedor_cliente:
-                    cursor.execute('SELECT id FROM clientes WHERE nome LIKE %s LIMIT 1', (f'%{fornecedor_cliente}%',))
+                    cursor.execute(
+                        'SELECT id FROM clientes WHERE nome LIKE %s AND tenant_id = %s LIMIT 1',
+                        (f'%{fornecedor_cliente}%', tenant_resolvido)
+                    )
                     cliente_result = cursor.fetchone()
                     if cliente_result:
                         cliente_id = cliente_result[0]
                 
                 # Criar conta a receber
                 cursor.execute('''
-                    INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
-                ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+                ''', (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_resolvido))
                 
                 conta_id = cursor.fetchone()[0]
                 
@@ -7342,8 +7518,8 @@ def sincronizar_lancamentos_com_contas(usuario_id):
                 cursor.execute('''
                     UPDATE lancamentos_financeiros 
                     SET conta_receber_id = %s
-                    WHERE id = %s
-                ''', (conta_id, lancamento_id))
+                    WHERE id = %s AND tenant_id = %s
+                ''', (conta_id, lancamento_id, tenant_resolvido))
                 
                 resultado["receitas"] += 1
                 
@@ -7510,14 +7686,22 @@ def atualizar_configuracoes_empresa(dados, tenant_id=None):
         conn.close()
 
 # Inicialização automática
-def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes=""):
+def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, data_vencimento=None, fornecedor_cliente="", numero_documento="", observacoes="", tenant_id=None):
     """Edita um lançamento financeiro existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para editar lancamento financeiro.")
+
         # Verificar se o lançamento existe e está pendente
-        cursor.execute('SELECT id, status FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute(
+            'SELECT id, status FROM lancamentos_financeiros WHERE id = %s AND tenant_id = %s',
+            (lancamento_id, tenant_resolvido)
+        )
         lancamento = cursor.fetchone()
         
         if not lancamento:
@@ -7531,8 +7715,8 @@ def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, 
             UPDATE lancamentos_financeiros 
             SET categoria = %s, descricao = %s, valor = %s, data_vencimento = %s,
                 fornecedor_cliente = %s, numero_documento = %s, observacoes = %s
-            WHERE id = %s
-        ''', (categoria, descricao, valor, data_vencimento, fornecedor_cliente, numero_documento, observacoes, lancamento_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (categoria, descricao, valor, data_vencimento, fornecedor_cliente, numero_documento, observacoes, lancamento_id, tenant_resolvido))
         
         conn.commit()
         return True, f"Lançamento {lancamento_id} editado com sucesso"
@@ -7543,14 +7727,22 @@ def editar_lancamento_financeiro_db(lancamento_id, categoria, descricao, valor, 
     finally:
         conn.close()
 
-def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagamento="", data_pagamento=None):
+def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagamento="", data_pagamento=None, tenant_id=None):
     """Altera o status de um lançamento financeiro (pago/recebido/cancelado)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para alterar status de lancamento.")
+
         # Verificar se o lançamento existe
-        cursor.execute('SELECT id, tipo, status FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute(
+            'SELECT id, tipo, status FROM lancamentos_financeiros WHERE id = %s AND tenant_id = %s',
+            (lancamento_id, tenant_resolvido)
+        )
         lancamento = cursor.fetchone()
         
         if not lancamento:
@@ -7567,8 +7759,8 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
         cursor.execute('''
             UPDATE lancamentos_financeiros 
             SET status = %s, forma_pagamento = %s, data_pagamento = %s
-            WHERE id = %s
-        ''', (novo_status, forma_pagamento, data_pagamento, lancamento_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (novo_status, forma_pagamento, data_pagamento, lancamento_id, tenant_resolvido))
         
         conn.commit()
         
@@ -7629,18 +7821,23 @@ def listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=None):
     finally:
         conn.close()
 
-def deletar_lancamento_financeiro_db(lancamento_id):
+def deletar_lancamento_financeiro_db(lancamento_id, tenant_id=None):
     """Deleta um lançamento financeiro e suas contas associadas"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_financeiro_caixa(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para deletar lancamento financeiro.")
+
         # Verificar se o lançamento existe
         cursor.execute('''
             SELECT id, tipo, status, conta_pagar_id, conta_receber_id 
             FROM lancamentos_financeiros 
-            WHERE id = %s
-        ''', (lancamento_id,))
+            WHERE id = %s AND tenant_id = %s
+        ''', (lancamento_id, tenant_resolvido))
         lancamento = cursor.fetchone()
         
         if not lancamento:
@@ -7652,13 +7849,22 @@ def deletar_lancamento_financeiro_db(lancamento_id):
         
         # Deletar contas associadas se existirem
         if lancamento[3]:  # conta_pagar_id
-            cursor.execute('DELETE FROM contas_pagar WHERE id = %s', (lancamento[3],))
+            cursor.execute(
+                'DELETE FROM contas_pagar WHERE id = %s AND tenant_id = %s',
+                (lancamento[3], tenant_resolvido)
+            )
         
         if lancamento[4]:  # conta_receber_id
-            cursor.execute('DELETE FROM contas_receber WHERE id = %s', (lancamento[4],))
+            cursor.execute(
+                'DELETE FROM contas_receber WHERE id = %s AND tenant_id = %s',
+                (lancamento[4], tenant_resolvido)
+            )
         
         # Deletar o lançamento
-        cursor.execute('DELETE FROM lancamentos_financeiros WHERE id = %s', (lancamento_id,))
+        cursor.execute(
+            'DELETE FROM lancamentos_financeiros WHERE id = %s AND tenant_id = %s',
+            (lancamento_id, tenant_resolvido)
+        )
         
         conn.commit()
         tipo_texto = "receita" if lancamento[1] == 'receita' else "despesa"

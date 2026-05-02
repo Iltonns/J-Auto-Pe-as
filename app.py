@@ -734,11 +734,12 @@ def dashboard():
 @required_permission('caixa')
 def caixa():
     """Página principal do caixa"""
-    status_caixa = obter_status_caixa()
-    movimentacoes = listar_movimentacoes_caixa(20)
+    tenant_id = get_current_tenant_id()
+    status_caixa = obter_status_caixa(tenant_id=tenant_id)
+    movimentacoes = listar_movimentacoes_caixa(20, tenant_id=tenant_id)
     
     # Usar a função específica para buscar vendas do dia
-    dados_vendas = obter_vendas_do_dia()
+    dados_vendas = obter_vendas_do_dia(tenant_id=tenant_id)
     
     # Debug: Imprimir dados das vendas
     print(f"DEBUG CAIXA: dados_vendas = {dados_vendas}")
@@ -761,10 +762,11 @@ def caixa():
 @required_permission('caixa')
 def abrir_caixa_route():
     """Abrir nova sessão de caixa"""
+    tenant_id = get_current_tenant_id()
     saldo_inicial = float(request.form.get('saldo_inicial', 0))
     observacoes = request.form.get('observacoes', '')
     
-    sucesso, mensagem = abrir_caixa(current_user.id, saldo_inicial, observacoes)
+    sucesso, mensagem = abrir_caixa(current_user.id, saldo_inicial, observacoes, tenant_id=tenant_id)
     
     if sucesso:
         flash(mensagem, 'success')
@@ -778,9 +780,10 @@ def abrir_caixa_route():
 @required_permission('caixa')
 def fechar_caixa_route():
     """Fechar sessão de caixa atual"""
+    tenant_id = get_current_tenant_id()
     observacoes = request.form.get('observacoes', '')
     
-    sucesso, mensagem = fechar_caixa(current_user.id, observacoes)
+    sucesso, mensagem = fechar_caixa(current_user.id, observacoes, tenant_id=tenant_id)
     
     if sucesso:
         flash(mensagem, 'success')
@@ -794,6 +797,7 @@ def fechar_caixa_route():
 @required_permission('caixa')
 def nova_movimentacao_caixa():
     """Registrar nova movimentação no caixa"""
+    tenant_id = get_current_tenant_id()
     tipo = request.form.get('tipo')
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
@@ -801,7 +805,7 @@ def nova_movimentacao_caixa():
     observacoes = request.form.get('observacoes', '')
     
     sucesso, mensagem = registrar_movimentacao_caixa(
-        tipo, categoria, descricao, valor, current_user.id, observacoes=observacoes
+        tipo, categoria, descricao, valor, current_user.id, observacoes=observacoes, tenant_id=tenant_id
     )
     
     if sucesso:
@@ -816,8 +820,9 @@ def nova_movimentacao_caixa():
 @required_permission('caixa')
 def financeiro():
     """Página do módulo financeiro"""
-    receitas_pendentes = listar_lancamentos_financeiros('receita', 'pendente')
-    despesas_pendentes = listar_lancamentos_financeiros('despesa', 'pendente')
+    tenant_id = get_current_tenant_id()
+    receitas_pendentes = listar_lancamentos_financeiros('receita', 'pendente', tenant_id=tenant_id)
+    despesas_pendentes = listar_lancamentos_financeiros('despesa', 'pendente', tenant_id=tenant_id)
     return render_template('financeiro.html', receitas=receitas_pendentes, despesas=despesas_pendentes)
 
 @app.route('/financeiro/lancamento', methods=['POST'])
@@ -825,6 +830,7 @@ def financeiro():
 @required_permission('caixa')
 def novo_lancamento_financeiro():
     """Criar novo lançamento financeiro"""
+    tenant_id = get_current_tenant_id()
     tipo = request.form.get('tipo')
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
@@ -837,7 +843,7 @@ def novo_lancamento_financeiro():
     
     sucesso, mensagem = criar_lancamento_financeiro(
         tipo, categoria, descricao, valor, data_lancamento, current_user.id,
-        data_vencimento, fornecedor_cliente, numero_documento, observacoes
+        data_vencimento, fornecedor_cliente, numero_documento, observacoes, tenant_id=tenant_id
     )
     
     if sucesso:
@@ -852,6 +858,7 @@ def novo_lancamento_financeiro():
 @required_permission('caixa')
 def editar_lancamento_financeiro(lancamento_id):
     """Editar um lançamento financeiro existente"""
+    tenant_id = get_current_tenant_id()
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
     valor = float(request.form.get('valor'))
@@ -862,7 +869,7 @@ def editar_lancamento_financeiro(lancamento_id):
     
     sucesso, mensagem = editar_lancamento_financeiro_db(
         lancamento_id, categoria, descricao, valor, data_vencimento,
-        fornecedor_cliente, numero_documento, observacoes
+        fornecedor_cliente, numero_documento, observacoes, tenant_id=tenant_id
     )
     
     if sucesso:
@@ -877,12 +884,13 @@ def editar_lancamento_financeiro(lancamento_id):
 @required_permission('caixa')
 def alterar_status_lancamento(lancamento_id):
     """Marcar lançamento como pago/recebido ou cancelado"""
+    tenant_id = get_current_tenant_id()
     novo_status = request.form.get('status')
     forma_pagamento = request.form.get('forma_pagamento', '')
     data_pagamento = request.form.get('data_pagamento')
     
     sucesso, mensagem = alterar_status_lancamento_financeiro(
-        lancamento_id, novo_status, forma_pagamento, data_pagamento
+        lancamento_id, novo_status, forma_pagamento, data_pagamento, tenant_id=tenant_id
     )
     
     if sucesso:
@@ -897,7 +905,7 @@ def alterar_status_lancamento(lancamento_id):
 @required_permission('caixa')
 def deletar_lancamento_financeiro(lancamento_id):
     """Deletar um lançamento financeiro"""
-    sucesso, mensagem = deletar_lancamento_financeiro_db(lancamento_id)
+    sucesso, mensagem = deletar_lancamento_financeiro_db(lancamento_id, tenant_id=get_current_tenant_id())
     
     if sucesso:
         flash(mensagem, 'success')
@@ -912,7 +920,10 @@ def deletar_lancamento_financeiro(lancamento_id):
 def sincronizar_lancamentos_com_contas_route():
     """Sincroniza lançamentos financeiros criando as contas correspondentes"""
     try:
-        sucesso, resultado = sincronizar_lancamentos_com_contas(current_user.id)
+        sucesso, resultado = sincronizar_lancamentos_com_contas(
+            current_user.id,
+            tenant_id=get_current_tenant_id()
+        )
         
         if sucesso:
             flash(f'Sincronização concluída! {resultado["despesas"]} contas a pagar e {resultado["receitas"]} contas a receber criadas a partir dos lançamentos.', 'success')
@@ -931,7 +942,7 @@ def sincronizar_lancamentos_com_contas_route():
 @required_permission('caixa')
 def sincronizar_vendas_caixa():
     """Sincronizar vendas do dia com o caixa"""
-    sucesso, mensagem = sincronizar_vendas_com_caixa()
+    sucesso, mensagem = sincronizar_vendas_com_caixa(tenant_id=get_current_tenant_id())
     
     if sucesso:
         flash(mensagem, 'success')
@@ -945,7 +956,7 @@ def sincronizar_vendas_caixa():
 @required_permission('admin')
 def limpar_sincronizacoes_caixa():
     """Limpar sincronizações incorretas do caixa (apenas admin)"""
-    sucesso, mensagem = limpar_sincronizacoes_incorretas()
+    sucesso, mensagem = limpar_sincronizacoes_incorretas(tenant_id=get_current_tenant_id())
     
     if sucesso:
         flash(f"✅ {mensagem}", 'success')
@@ -959,8 +970,9 @@ def limpar_sincronizacoes_caixa():
 def api_status_caixa():
     """Retorna o status atual do caixa para o frontend"""
     try:
-        caixa_aberto = caixa_esta_aberto()
-        status_caixa = obter_status_caixa()
+        tenant_id = get_current_tenant_id()
+        caixa_aberto = caixa_esta_aberto(tenant_id=tenant_id)
+        status_caixa = obter_status_caixa(tenant_id=tenant_id)
         
         return jsonify({
             'aberto': caixa_aberto,
@@ -977,14 +989,15 @@ def api_status_caixa():
 def exportar_caixa_pdf():
     """Exportar relatório do caixa em PDF"""
     try:
+        tenant_id = get_current_tenant_id()
         data = request.args.get('data')
         if not data:
             data = hoje_br().strftime('%Y-%m-%d')
         
         # Obter dados do caixa
-        status_caixa = obter_status_caixa()
-        movimentacoes = obter_movimentacoes_caixa(data)
-        resumo_vendas = obter_vendas_do_dia()
+        status_caixa = obter_status_caixa(tenant_id=tenant_id)
+        movimentacoes = obter_movimentacoes_caixa(data, tenant_id=tenant_id)
+        resumo_vendas = obter_vendas_do_dia(tenant_id=tenant_id)
         
         # Criar PDF
         pdf_buffer = criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data)
