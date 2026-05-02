@@ -232,6 +232,104 @@ def _resolver_tenant_id_fornecedores(tenant_id=None, permitir_global=True):
 
     raise ValueError("tenant_id não informado para operação do módulo de fornecedores.")
 
+def _resolver_tenant_id_produtos(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes do modulo de produtos.
+    Prioridade: parametro explicito > contexto Flask (g/session) > fallback de tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id nao informado para operacao do modulo de produtos.")
+
+def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
+    """Valida se fornecedor pertence ao tenant informado."""
+    fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
+    if fornecedor_normalizado is None:
+        return None
+
+    cursor.execute(
+        "SELECT id FROM fornecedores WHERE id = %s AND tenant_id = %s",
+        (fornecedor_normalizado, tenant_id)
+    )
+    if not cursor.fetchone():
+        raise ValueError("Fornecedor informado nao pertence ao tenant atual.")
+
+    return fornecedor_normalizado
+
+def _validar_duplicidade_produto(cursor, tenant_id, nome=None, codigo_barras=None, codigo_fornecedor=None, produto_id_excluir=None):
+    """Valida duplicidades de produto dentro do tenant."""
+    produto_id_excluir = _normalizar_tenant_id(produto_id_excluir)
+    nome_normalizado = nome.strip().lower() if isinstance(nome, str) and nome.strip() else None
+    codigo_barras_normalizado = codigo_barras.strip() if isinstance(codigo_barras, str) and codigo_barras.strip() else None
+    codigo_fornecedor_normalizado = codigo_fornecedor.strip().lower() if isinstance(codigo_fornecedor, str) and codigo_fornecedor.strip() else None
+
+    if codigo_barras_normalizado:
+        query = """
+            SELECT id, nome
+            FROM produtos
+            WHERE ativo = TRUE AND tenant_id = %s AND codigo_barras = %s
+        """
+        params = [tenant_id, codigo_barras_normalizado]
+        if produto_id_excluir is not None:
+            query += " AND id != %s"
+            params.append(produto_id_excluir)
+        query += " ORDER BY id LIMIT 1"
+        cursor.execute(query, tuple(params))
+        row = cursor.fetchone()
+        if row:
+            raise ValueError(f"Codigo de barras ja cadastrado para o produto '{row[1]}' neste tenant.")
+
+    if codigo_fornecedor_normalizado:
+        query = """
+            SELECT id, nome
+            FROM produtos
+            WHERE ativo = TRUE AND tenant_id = %s AND LOWER(COALESCE(codigo_fornecedor, '')) = %s
+        """
+        params = [tenant_id, codigo_fornecedor_normalizado]
+        if produto_id_excluir is not None:
+            query += " AND id != %s"
+            params.append(produto_id_excluir)
+        query += " ORDER BY id LIMIT 1"
+        cursor.execute(query, tuple(params))
+        row = cursor.fetchone()
+        if row:
+            raise ValueError(f"Codigo do fornecedor ja cadastrado para o produto '{row[1]}' neste tenant.")
+
+    if nome_normalizado:
+        query = """
+            SELECT id, nome
+            FROM produtos
+            WHERE ativo = TRUE AND tenant_id = %s AND LOWER(nome) = %s
+        """
+        params = [tenant_id, nome_normalizado]
+        if produto_id_excluir is not None:
+            query += " AND id != %s"
+            params.append(produto_id_excluir)
+        query += " ORDER BY id LIMIT 1"
+        cursor.execute(query, tuple(params))
+        row = cursor.fetchone()
+        if row:
+            raise ValueError(f"Produto '{row[1]}' ja cadastrado neste tenant.")
+
 def add_column_if_not_exists(cursor, conn, table_name, column_definition):
     """Adiciona uma coluna em uma tabela se ela não existir"""
     try:
@@ -2126,263 +2224,338 @@ def deletar_cliente(id, tenant_id=None):
         conn.close()
 
 # FUNÇÕES DE PRODUTOS
-def listar_produtos(page=1, per_page=10):
-    """Lista produtos ativos com paginação"""
+def listar_produtos(page=1, per_page=10, tenant_id=None):
+    """Lista produtos ativos com paginacao no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Contar o número total de produtos ativos
-    cursor.execute('SELECT COUNT(*) FROM produtos WHERE ativo = TRUE')
-    total_produtos = cursor.fetchone()[0]
-    
-    # Calcular o total de páginas
-    total_pages = ceil(total_produtos / per_page)
-    
-    # Calcular o offset
-    offset = (page - 1) * per_page
-    
-    cursor.execute('''
-        SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
-               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca, fornecedor_id
-        FROM produtos
-        WHERE ativo = TRUE
-        ORDER BY nome
-        LIMIT %s OFFSET %s
-    ''', (per_page, offset))
-    
-    produtos = []
-    for row in cursor.fetchall():
-        produtos.append({
-            'id': row[0],
-            'nome': row[1],
-            'preco': row[2] if row[2] is not None else 0,
-            'estoque': row[3],
-            'estoque_minimo': row[4],
-            'codigo_barras': row[5],
-            'descricao': row[6],
-            'categoria': row[7],
-            'ativo': row[8],
-            'codigo_fornecedor': row[9],
-            'preco_custo': row[10] or 0,
-            'margem_lucro': row[11] or 0,
-            'ncm': row[12],
-            'unidade': row[13] or 'UN',
-            'foto_url': row[14],
-            'marca': row[15],
-            'fornecedor_id': row[16]
-        })
-    
-    conn.close()
-    
-    return {'produtos': produtos, 'total_pages': total_pages, 'current_page': page}
 
-def buscar_produto(termo_busca):
-    """Busca produto por nome, código de barras, código do fornecedor, marca ou ID
-    Suporta busca com múltiplos termos separados por % ou espaço
-    Exemplo: 'PIVO%GOL' ou 'PIVO GOL' retorna produtos que contenham ambos os termos
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Dividir o termo de busca em múltiplas palavras
-    # Substituir % por espaço e dividir
-    termo_limpo = termo_busca.replace('%', ' ').strip()
-    termos = [t.strip() for t in termo_limpo.split() if t.strip()]
-    
-    # Se não houver termos, retornar vazio
-    if not termos:
-        conn.close()
-        return []
-    
-    # Se houver apenas um termo, usar busca simples
-    if len(termos) == 1:
-        termo = termos[0]
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return {'produtos': [], 'total_pages': 0, 'current_page': page}
+
+        page = max(1, int(page or 1))
+        per_page = max(1, int(per_page or 10))
+
+        cursor.execute(
+            'SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND tenant_id = %s',
+            (tenant_resolvido,)
+        )
+        total_produtos = cursor.fetchone()[0]
+        total_pages = ceil(total_produtos / per_page) if total_produtos > 0 else 0
+        offset = (page - 1) * per_page
+
         cursor.execute('''
-            SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
+            SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo,
+                   codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca, fornecedor_id, tenant_id
             FROM produtos
-            WHERE ativo = TRUE AND (
-                nome ILIKE %s OR 
-                codigo_barras = %s OR 
-                codigo_fornecedor ILIKE %s OR
-                marca ILIKE %s OR
-                categoria ILIKE %s OR
-                CAST(id AS TEXT) = %s
-            )
-            ORDER BY 
-                CASE 
-                    WHEN nome ILIKE %s THEN 1
-                    WHEN marca ILIKE %s THEN 2
-                    WHEN codigo_barras = %s THEN 3
-                    ELSE 4
-                END
-            LIMIT 50
-        ''', (f'%{termo}%', termo, f'%{termo}%', f'%{termo}%', f'%{termo}%', termo,
-              f'{termo}%', f'{termo}%', termo))
-    else:
-        # Busca com múltiplos termos - todos devem estar presentes
-        conditions = []
-        params = []
-        
-        for termo in termos:
-            # Para cada termo, verificar se está presente em qualquer campo
-            conditions.append('''(
-                nome ILIKE %s OR 
-                codigo_barras ILIKE %s OR 
-                codigo_fornecedor ILIKE %s OR
-                marca ILIKE %s OR
-                categoria ILIKE %s
-            )''')
-            params.extend([f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%'])
-        
-        # Juntar todas as condições com AND (todos os termos devem estar presentes)
-        where_clause = ' AND '.join(conditions)
-        
-        query = f'''
-            SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
-            FROM produtos
-            WHERE ativo = TRUE AND ({where_clause})
+            WHERE ativo = TRUE AND tenant_id = %s
             ORDER BY nome
-            LIMIT 50
-        '''
-        
-        cursor.execute(query, params)
-    
-    produtos = []
-    for row in cursor.fetchall():
-        produtos.append({
-            'id': row[0],
-            'nome': row[1],
-            'preco': row[2] if row[2] is not None else 0,
-            'estoque': row[3],
-            'codigo_barras': row[4],
-            'codigo_fornecedor': row[5],
-            'preco_custo': row[6] or 0,
-            'margem_lucro': row[7] or 0,
-            'categoria': row[8],
-            'marca': row[9]
-        })
-    
-    conn.close()
-    return produtos
+            LIMIT %s OFFSET %s
+        ''', (tenant_resolvido, per_page, offset))
 
-def obter_produto_por_id(produto_id):
-    """Obtém um produto específico pelo ID"""
+        produtos = []
+        for row in cursor.fetchall():
+            produtos.append({
+                'id': row[0],
+                'nome': row[1],
+                'preco': row[2] if row[2] is not None else 0,
+                'estoque': row[3],
+                'estoque_minimo': row[4],
+                'codigo_barras': row[5],
+                'descricao': row[6],
+                'categoria': row[7],
+                'ativo': row[8],
+                'codigo_fornecedor': row[9],
+                'preco_custo': row[10] or 0,
+                'margem_lucro': row[11] or 0,
+                'ncm': row[12],
+                'unidade': row[13] or 'UN',
+                'foto_url': row[14],
+                'marca': row[15],
+                'fornecedor_id': row[16],
+                'tenant_id': row[17]
+            })
+
+        return {'produtos': produtos, 'total_pages': total_pages, 'current_page': page}
+    finally:
+        conn.close()
+
+
+def buscar_produto(termo_busca, tenant_id=None):
+    """Busca produto por nome, codigo de barras, codigo do fornecedor, marca ou ID por tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo, 
-               codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca
-        FROM produtos
-        WHERE id = %s AND ativo = TRUE
-    ''', (produto_id,))
-    
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        return {
-            'id': row[0],
-            'nome': row[1],
-            'preco': row[2] if row[2] is not None else 0,
-            'estoque': row[3],
-            'estoque_minimo': row[4],
-            'codigo_barras': row[5],
-            'descricao': row[6],
-            'categoria': row[7],
-            'ativo': row[8],
-            'codigo_fornecedor': row[9],
-            'preco_custo': row[10] or 0,
-            'margem_lucro': row[11] or 0,
-            'ncm': row[12],
-            'unidade': row[13] or 'UN',
-            'foto_url': row[14],
-            'marca': row[15]
-        }
-    return None
 
-def adicionar_produto(nome, preco, estoque=0, estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None, 
-                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
-    """Adiciona um novo produto"""
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
+        termo_limpo = (termo_busca or '').replace('%', ' ').strip()
+        termos = [t.strip() for t in termo_limpo.split() if t.strip()]
+        if not termos:
+            return []
+
+        if len(termos) == 1:
+            termo = termos[0]
+            cursor.execute('''
+                SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
+                FROM produtos
+                WHERE ativo = TRUE AND tenant_id = %s AND (
+                    nome ILIKE %s OR
+                    codigo_barras = %s OR
+                    codigo_fornecedor ILIKE %s OR
+                    marca ILIKE %s OR
+                    categoria ILIKE %s OR
+                    CAST(id AS TEXT) = %s
+                )
+                ORDER BY
+                    CASE
+                        WHEN nome ILIKE %s THEN 1
+                        WHEN marca ILIKE %s THEN 2
+                        WHEN codigo_barras = %s THEN 3
+                        ELSE 4
+                    END
+                LIMIT 50
+            ''', (
+                tenant_resolvido,
+                f'%{termo}%', termo, f'%{termo}%', f'%{termo}%', f'%{termo}%', termo,
+                f'{termo}%', f'{termo}%', termo
+            ))
+        else:
+            conditions = []
+            params = [tenant_resolvido]
+
+            for termo in termos:
+                conditions.append('''(
+                    nome ILIKE %s OR
+                    codigo_barras ILIKE %s OR
+                    codigo_fornecedor ILIKE %s OR
+                    marca ILIKE %s OR
+                    categoria ILIKE %s
+                )''')
+                params.extend([f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%', f'%{termo}%'])
+
+            where_clause = ' AND '.join(conditions)
+            query = f'''
+                SELECT id, nome, preco, estoque, codigo_barras, codigo_fornecedor, preco_custo, margem_lucro, categoria, marca
+                FROM produtos
+                WHERE ativo = TRUE AND tenant_id = %s AND ({where_clause})
+                ORDER BY nome
+                LIMIT 50
+            '''
+            cursor.execute(query, tuple(params))
+
+        produtos = []
+        for row in cursor.fetchall():
+            produtos.append({
+                'id': row[0],
+                'nome': row[1],
+                'preco': row[2] if row[2] is not None else 0,
+                'estoque': row[3],
+                'codigo_barras': row[4],
+                'codigo_fornecedor': row[5],
+                'preco_custo': row[6] or 0,
+                'margem_lucro': row[7] or 0,
+                'categoria': row[8],
+                'marca': row[9]
+            })
+
+        return produtos
+    finally:
+        conn.close()
+
+
+def obter_produto_por_id(produto_id, tenant_id=None):
+    """Obtem um produto especifico pelo ID dentro do tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Calcular preço de venda baseado no custo e margem se fornecidos
-    # Fórmula: Preço = Custo + (Custo * Margem/100)
-    # Exemplo: R$ 20 + (R$ 20 * 100%) = R$ 20 + R$ 20 = R$ 40
-    if preco_custo > 0 and margem_lucro > 0:
-        preco = preco_custo + (preco_custo * margem_lucro / 100)
-    
-    cursor.execute('''
-        INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                            codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id
-    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id))
-    
-    produto_id = cursor.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return produto_id
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return None
+
+        cursor.execute('''
+            SELECT id, nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria, ativo,
+                   codigo_fornecedor, preco_custo, margem_lucro, ncm, unidade, foto_url, marca, tenant_id, fornecedor_id
+            FROM produtos
+            WHERE id = %s AND ativo = TRUE AND tenant_id = %s
+        ''', (produto_id, tenant_resolvido))
+
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'nome': row[1],
+                'preco': row[2] if row[2] is not None else 0,
+                'estoque': row[3],
+                'estoque_minimo': row[4],
+                'codigo_barras': row[5],
+                'descricao': row[6],
+                'categoria': row[7],
+                'ativo': row[8],
+                'codigo_fornecedor': row[9],
+                'preco_custo': row[10] or 0,
+                'margem_lucro': row[11] or 0,
+                'ncm': row[12],
+                'unidade': row[13] or 'UN',
+                'foto_url': row[14],
+                'marca': row[15],
+                'tenant_id': row[16],
+                'fornecedor_id': row[17]
+            }
+        return None
+    finally:
+        conn.close()
+
+
+def adicionar_produto(nome, preco, estoque=0, estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None,
+                     codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None, tenant_id=None):
+    """Adiciona um novo produto no tenant atual."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError('Tenant nao resolvido para cadastro de produto.')
+
+        if preco_custo > 0 and margem_lucro > 0:
+            preco = preco_custo + (preco_custo * margem_lucro / 100)
+
+        fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
+        _validar_duplicidade_produto(
+            cursor,
+            tenant_resolvido,
+            nome=nome,
+            codigo_barras=codigo_barras,
+            codigo_fornecedor=codigo_fornecedor
+        )
+
+        cursor.execute('''
+            INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                                codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (
+            nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+            codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, tenant_resolvido
+        ))
+
+        produto_id = cursor.fetchone()[0]
+        conn.commit()
+        return produto_id
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        raise ValueError('Codigo de barras ja cadastrado no sistema.')
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def editar_produto(id, nome, preco, estoque, estoque_minimo=1, codigo_barras=None, descricao=None, categoria=None,
-                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
-    """Edita um produto existente"""
+                  codigo_fornecedor=None, preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None, tenant_id=None):
+    """Edita um produto existente no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Calcular preço de venda baseado no custo e margem se fornecidos
-    # Fórmula: Preço = Custo + (Custo * Margem/100)
-    if preco_custo > 0 and margem_lucro > 0:
-        preco = preco_custo + (preco_custo * margem_lucro / 100)
-    
-    cursor.execute('''
-        UPDATE produtos 
-        SET nome = %s, preco = %s, estoque = %s, estoque_minimo = %s, 
-            codigo_barras = %s, descricao = %s, categoria = %s,
-            codigo_fornecedor = %s, preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s,
-            fornecedor_id = %s
-        WHERE id = %s
-    ''', (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, id))
-    
-    conn.commit()
-    conn.close()
-    return True
 
-def deletar_produto(id):
-    """Marca um produto como inativo"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("UPDATE produtos SET ativo = FALSE WHERE id = %s", (id,))
-    conn.commit()
-    conn.close()
-
-def deletar_todos_os_produtos():
-    """Marca todos os produtos como inativos - FUNÇÃO DE TESTE"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
     try:
-        # Marcar todos os produtos como inativos
-        cursor.execute("UPDATE produtos SET ativo = FALSE")
-        
-        # Contar quantos produtos foram marcados como inativos
-        cursor.execute("SELECT COUNT(*) FROM produtos WHERE ativo = FALSE")
-        total_deletados = cursor.fetchone()[0]
-        
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
+        if preco_custo > 0 and margem_lucro > 0:
+            preco = preco_custo + (preco_custo * margem_lucro / 100)
+
+        fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
+        _validar_duplicidade_produto(
+            cursor,
+            tenant_resolvido,
+            nome=nome,
+            codigo_barras=codigo_barras,
+            codigo_fornecedor=codigo_fornecedor,
+            produto_id_excluir=id
+        )
+
+        cursor.execute('''
+            UPDATE produtos
+            SET nome = %s, preco = %s, estoque = %s, estoque_minimo = %s,
+                codigo_barras = %s, descricao = %s, categoria = %s,
+                codigo_fornecedor = %s, preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s,
+                fornecedor_id = %s
+            WHERE id = %s AND tenant_id = %s
+        ''', (
+            nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+            codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, id, tenant_resolvido
+        ))
+
         conn.commit()
-        print(f"✓ {total_deletados} produtos marcados como inativos")
+        return cursor.rowcount > 0
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        raise ValueError('Codigo de barras ja cadastrado no sistema.')
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def deletar_produto(id, tenant_id=None):
+    """Marca um produto como inativo no tenant atual."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
+        cursor.execute('UPDATE produtos SET ativo = FALSE WHERE id = %s AND tenant_id = %s', (id, tenant_resolvido))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def deletar_todos_os_produtos(tenant_id=None):
+    """Marca todos os produtos do tenant como inativos - FUNCAO DE TESTE."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return 0
+
+        cursor.execute('UPDATE produtos SET ativo = FALSE WHERE tenant_id = %s AND ativo = TRUE', (tenant_resolvido,))
+        total_deletados = cursor.rowcount
+
+        conn.commit()
+        print(f"{total_deletados} produtos do tenant foram marcados como inativos")
         return total_deletados
-        
+
     except Exception as e:
         conn.rollback()
-        print(f"✗ Erro ao deletar produtos: {e}")
+        print(f"Erro ao deletar produtos do tenant: {e}")
         raise e
     finally:
         conn.close()
+
 
 def limpar_completamente_produtos():
     """Remove completamente todos os produtos do banco - CUIDADO!"""
@@ -4666,239 +4839,229 @@ def mapear_ncm_para_categoria(ncm):
     else:
         return "Geral"
 
-def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=1, usar_preco_nfe=True, acao_existente='atualizar_estoque'):
+def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_minimo=1, usar_preco_nfe=True, acao_existente='atualizar_estoque', tenant_id=None):
     """
-    Importa produtos de um arquivo XML de NFe com configurações avançadas
-    Também extrai e cadastra/atualiza automaticamente o fornecedor baseado nos dados do emitente da NF-e
-    
-    Args:
-        conteudo_xml: Conteúdo do arquivo XML como string
-        margem_padrao: Margem de lucro padrão (%)
-        estoque_minimo: Estoque mínimo padrão
-        usar_preco_nfe: Se deve usar preço da NFe como custo
-        acao_existente: 'atualizar_estoque', 'substituir_dados' ou 'ignorar'
+    Importa produtos de XML da NFe com configuracoes avancadas, isolado por tenant.
     """
     import xml.etree.ElementTree as ET
-    
+
     produtos_importados = 0
     produtos_atualizados = 0
     produtos_ignorados = 0
     erros = []
     fornecedor_id = None
-    
+    conn = None
+
     try:
-        # Parse do XML
         root = ET.fromstring(conteudo_xml)
-        
-        # Namespace da NFe
         ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
-        
-        # ===== EXTRAIR E CADASTRAR/ATUALIZAR FORNECEDOR =====
+
+        conn_tenant = get_db_connection()
+        cursor_tenant = conn_tenant.cursor()
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor_tenant, tenant_resolvido)
+        conn_tenant.close()
+
+        if tenant_resolvido is None:
+            raise ValueError('Tenant nao resolvido para importacao de produtos.')
+
         emit = root.find('.//nfe:emit', ns)
         if emit is not None:
             try:
-                # Extrair dados do emitente (fornecedor)
                 cnpj_fornecedor = emit.find('nfe:CNPJ', ns)
                 cnpj_fornecedor = cnpj_fornecedor.text if cnpj_fornecedor is not None else None
-                
+
                 nome_fornecedor = emit.find('nfe:xNome', ns)
                 nome_fornecedor = nome_fornecedor.text if nome_fornecedor is not None else None
-                
+
                 nome_fantasia = emit.find('nfe:xFant', ns)
                 nome_fantasia = nome_fantasia.text if nome_fantasia is not None else None
-                
-                # Dados de endereço
+
                 enderEmit = emit.find('nfe:enderEmit', ns)
                 endereco_completo = None
                 cidade = None
                 estado = None
                 cep = None
                 telefone = None
-                
+
                 if enderEmit is not None:
                     xLgr = enderEmit.find('nfe:xLgr', ns)
                     nro = enderEmit.find('nfe:nro', ns)
                     xBairro = enderEmit.find('nfe:xBairro', ns)
                     xCpl = enderEmit.find('nfe:xCpl', ns)
-                    
+
                     cidade_elem = enderEmit.find('nfe:xMun', ns)
                     cidade = cidade_elem.text if cidade_elem is not None else None
-                    
+
                     estado_elem = enderEmit.find('nfe:UF', ns)
                     estado = estado_elem.text if estado_elem is not None else None
-                    
+
                     cep_elem = enderEmit.find('nfe:CEP', ns)
                     cep = cep_elem.text if cep_elem is not None else None
-                    
+
                     fone_elem = enderEmit.find('nfe:fone', ns)
                     telefone = fone_elem.text if fone_elem is not None else None
-                    
-                    # Montar endereço completo
+
                     partes_endereco = []
                     if xLgr is not None:
                         partes_endereco.append(xLgr.text)
                     if nro is not None:
-                        partes_endereco.append(f"nº {nro.text}")
+                        partes_endereco.append(f"n {nro.text}")
                     if xCpl is not None and xCpl.text:
                         partes_endereco.append(xCpl.text)
                     if xBairro is not None:
                         partes_endereco.append(xBairro.text)
-                    
+
                     endereco_completo = ', '.join(partes_endereco) if partes_endereco else None
-                
-                # Buscar ou criar fornecedor
+
                 if cnpj_fornecedor and nome_fornecedor:
-                    # Buscar fornecedor existente pelo CNPJ normalizado
-                    fornecedor_existente = buscar_fornecedor_por_cnpj(cnpj_fornecedor)
-                    
+                    fornecedor_existente = buscar_fornecedor_por_cnpj(cnpj_fornecedor, tenant_id=tenant_resolvido)
+
                     if fornecedor_existente:
-                        # Atualizar fornecedor existente
                         fornecedor_id = fornecedor_existente['id']
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                            UPDATE fornecedores 
+                        conn_forn = get_db_connection()
+                        cursor_forn = conn_forn.cursor()
+                        cursor_forn.execute('''
+                            UPDATE fornecedores
                             SET nome = %s, telefone = %s, endereco = %s, cidade = %s, estado = %s, cep = %s
-                            WHERE id = %s
-                        ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id))
-                        conn.commit()
-                        conn.close()
+                            WHERE id = %s AND tenant_id = %s
+                        ''', (nome_fornecedor, telefone, endereco_completo, cidade, estado, cep, fornecedor_id, tenant_resolvido))
+                        conn_forn.commit()
+                        conn_forn.close()
                     else:
-                        # Criar novo fornecedor
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                            INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        conn_forn = get_db_connection()
+                        cursor_forn = conn_forn.cursor()
+                        cursor_forn.execute('''
+                            INSERT INTO fornecedores (nome, cnpj, telefone, endereco, cidade, estado, cep, observacoes, tenant_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        ''', (nome_fornecedor, cnpj_fornecedor, telefone, endereco_completo, cidade, estado, cep, 
-                              f"Importado de NF-e. Nome Fantasia: {nome_fantasia}" if nome_fantasia else "Importado de NF-e"))
-                        fornecedor_id = cursor.fetchone()[0]
-                        conn.commit()
-                        conn.close()
-                    
+                        ''', (
+                            nome_fornecedor,
+                            cnpj_fornecedor,
+                            telefone,
+                            endereco_completo,
+                            cidade,
+                            estado,
+                            cep,
+                            f"Importado de NF-e. Nome Fantasia: {nome_fantasia}" if nome_fantasia else 'Importado de NF-e',
+                            tenant_resolvido
+                        ))
+                        fornecedor_id = cursor_forn.fetchone()[0]
+                        conn_forn.commit()
+                        conn_forn.close()
             except Exception as e:
                 erros.append(f"Erro ao processar fornecedor: {str(e)}")
-        
-        # ===== BUSCAR PRODUTOS DO XML =====
-        # Buscar todos os produtos (det)
+
         produtos_xml = root.findall('.//nfe:det', ns)
-        
         if not produtos_xml:
-            raise ValueError("Nenhum produto encontrado no XML")
-        
+            raise ValueError('Nenhum produto encontrado no XML')
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         for det in produtos_xml:
             try:
-                # Extrair dados do produto
                 prod = det.find('nfe:prod', ns)
                 if prod is None:
                     continue
-                
-                # Dados básicos do produto
+
                 codigo_produto = prod.find('nfe:cProd', ns)
                 codigo_produto = codigo_produto.text if codigo_produto is not None else ''
-                
+
                 codigo_ean = prod.find('nfe:cEAN', ns)
                 codigo_ean = codigo_ean.text if codigo_ean is not None else None
                 if codigo_ean in ['SEM GTIN', '', None]:
-                    codigo_ean = None  # NULL para produtos sem código de barras
-                
+                    codigo_ean = None
+
                 nome_produto = prod.find('nfe:xProd', ns)
                 nome_produto = nome_produto.text if nome_produto is not None else ''
-                
+
                 valor_unitario = prod.find('nfe:vUnCom', ns)
                 valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
-                
+
                 quantidade = prod.find('nfe:qCom', ns)
                 quantidade = int(float(quantidade.text)) if quantidade is not None else 0
-                
+
                 ncm = prod.find('nfe:NCM', ns)
                 ncm = ncm.text if ncm is not None else ''
-                
+
                 unidade = prod.find('nfe:uCom', ns)
                 unidade = unidade.text if unidade is not None else 'UN'
-                
+
                 if not nome_produto:
-                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+                    erros.append(f"Produto sem nome encontrado (codigo: {codigo_produto})")
                     continue
-                
-                # Calcular preços
+
                 preco_custo = valor_unitario if usar_preco_nfe else 0.0
                 preco_venda = preco_custo + (preco_custo * margem_padrao / 100) if preco_custo > 0 else 0.0
-                
-                # Determinar categoria baseada no NCM
-                categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else "Geral"
-                
-                # Verificar se produto já existe (por código de barras ou código do produto)
+                categoria = obter_categoria_por_ncm_avancado(ncm) if ncm else 'Geral'
+
                 produto_existente = None
                 if codigo_ean:
                     cursor.execute('''
-                        SELECT id, nome, preco, estoque 
-                        FROM produtos 
-                        WHERE codigo_barras = %s
-                    ''', (codigo_ean,))
+                        SELECT id, nome, preco, estoque
+                        FROM produtos
+                        WHERE codigo_barras = %s AND tenant_id = %s AND ativo = TRUE
+                    ''', (codigo_ean, tenant_resolvido))
                     produto_existente = cursor.fetchone()
-                
+
                 if not produto_existente and codigo_produto:
                     cursor.execute('''
-                        SELECT id, nome, preco, estoque 
-                        FROM produtos 
-                        WHERE codigo_fornecedor = %s OR nome LIKE %s
-                    ''', (codigo_produto, f'%{codigo_produto}%'))
+                        SELECT id, nome, preco, estoque
+                        FROM produtos
+                        WHERE tenant_id = %s AND ativo = TRUE AND (codigo_fornecedor = %s OR nome LIKE %s)
+                    ''', (tenant_resolvido, codigo_produto, f'%{codigo_produto}%'))
                     produto_existente = cursor.fetchone()
-                
+
                 if produto_existente:
                     if acao_existente == 'ignorar':
                         produtos_ignorados += 1
                         continue
                     elif acao_existente == 'atualizar_estoque':
-                        # Atualizar apenas estoque
                         produto_id = produto_existente[0]
                         novo_estoque = produto_existente[3] + quantidade
                         cursor.execute('''
-                            UPDATE produtos 
+                            UPDATE produtos
                             SET estoque = %s
-                            WHERE id = %s
-                        ''', (novo_estoque, produto_id))
+                            WHERE id = %s AND tenant_id = %s
+                        ''', (novo_estoque, produto_id, tenant_resolvido))
                         produtos_atualizados += 1
                         continue
                     elif acao_existente == 'substituir_dados':
-                        # Substituir todos os dados (incluindo fornecedor)
                         produto_id = produto_existente[0]
                         cursor.execute('''
-                            UPDATE produtos 
-                            SET nome = %s, codigo_fornecedor = %s, codigo_barras = %s, categoria = %s, 
+                            UPDATE produtos
+                            SET nome = %s, codigo_fornecedor = %s, codigo_barras = %s, categoria = %s,
                                 preco_custo = %s, preco = %s, estoque = %s, estoque_minimo = %s,
                                 unidade = %s, ncm = %s, fornecedor_id = %s
-                            WHERE id = %s
-                        ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
-                             preco_custo, preco_venda, quantidade, estoque_minimo, 
-                             unidade, ncm, fornecedor_id, produto_id))
+                            WHERE id = %s AND tenant_id = %s
+                        ''', (
+                            nome_produto, codigo_produto, codigo_ean, categoria,
+                            preco_custo, preco_venda, quantidade, estoque_minimo,
+                            unidade, ncm, fornecedor_id, produto_id, tenant_resolvido
+                        ))
                         produtos_atualizados += 1
                         continue
-                
-                # Inserir novo produto (vinculando ao fornecedor)
+
                 cursor.execute('''
                     INSERT INTO produtos (nome, codigo_fornecedor, codigo_barras, categoria, descricao,
-                                        preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo, fornecedor_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (nome_produto, codigo_produto, codigo_ean, categoria, 
-                     "Importado via NFe XML", preco_custo, preco_venda, 
-                     quantidade, estoque_minimo, unidade, ncm, True, fornecedor_id))
-                
+                                        preco_custo, preco, estoque, estoque_minimo, unidade, ncm, ativo, fornecedor_id, tenant_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    nome_produto, codigo_produto, codigo_ean, categoria,
+                    'Importado via NFe XML', preco_custo, preco_venda,
+                    quantidade, estoque_minimo, unidade, ncm, True, fornecedor_id, tenant_resolvido
+                ))
+
                 produtos_importados += 1
-                
+
             except Exception as e:
-                conn.rollback()  # Fazer rollback para poder continuar processando
+                conn.rollback()
                 erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
                 continue
-        
+
         conn.commit()
-        conn.close()
-        
+
         return {
             'sucesso': True,
             'produtos_importados': produtos_importados,
@@ -4907,7 +5070,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
             'total_processados': produtos_importados + produtos_atualizados + produtos_ignorados,
             'erros': erros
         }
-        
+
     except ET.ParseError as e:
         return {
             'sucesso': False,
@@ -4915,7 +5078,7 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
             'produtos_importados': 0,
             'produtos_atualizados': 0,
             'produtos_ignorados': 0,
-            'erros': [f'XML inválido: {str(e)}']
+            'erros': [f'XML invalido: {str(e)}']
         }
     except Exception as e:
         return {
@@ -4926,6 +5089,10 @@ def importar_produtos_de_xml_avancado(conteudo_xml, margem_padrao=100, estoque_m
             'produtos_ignorados': 0,
             'erros': [str(e)]
         }
+    finally:
+        if conn:
+            conn.close()
+
 
 def obter_categoria_por_ncm_avancado(ncm):
     """
@@ -4987,97 +5154,98 @@ def obter_categoria_por_ncm_avancado(ncm):
     
     return categorias_gerais.get(prefixo_2, "Geral")
 
-def importar_produtos_de_xml(conteudo_xml):
+def importar_produtos_de_xml(conteudo_xml, tenant_id=None):
     """
-    Importa produtos de um arquivo XML de NFe (função original mantida para compatibilidade)
+    Importa produtos de XML (compatibilidade), isolado por tenant.
     """
     import xml.etree.ElementTree as ET
-    
+
     produtos_importados = []
     produtos_atualizados = []
     erros = []
-    
+    conn = None
+
     try:
-        # Parse do XML
         root = ET.fromstring(conteudo_xml)
-        
-        # Namespace da NFe
         ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
-        
-        # Buscar todos os produtos (det)
+
+        conn_tenant = get_db_connection()
+        cursor_tenant = conn_tenant.cursor()
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor_tenant, tenant_resolvido)
+        conn_tenant.close()
+
+        if tenant_resolvido is None:
+            raise ValueError('Tenant nao resolvido para importacao de produtos.')
+
         produtos_xml = root.findall('.//nfe:det', ns)
-        
         if not produtos_xml:
-            raise ValueError("Nenhum produto encontrado no XML")
-        
+            raise ValueError('Nenhum produto encontrado no XML')
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         for det in produtos_xml:
             try:
-                # Extrair dados do produto
                 prod = det.find('nfe:prod', ns)
                 if prod is None:
                     continue
-                
-                # Dados básicos do produto
+
                 codigo_produto = prod.find('nfe:cProd', ns)
                 codigo_produto = codigo_produto.text if codigo_produto is not None else ''
-                
+
                 codigo_ean = prod.find('nfe:cEAN', ns)
                 codigo_ean = codigo_ean.text if codigo_ean is not None else None
                 if codigo_ean in ['SEM GTIN', '', None]:
-                    codigo_ean = None  # NULL para produtos sem código de barras
-                
+                    codigo_ean = None
+
                 nome_produto = prod.find('nfe:xProd', ns)
                 nome_produto = nome_produto.text if nome_produto is not None else ''
-                
+
                 valor_unitario = prod.find('nfe:vUnCom', ns)
                 valor_unitario = float(valor_unitario.text) if valor_unitario is not None else 0.0
-                
+
                 quantidade = prod.find('nfe:qCom', ns)
                 quantidade = int(float(quantidade.text)) if quantidade is not None else 0
-                
+
                 ncm = prod.find('nfe:NCM', ns)
                 ncm = ncm.text if ncm is not None else ''
-                
+
                 unidade = prod.find('nfe:uCom', ns)
                 unidade = unidade.text if unidade is not None else 'UN'
-                
+
                 if not nome_produto:
-                    erros.append(f"Produto sem nome encontrado (código: {codigo_produto})")
+                    erros.append(f"Produto sem nome encontrado (codigo: {codigo_produto})")
                     continue
-                
-                # Verificar se produto já existe (por código de barras ou código do produto)
+
                 produto_existente = None
                 if codigo_ean:
                     cursor.execute('''
-                        SELECT id, nome, preco, estoque 
-                        FROM produtos 
-                        WHERE codigo_barras = %s
-                    ''', (codigo_ean,))
+                        SELECT id, nome, preco, estoque
+                        FROM produtos
+                        WHERE codigo_barras = %s AND tenant_id = %s AND ativo = TRUE
+                    ''', (codigo_ean, tenant_resolvido))
                     produto_existente = cursor.fetchone()
-                
+
                 if not produto_existente and codigo_produto:
                     cursor.execute('''
-                        SELECT id, nome, preco, estoque 
-                        FROM produtos 
-                        WHERE codigo_fornecedor = %s OR nome LIKE %s
-                    ''', (codigo_produto, f'%{codigo_produto}%'))
+                        SELECT id, nome, preco, estoque
+                        FROM produtos
+                        WHERE tenant_id = %s AND ativo = TRUE AND (codigo_fornecedor = %s OR nome LIKE %s)
+                    ''', (tenant_resolvido, codigo_produto, f'%{codigo_produto}%'))
                     produto_existente = cursor.fetchone()
-                
+
                 if produto_existente:
-                    # Atualizar produto existente incluindo categoria
                     produto_id = produto_existente[0]
                     novo_estoque = produto_existente[3] + quantidade
                     categoria = mapear_ncm_para_categoria(ncm)
-                    
+
                     cursor.execute('''
-                        UPDATE produtos 
+                        UPDATE produtos
                         SET estoque = %s, preco = %s, ncm = %s, unidade = %s, categoria = %s
-                        WHERE id = %s
-                    ''', (novo_estoque, valor_unitario, ncm, unidade, categoria, produto_id))
-                    
+                        WHERE id = %s AND tenant_id = %s
+                    ''', (novo_estoque, valor_unitario, ncm, unidade, categoria, produto_id, tenant_resolvido))
+
                     produtos_atualizados.append({
                         'id': produto_id,
                         'nome': produto_existente[1],
@@ -5086,14 +5254,14 @@ def importar_produtos_de_xml(conteudo_xml):
                         'preco_atualizado': valor_unitario
                     })
                 else:
-                    # Criar novo produto com categoria baseada no NCM
                     categoria = mapear_ncm_para_categoria(ncm)
-                    
+
                     cursor.execute('''
-                        INSERT INTO produtos (nome, preco, estoque, codigo_barras, ncm, unidade, codigo_fornecedor, categoria)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ''', (nome_produto, valor_unitario, quantidade, codigo_ean, ncm, unidade, codigo_produto, categoria))
-                    
+                        INSERT INTO produtos (nome, preco, estoque, codigo_barras, ncm, unidade, codigo_fornecedor, categoria, tenant_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    ''', (nome_produto, valor_unitario, quantidade, codigo_ean, ncm, unidade, codigo_produto, categoria, tenant_resolvido))
+
                     produto_id = cursor.fetchone()[0]
                     produtos_importados.append({
                         'id': produto_id,
@@ -5104,15 +5272,14 @@ def importar_produtos_de_xml(conteudo_xml):
                         'codigo_fornecedor': codigo_produto,
                         'categoria': categoria
                     })
-                
+
             except Exception as e:
-                conn.rollback()  # Fazer rollback para poder continuar processando
+                conn.rollback()
                 erros.append(f"Erro ao processar produto {codigo_produto}: {str(e)}")
                 continue
-        
+
         conn.commit()
-        conn.close()
-        
+
         return {
             'sucesso': True,
             'produtos_importados': produtos_importados,
@@ -5120,14 +5287,14 @@ def importar_produtos_de_xml(conteudo_xml):
             'erros': erros,
             'total_processados': len(produtos_xml)
         }
-        
+
     except ET.ParseError as e:
         return {
             'sucesso': False,
             'erro': f'Erro ao analisar XML: {str(e)}',
             'produtos_importados': [],
             'produtos_atualizados': [],
-            'erros': [f'XML inválido: {str(e)}']
+            'erros': [f'XML invalido: {str(e)}']
         }
     except Exception as e:
         return {
@@ -5137,6 +5304,10 @@ def importar_produtos_de_xml(conteudo_xml):
             'produtos_atualizados': [],
             'erros': [str(e)]
         }
+    finally:
+        if conn:
+            conn.close()
+
 
 def garantir_estrutura_nfe_entrada():
     """Garante colunas e indices para rastreabilidade de NF-e de compra."""
@@ -7042,75 +7213,76 @@ def deletar_todas_vendas(restaurar_estoque=True):
     finally:
         conn.close()
 
-def obter_marcas_cadastradas():
-    """Retorna lista de todas as marcas únicas cadastradas no sistema"""
+def obter_marcas_cadastradas(tenant_id=None):
+    """Retorna marcas unicas cadastradas no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
-        # Buscar marcas únicas de produtos
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
         cursor.execute('''
             SELECT DISTINCT marca
             FROM produtos
-            WHERE marca IS NOT NULL AND marca != ''
+            WHERE marca IS NOT NULL AND marca != '' AND tenant_id = %s
             ORDER BY marca
-        ''')
+        ''', (tenant_resolvido,))
         marcas_produtos = [row[0] for row in cursor.fetchall()]
-        
-        # Buscar marcas únicas de movimentações
+
         cursor.execute('''
             SELECT DISTINCT marca
             FROM movimentacoes
-            WHERE marca IS NOT NULL AND marca != ''
+            WHERE marca IS NOT NULL AND marca != '' AND tenant_id = %s
             ORDER BY marca
-        ''')
+        ''', (tenant_resolvido,))
         marcas_movimentacoes = [row[0] for row in cursor.fetchall()]
-        
-        # Combinar e eliminar duplicatas
-        marcas = sorted(list(set(marcas_produtos + marcas_movimentacoes)))
-        
-        conn.close()
-        return marcas
-        
+
+        return sorted(list(set(marcas_produtos + marcas_movimentacoes)))
+
     except Exception as e:
         print(f"Erro ao obter marcas: {e}")
-        conn.close()
         return []
+    finally:
+        conn.close()
 
-def obter_categorias_cadastradas():
-    """Retorna lista de todas as categorias únicas cadastradas no sistema"""
+
+def obter_categorias_cadastradas(tenant_id=None):
+    """Retorna categorias unicas cadastradas no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
-        # Buscar categorias únicas de produtos
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
         cursor.execute('''
             SELECT DISTINCT categoria
             FROM produtos
-            WHERE categoria IS NOT NULL AND categoria != ''
+            WHERE categoria IS NOT NULL AND categoria != '' AND tenant_id = %s
             ORDER BY categoria
-        ''')
+        ''', (tenant_resolvido,))
         categorias_produtos = [row[0] for row in cursor.fetchall()]
-        
-        # Buscar categorias únicas de movimentações
+
         cursor.execute('''
             SELECT DISTINCT categoria
             FROM movimentacoes
-            WHERE categoria IS NOT NULL AND categoria != ''
+            WHERE categoria IS NOT NULL AND categoria != '' AND tenant_id = %s
             ORDER BY categoria
-        ''')
+        ''', (tenant_resolvido,))
         categorias_movimentacoes = [row[0] for row in cursor.fetchall()]
-        
-        # Combinar e eliminar duplicatas
-        categorias = sorted(list(set(categorias_produtos + categorias_movimentacoes)))
-        
-        conn.close()
-        return categorias
-        
+
+        return sorted(list(set(categorias_produtos + categorias_movimentacoes)))
+
     except Exception as e:
         print(f"Erro ao obter categorias: {e}")
-        conn.close()
         return []
+    finally:
+        conn.close()
 
 
 # ========================================
@@ -8056,4 +8228,3 @@ if __name__ == "__main__":
     criar_usuario_admin()
     popular_dados_exemplo()
     print("Banco de dados inicializado com sucesso!")
-

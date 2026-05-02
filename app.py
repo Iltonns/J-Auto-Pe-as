@@ -1376,12 +1376,20 @@ def produtos_fornecedor(id):
 def produtos():
     """Exibe a página de gerenciamento de produtos"""
     try:
+        tenant_id = get_current_tenant_id()
         # Carregar TODOS os produtos para paginação JavaScript
         # Remover paginação server-side para usar paginação client-side
-        produtos_data = listar_produtos(page=1, per_page=999999)  # Carregar todos
+        produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)  # Carregar todos
         
-        fornecedores_lista = obter_fornecedores_para_select()
-        estatisticas = obter_estatisticas_dashboard()
+        fornecedores_lista = obter_fornecedores_para_select(tenant_id=tenant_id)
+        produtos_lista = produtos_data.get('produtos', [])
+        estatisticas = {
+            'produtos_estoque_baixo': len([
+                p for p in produtos_lista
+                if (p.get('estoque') or 0) > 0 and (p.get('estoque') or 0) <= (p.get('estoque_minimo') or 0)
+            ]),
+            'produtos_sem_estoque': len([p for p in produtos_lista if (p.get('estoque') or 0) <= 0])
+        }
         
         return render_template('produtos.html', 
                              produtos=produtos_data['produtos'], 
@@ -1405,7 +1413,7 @@ def buscar_produto_route():
             return jsonify([])
         
         # Usar a função buscar_produto que é mais flexível
-        produtos = buscar_produto(termo)
+        produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
         
         # Renomear 'preco' para 'preco_venda' e converter tipos
         for produto in produtos:
@@ -1458,11 +1466,11 @@ def api_buscar_produtos():
         
         # Se não houver termo, retornar lista completa
         if not termo:
-            produtos_data = listar_produtos(page=1, per_page=999999)
+            produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=get_current_tenant_id())
             produtos = produtos_data['produtos']
         else:
             # Usar a função buscar_produto que já tem a lógica inteligente
-            produtos = buscar_produto(termo)
+            produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
         
         # Filtrar por categoria se especificada
         if categoria and categoria != 'todas':
@@ -1487,7 +1495,7 @@ def api_buscar_produto_unico(termo):
     """Busca um produto específico pelo termo"""
     try:
         # Carregar todos os produtos
-        produtos_data = listar_produtos(page=1, per_page=999999)
+        produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=get_current_tenant_id())
         produtos = produtos_data['produtos']
         
         def converter_decimals(produto):
@@ -1600,10 +1608,14 @@ def adicionar_produto_route():
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id
+            fornecedor_id=fornecedor_id,
+            tenant_id=get_current_tenant_id()
         )
-        
-        flash('Produto adicionado com sucesso!', 'success')
+
+        if produto_id:
+            flash('Produto adicionado com sucesso!', 'success')
+        else:
+            flash('Nao foi possivel adicionar produto para o tenant atual.', 'warning')
         return redirect(url_for('produtos'))
         
     except Exception as e:
@@ -1618,6 +1630,7 @@ def adicionar_produto_route():
 def editar_produto_route(id):
     """Edita um produto existente"""
     try:
+        tenant_id = get_current_tenant_id()
         # Função auxiliar para conversão segura
         def safe_float(value, default=0.0):
             try:
@@ -1632,7 +1645,7 @@ def editar_produto_route(id):
                 return default
 
         # Verificar se produto existe
-        produto_atual = obter_produto_por_id(id)
+        produto_atual = obter_produto_por_id(id, tenant_id=tenant_id)
         if not produto_atual:
             flash('Produto não encontrado!', 'error')
             return redirect(url_for('produtos'))
@@ -1689,7 +1702,7 @@ def editar_produto_route(id):
                     flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
 
         # Atualizar produto no banco
-        editar_produto(
+        atualizado = editar_produto(
             id=id,
             nome=nome,
             preco=preco,
@@ -1703,10 +1716,14 @@ def editar_produto_route(id):
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id
+            fornecedor_id=fornecedor_id,
+            tenant_id=tenant_id
         )
         
-        flash('Produto editado com sucesso!', 'success')
+        if atualizado:
+            flash('Produto editado com sucesso!', 'success')
+        else:
+            flash('Produto nao encontrado para o tenant atual.', 'warning')
         return redirect(url_for('produtos'))
         
     except Exception as e:
@@ -1718,13 +1735,17 @@ def editar_produto_route(id):
 def deletar_produto_route(id):
     """Deleta um produto (marca como inativo)"""
     try:
-        produto = obter_produto_por_id(id)
+        tenant_id = get_current_tenant_id()
+        produto = obter_produto_por_id(id, tenant_id=tenant_id)
         if not produto:
             flash('Produto não encontrado!', 'error')
             return redirect(url_for('produtos'))
         
-        deletar_produto(id)
-        flash('Produto excluído com sucesso!', 'success')
+        removido = deletar_produto(id, tenant_id=tenant_id)
+        if removido:
+            flash('Produto excluido com sucesso!', 'success')
+        else:
+            flash('Produto nao encontrado para o tenant atual.', 'warning')
         
     except Exception as e:
         flash(f'Erro ao excluir produto: {str(e)}', 'error')
@@ -1736,7 +1757,7 @@ def deletar_produto_route(id):
 def deletar_todos_produtos_route():
     """Deleta todos os produtos (função de teste)"""
     try:
-        total_deletados = deletar_todos_os_produtos()
+        total_deletados = deletar_todos_os_produtos(tenant_id=get_current_tenant_id())
         flash(f'Todos os produtos foram removidos com sucesso! ({total_deletados} produtos)', 'success')
     except Exception as e:
         flash(f'Erro ao deletar todos os produtos: {str(e)}', 'error')
@@ -1843,7 +1864,8 @@ def importar_produtos_xml_route():
                     margem_padrao=margem_padrao,
                     estoque_minimo=estoque_minimo_padrao,
                     usar_preco_nfe=usar_preco_nfe,
-                    acao_existente=acao_existente
+                    acao_existente=acao_existente,
+                    tenant_id=get_current_tenant_id()
                 )
                 
                 if resultado['sucesso']:
@@ -4458,7 +4480,7 @@ def exportar_financeiro_pdf():
 def api_marcas():
     """Retorna todas as marcas cadastradas no sistema"""
     try:
-        marcas = obter_marcas_cadastradas()
+        marcas = obter_marcas_cadastradas(tenant_id=get_current_tenant_id())
         return jsonify(marcas)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
@@ -4468,7 +4490,7 @@ def api_marcas():
 def api_categorias():
     """Retorna todas as categorias cadastradas no sistema"""
     try:
-        categorias = obter_categorias_cadastradas()
+        categorias = obter_categorias_cadastradas(tenant_id=get_current_tenant_id())
         return jsonify(categorias)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
@@ -4498,4 +4520,3 @@ if __name__ == '__main__':
     
     # Rodar a aplicação
     app.run(debug=True, host='0.0.0.0', port=5000)
-
