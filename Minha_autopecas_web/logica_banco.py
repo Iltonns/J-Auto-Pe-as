@@ -260,6 +260,34 @@ def _resolver_tenant_id_produtos(tenant_id=None, permitir_global=True):
 
     raise ValueError("tenant_id nao informado para operacao do modulo de produtos.")
 
+def _resolver_tenant_id_movimentacoes(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes do modulo de movimentacoes/estoque.
+    Prioridade: parametro explicito > contexto Flask (g/session) > fallback de tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id nao informado para operacao do modulo de movimentacoes.")
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -2582,19 +2610,32 @@ def limpar_completamente_produtos():
     finally:
         conn.close()
 
-def atualizar_estoque(produto_id, quantidade):
-    """Atualiza o estoque de um produto (diminui)"""
+def atualizar_estoque(produto_id, quantidade, tenant_id=None):
+    """Atualiza o estoque de um produto (diminui), respeitando o tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE produtos 
-        SET estoque = estoque - %s 
-        WHERE id = %s
-    ''', (quantidade, produto_id))
-    
-    conn.commit()
-    conn.close()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para atualizar estoque.")
+
+        cursor.execute('''
+            UPDATE produtos
+            SET estoque = estoque - %s
+            WHERE id = %s AND tenant_id = %s
+        ''', (quantidade, produto_id, tenant_resolvido))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Produto nao encontrado para o tenant atual.")
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # FUNÇÕES DE MOVIMENTAÇÕES DE PRODUTOS
 def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='entrada', origem='manual',
@@ -2603,7 +2644,7 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
                           marca=None, fornecedor_id=None, ncm=None, unidade='UN',
                           xml_nfe_chave=None, xml_nfe_numero=None, xml_nfe_data=None,
                           xml_produto_codigo=None, xml_conteudo=None, usuario_id=None, observacoes=None,
-                          forcar_pendente=False, conn=None, cursor=None):
+                          forcar_pendente=False, conn=None, cursor=None, tenant_id=None):
     """Adiciona uma nova movimentação e a aprova automaticamente se o produto já existir."""
     local_conn = False
     if conn is None or cursor is None:
@@ -2612,16 +2653,29 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
         local_conn = True
 
     try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para adicionar movimentacao.")
+
+        fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
+
         # 1. Verificar se o produto já existe (PRIORIDADE: Código do Fornecedor)
         produto_existente_id = None
         if codigo_fornecedor:
-            cursor.execute("SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE", (codigo_fornecedor,))
+            cursor.execute(
+                "SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE AND tenant_id = %s",
+                (codigo_fornecedor, tenant_resolvido)
+            )
             result = cursor.fetchone()
             if result:
                 produto_existente_id = result[0]
 
         if not produto_existente_id and codigo_barras:
-            cursor.execute("SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE", (codigo_barras,))
+            cursor.execute(
+                "SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE AND tenant_id = %s",
+                (codigo_barras, tenant_resolvido)
+            )
             result = cursor.fetchone()
             if result:
                 produto_existente_id = result[0]
@@ -2642,15 +2696,15 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
                 descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
                 margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
                 xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
-                usuario_criacao, observacoes, produto_id
+                usuario_criacao, observacoes, produto_id, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         ''', (tipo_movimentacao, origem, status_inicial, nome, codigo_barras, codigo_fornecedor,
               descricao, categoria, marca, ncm, unidade, quantidade, preco_custo,
               margem_lucro, preco_venda, estoque_minimo, fornecedor_id, foto_url,
               xml_nfe_chave, xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo,
-              usuario_id, observacoes, produto_existente_id))
+              usuario_id, observacoes, produto_existente_id, tenant_resolvido))
         
         movimentacao_id = cursor.fetchone()[0]
 
@@ -2658,7 +2712,13 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
         if status_inicial == 'aprovada':
             print(f"[AUTO-APROVACAO] Movimentação {movimentacao_id} para produto existente ID {produto_existente_id}. Aprovando...")
             # Chamar a lógica de aprovação diretamente
-            aprovar_movimentacao(movimentacao_id, usuario_id, conn, cursor)
+            aprovar_movimentacao(
+                movimentacao_id,
+                usuario_id,
+                conn=conn,
+                cursor=cursor,
+                tenant_id=tenant_resolvido
+            )
 
         if local_conn:
             conn.commit()
@@ -2673,61 +2733,74 @@ def adicionar_movimentacao(nome, preco_venda, quantidade=0, tipo_movimentacao='e
         if local_conn:
             conn.close()
 
-def listar_movimentacoes(status=None, tipo_movimentacao=None):
+def listar_movimentacoes(status=None, tipo_movimentacao=None, tenant_id=None):
     """Lista todas as movimentações, opcionalmente filtrando por status e tipo"""
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
+    tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar movimentacoes.")
+
     query = '''
         SELECT m.*, 
                f.nome as fornecedor_nome,
                u.nome_completo as usuario_nome,
                ua.nome_completo as usuario_aprovacao_nome
         FROM movimentacoes m
-        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
-        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
-        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id
-        WHERE 1=1
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id AND f.tenant_id = m.tenant_id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id AND u.tenant_id = m.tenant_id
+        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id AND ua.tenant_id = m.tenant_id
+        WHERE m.tenant_id = %s
     '''
-    params = []
-    
+    params = [tenant_resolvido]
+
     if status:
         query += " AND m.status = %s"
         params.append(status)
-    
+
     if tipo_movimentacao:
         query += " AND m.tipo_movimentacao = %s"
         params.append(tipo_movimentacao)
-    
+
     query += " ORDER BY m.data_criacao DESC"
-    
+
     cursor.execute(query, params)
     movimentacoes = cursor.fetchall()
     conn.close()
     return movimentacoes
 
-def obter_movimentacao_por_id(movimentacao_id):
+def obter_movimentacao_por_id(movimentacao_id, tenant_id=None):
     """Busca uma movimentação específica por ID"""
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
+    tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para buscar movimentacao.")
+
     cursor.execute('''
         SELECT m.*, 
                f.nome as fornecedor_nome,
                u.nome_completo as usuario_nome
         FROM movimentacoes m
-        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
-        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
-        WHERE m.id = %s
-    ''', (movimentacao_id,))
-    
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id AND f.tenant_id = m.tenant_id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id AND u.tenant_id = m.tenant_id
+        WHERE m.id = %s AND m.tenant_id = %s
+    ''', (movimentacao_id, tenant_resolvido))
+
     movimentacao = cursor.fetchone()
     conn.close()
     return movimentacao
 
 def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_minimo=1,
                        codigo_barras=None, descricao=None, categoria=None, codigo_fornecedor=None,
-                       preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None):
+                       preco_custo=0, margem_lucro=0, foto_url=None, marca=None, fornecedor_id=None,
+                       tenant_id=None):
     """Edita uma movimentação pendente"""
     print(f"[DEBUG] Iniciando edição da movimentação ID: {movimentacao_id}")
     print(f"[DEBUG] Dados recebidos: nome={nome}, preco_venda={preco_venda}, preco_custo={preco_custo}, quantidade={quantidade}")
@@ -2747,9 +2820,20 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para editar movimentacao.")
+
+    fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
     
     # Verificar se a movimentação está pendente
-    cursor.execute('SELECT status, foto_url FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+    cursor.execute(
+        'SELECT status, foto_url FROM movimentacoes WHERE id = %s AND tenant_id = %s',
+        (movimentacao_id, tenant_resolvido)
+    )
     result = cursor.fetchone()
     
     if not result:
@@ -2774,9 +2858,9 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
         SET nome = %s, preco_venda = %s, quantidade = %s, estoque_minimo = %s,
             codigo_barras = %s, descricao = %s, categoria = %s, codigo_fornecedor = %s,
             preco_custo = %s, margem_lucro = %s, foto_url = %s, marca = %s, fornecedor_id = %s
-        WHERE id = %s AND status = 'pendente'
+        WHERE id = %s AND tenant_id = %s AND status = 'pendente'
     ''', (nome, preco_venda, quantidade, estoque_minimo, codigo_barras, descricao, categoria,
-          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, movimentacao_id))
+          codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id, movimentacao_id, tenant_resolvido))
     
     linhas_afetadas = cursor.rowcount
     print(f"[DEBUG] Linhas afetadas pelo UPDATE: {linhas_afetadas}")
@@ -2787,9 +2871,8 @@ def editar_movimentacao(movimentacao_id, nome, preco_venda, quantidade, estoque_
     print(f"[DEBUG] Edição concluída com sucesso! Foto final: {foto_url}, Margem final: {margem_lucro:.2f}%")
     return True
 
-def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None):
-    """Aprova uma movimentação e cria/atualiza o produto no estoque."""
-    # Gerenciar conexão e cursor
+def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None, tenant_id=None):
+    """Aprova uma movimentação e cria/atualiza o produto no estoque no mesmo tenant."""
     local_conn = False
     if conn is None or cursor is None:
         conn = get_db_connection()
@@ -2797,82 +2880,169 @@ def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None):
         local_conn = True
 
     try:
-        # Buscar dados da movimentação
-        cursor.execute('SELECT * FROM movimentacoes WHERE id = %s', (movimentacao_id,))
-        mov = cursor.fetchone()
-        
-        if not mov:
-            raise ValueError("Movimentação não encontrada")
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para aprovar movimentacao.")
 
-        # Extrair dados da movimentação (usando índices de coluna)
-        mov_id, tipo_mov, origem, status, nome, cod_barras, cod_forn, desc, cat, marca, ncm, unid, qtd, p_custo, m_lucro, p_venda, est_min, forn_id, produto_id_mov, foto, xml_chave, xml_num, xml_data, xml_prod_cod, xml_cont, user_c, user_a, data_c, data_a, obs, motivo_r = mov
+        cursor.execute('''
+            SELECT
+                id, tipo_movimentacao, origem, status, nome, codigo_barras, codigo_fornecedor,
+                descricao, categoria, marca, ncm, unidade, quantidade, preco_custo, margem_lucro,
+                preco_venda, estoque_minimo, fornecedor_id, produto_id, foto_url, xml_nfe_chave,
+                xml_nfe_numero, xml_nfe_data, xml_produto_codigo, xml_conteudo, usuario_criacao,
+                usuario_aprovacao, data_criacao, data_aprovacao, observacoes, motivo_rejeicao, tenant_id
+            FROM movimentacoes
+            WHERE id = %s AND tenant_id = %s
+        ''', (movimentacao_id, tenant_resolvido))
+        mov_row = cursor.fetchone()
 
-        if status != 'pendente' and status != 'aprovada': # Permitir re-aprovação
-            raise ValueError(f"Apenas movimentações pendentes ou já aprovadas podem ser processadas. Status atual: {status}")
+        if not mov_row:
+            raise ValueError("Movimentacao nao encontrada para o tenant atual.")
 
-        # Verificar se produto já existe (PRIORIDADE: Código do Fornecedor)
-        produto_id = produto_id_mov
-        if not produto_id:
-            if cod_forn:
-                cursor.execute('SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE', (cod_forn,))
-                res = cursor.fetchone()
-                if res: produto_id = res[0]
-            if not produto_id and cod_barras:
-                cursor.execute('SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE', (cod_barras,))
-                res = cursor.fetchone()
-                if res: produto_id = res[0]
+        if isinstance(mov_row, dict):
+            mov = mov_row
+        else:
+            colunas = [desc[0] for desc in cursor.description]
+            mov = dict(zip(colunas, mov_row))
 
-        # Atualizar ou criar produto
+        status = mov.get('status')
+        if status not in ('pendente', 'aprovada'):
+            raise ValueError(
+                f"Apenas movimentacoes pendentes ou aprovadas podem ser processadas. Status atual: {status}"
+            )
+
+        nome = mov.get('nome')
+        cod_barras = mov.get('codigo_barras')
+        cod_forn = mov.get('codigo_fornecedor')
+        desc = mov.get('descricao')
+        cat = mov.get('categoria')
+        marca = mov.get('marca')
+        ncm = mov.get('ncm')
+        unid = mov.get('unidade')
+        qtd = mov.get('quantidade') or 0
+        p_custo = mov.get('preco_custo')
+        m_lucro = mov.get('margem_lucro')
+        p_venda = mov.get('preco_venda')
+        est_min = mov.get('estoque_minimo')
+        forn_id = mov.get('fornecedor_id')
+        foto = mov.get('foto_url')
+        produto_id = mov.get('produto_id')
+
         if produto_id:
-            # Produto existe - ATUALIZAR
+            cursor.execute(
+                "SELECT id FROM produtos WHERE id = %s AND tenant_id = %s AND ativo = TRUE",
+                (produto_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Produto vinculado na movimentacao nao pertence ao tenant atual.")
+        else:
+            if cod_forn:
+                cursor.execute(
+                    "SELECT id FROM produtos WHERE codigo_fornecedor = %s AND ativo = TRUE AND tenant_id = %s",
+                    (cod_forn, tenant_resolvido)
+                )
+                res = cursor.fetchone()
+                if res:
+                    produto_id = res[0]
+
+            if not produto_id and cod_barras:
+                cursor.execute(
+                    "SELECT id FROM produtos WHERE codigo_barras = %s AND ativo = TRUE AND tenant_id = %s",
+                    (cod_barras, tenant_resolvido)
+                )
+                res = cursor.fetchone()
+                if res:
+                    produto_id = res[0]
+
+        if produto_id:
             print(f"[APROVACAO] Produto {produto_id} existe. Atualizando...")
             update_fields = []
             params = []
 
-            # Adicionar campos para atualização se tiverem valor
-            if nome: update_fields.append("nome = %s"); params.append(nome)
-            if p_venda: update_fields.append("preco = %s"); params.append(p_venda)
-            if p_custo: update_fields.append("preco_custo = %s"); params.append(p_custo)
-            if m_lucro: update_fields.append("margem_lucro = %s"); params.append(m_lucro)
-            if desc: update_fields.append("descricao = %s"); params.append(desc)
-            if cat: update_fields.append("categoria = %s"); params.append(cat)
-            if marca: update_fields.append("marca = %s"); params.append(marca)
-            if forn_id: update_fields.append("fornecedor_id = %s"); params.append(forn_id)
-            if est_min: update_fields.append("estoque_minimo = %s"); params.append(est_min)
-            if ncm: update_fields.append("ncm = %s"); params.append(ncm)
-            if unid: update_fields.append("unidade = %s"); params.append(unid)
-            if foto: update_fields.append("foto_url = %s"); params.append(foto)
+            if nome:
+                update_fields.append("nome = %s")
+                params.append(nome)
+            if p_venda:
+                update_fields.append("preco = %s")
+                params.append(p_venda)
+            if p_custo:
+                update_fields.append("preco_custo = %s")
+                params.append(p_custo)
+            if m_lucro:
+                update_fields.append("margem_lucro = %s")
+                params.append(m_lucro)
+            if desc:
+                update_fields.append("descricao = %s")
+                params.append(desc)
+            if cat:
+                update_fields.append("categoria = %s")
+                params.append(cat)
+            if marca:
+                update_fields.append("marca = %s")
+                params.append(marca)
+            if forn_id:
+                update_fields.append("fornecedor_id = %s")
+                params.append(forn_id)
+            if est_min:
+                update_fields.append("estoque_minimo = %s")
+                params.append(est_min)
+            if ncm:
+                update_fields.append("ncm = %s")
+                params.append(ncm)
+            if unid:
+                update_fields.append("unidade = %s")
+                params.append(unid)
+            if foto:
+                update_fields.append("foto_url = %s")
+                params.append(foto)
 
             if update_fields:
-                query = f"UPDATE produtos SET estoque = estoque + %s, { ', '.join(update_fields) } WHERE id = %s"
+                query = f"""
+                    UPDATE produtos
+                    SET estoque = estoque + %s, {', '.join(update_fields)}
+                    WHERE id = %s AND tenant_id = %s
+                """
                 params.insert(0, qtd)
                 params.append(produto_id)
+                params.append(tenant_resolvido)
                 cursor.execute(query, tuple(params))
             else:
-                # Se nenhum campo for atualizado, apenas o estoque
-                cursor.execute("UPDATE produtos SET estoque = estoque + %s WHERE id = %s", (qtd, produto_id))
+                cursor.execute(
+                    "UPDATE produtos SET estoque = estoque + %s WHERE id = %s AND tenant_id = %s",
+                    (qtd, produto_id, tenant_resolvido)
+                )
+
+            if cursor.rowcount == 0:
+                raise ValueError("Falha ao atualizar estoque: produto nao pertence ao tenant atual.")
         else:
-            # Produto não existe - CRIAR
-            print(f"[APROVACAO] Criando novo produto.")
+            print("[APROVACAO] Criando novo produto.")
             cursor.execute('''
-                INSERT INTO produtos (nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
-                                    codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
-                                    ncm, unidade, ativo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                INSERT INTO produtos (
+                    nome, preco, estoque, estoque_minimo, codigo_barras, descricao, categoria,
+                    codigo_fornecedor, preco_custo, margem_lucro, foto_url, marca, fornecedor_id,
+                    ncm, unidade, ativo, tenant_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
                 RETURNING id
-            ''', (nome, p_venda, qtd, est_min, cod_barras, desc, cat, cod_forn, p_custo, m_lucro, foto, marca, forn_id, ncm, unid))
+            ''', (
+                nome, p_venda, qtd, est_min, cod_barras, desc, cat, cod_forn, p_custo, m_lucro,
+                foto, marca, forn_id, ncm, unid, tenant_resolvido
+            ))
             produto_id = cursor.fetchone()[0]
 
-        # Atualizar status da movimentação
         cursor.execute('''
-            UPDATE movimentacoes 
+            UPDATE movimentacoes
             SET status = 'aprovada', usuario_aprovacao = %s, data_aprovacao = %s, produto_id = %s
-            WHERE id = %s
-        ''', (usuario_id, agora_br(), produto_id, movimentacao_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (usuario_id, agora_br(), produto_id, movimentacao_id, tenant_resolvido))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Falha ao aprovar movimentacao para o tenant atual.")
 
         if local_conn:
             conn.commit()
-        
+
         return produto_id
 
     except Exception as e:
@@ -2884,48 +3054,79 @@ def aprovar_movimentacao(movimentacao_id, usuario_id, conn=None, cursor=None):
         if local_conn:
             conn.close()
 
-def cancelar_movimentacao(movimentacao_id, usuario_id, motivo_cancelamento):
+def cancelar_movimentacao(movimentacao_id, usuario_id, motivo_cancelamento, tenant_id=None):
     """Cancela uma movimentação (permite deletar depois)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE movimentacoes 
-        SET status = 'cancelada', usuario_aprovacao = %s, data_aprovacao = %s,
-            motivo_rejeicao = %s
-        WHERE id = %s AND status = 'pendente'
-    ''', (usuario_id, agora_br(), motivo_cancelamento, movimentacao_id))
-    
-    conn.commit()
-    conn.close()
-    return True
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para cancelar movimentacao.")
+
+        cursor.execute('''
+            UPDATE movimentacoes
+            SET status = 'cancelada', usuario_aprovacao = %s, data_aprovacao = %s,
+                motivo_rejeicao = %s
+            WHERE id = %s AND tenant_id = %s AND status = 'pendente'
+        ''', (usuario_id, agora_br(), motivo_cancelamento, movimentacao_id, tenant_resolvido))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Movimentacao nao encontrada/pendente para o tenant atual.")
+
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # Mantém compatibilidade com código antigo
-def rejeitar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao):
+def rejeitar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao, tenant_id=None):
     """DEPRECATED: Use cancelar_movimentacao()"""
-    return cancelar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao)
+    return cancelar_movimentacao(movimentacao_id, usuario_id, motivo_rejeicao, tenant_id=tenant_id)
 
-def deletar_movimentacao(movimentacao_id):
+def deletar_movimentacao(movimentacao_id, tenant_id=None):
     """Deleta uma movimentação pendente ou cancelada"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Verificar se está pendente ou cancelada antes de deletar
-    cursor.execute('SELECT status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
-    result = cursor.fetchone()
-    
-    if not result:
-        conn.close()
-        raise ValueError("Movimentação não encontrada")
-    
-    if result[0] not in ['pendente', 'cancelada']:
-        conn.close()
-        raise ValueError("Apenas movimentações pendentes ou canceladas podem ser deletadas")
-    
-    conn.close()
-    return True
 
-def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
+    try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para deletar movimentacao.")
+
+        cursor.execute(
+            'SELECT status FROM movimentacoes WHERE id = %s AND tenant_id = %s',
+            (movimentacao_id, tenant_resolvido)
+        )
+        result = cursor.fetchone()
+
+        if not result:
+            raise ValueError("Movimentacao nao encontrada para o tenant atual.")
+
+        if result[0] not in ['pendente', 'cancelada']:
+            raise ValueError("Apenas movimentacoes pendentes ou canceladas podem ser deletadas")
+
+        cursor.execute(
+            "DELETE FROM movimentacoes WHERE id = %s AND tenant_id = %s",
+            (movimentacao_id, tenant_resolvido)
+        )
+        if cursor.rowcount == 0:
+            raise ValueError("Falha ao deletar movimentacao para o tenant atual.")
+
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id, tenant_id=None):
     """
     Vincula uma movimentação pendente a um produto existente no estoque.
     Atualiza os dados da movimentação com os dados do produto existente,
@@ -2936,8 +3137,16 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False, "Nao foi possivel resolver tenant_id para vincular movimentacao."
+
         # 1. Verificar se a movimentação existe e está pendente
-        cursor.execute("SELECT status FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+        cursor.execute(
+            "SELECT status FROM movimentacoes WHERE id = %s AND tenant_id = %s",
+            (movimentacao_id, tenant_resolvido)
+        )
         movimentacao = cursor.fetchone()
         
         if not movimentacao:
@@ -2948,7 +3157,7 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
             
         # 2. Buscar os dados do produto de destino
         # Usando a função já existente para consistência
-        produto_existente = obter_produto_por_id(produto_id)
+        produto_existente = obter_produto_por_id(produto_id, tenant_id=tenant_resolvido)
 
         if not produto_existente:
             return False, "Produto de destino não encontrado ou está inativo."
@@ -2972,7 +3181,7 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
                 fornecedor_id = %(fornecedor_id)s,
                 foto_url = %(foto_url)s,
                 observacoes = COALESCE(observacoes, '') || %(observacao)s
-            WHERE id = %(movimentacao_id)s
+            WHERE id = %(movimentacao_id)s AND tenant_id = %(tenant_id)s
         """, {
             'produto_id': produto_id,
             'nome': produto_existente.get('nome'),
@@ -2987,7 +3196,8 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
             'fornecedor_id': produto_existente.get('fornecedor_id'),
             'foto_url': produto_existente.get('foto_url'),
             'observacao': f'\n[Vinculado ao produto ID {produto_id} por usuário {usuario_id} em {agora_br().strftime("%Y-%m-%d %H:%M:%S")}]',
-            'movimentacao_id': movimentacao_id
+            'movimentacao_id': movimentacao_id,
+            'tenant_id': tenant_resolvido
         })
         
         conn.commit()
@@ -3006,14 +3216,22 @@ def vincular_produto_nfe(movimentacao_id, produto_id, usuario_id):
     finally:
         conn.close()
 
-def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id):
+def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id, tenant_id=None):
     """Reverte o estoque de uma movimentação aprovada e a deleta."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para reverter/deletar movimentacao.")
+
         # Buscar dados da movimentação
-        cursor.execute('SELECT produto_id, quantidade, status FROM movimentacoes WHERE id = %s', (movimentacao_id,))
+        cursor.execute(
+            'SELECT produto_id, quantidade, status FROM movimentacoes WHERE id = %s AND tenant_id = %s',
+            (movimentacao_id, tenant_resolvido)
+        )
         mov = cursor.fetchone()
 
         if not mov:
@@ -3028,16 +3246,27 @@ def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id):
             # Se não há produto_id, a movimentação, embora aprovada, não afetou o estoque.
             # Apenas deletar a movimentação.
             print(f"[REVERSAO] Movimentação {movimentacao_id} não tem produto associado. Apenas deletando.")
-            cursor.execute("DELETE FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+            cursor.execute(
+                "DELETE FROM movimentacoes WHERE id = %s AND tenant_id = %s",
+                (movimentacao_id, tenant_resolvido)
+            )
             conn.commit()
             return True, f"Movimentação {movimentacao_id} deletada (não havia estoque para reverter)."
 
         # Reverter o estoque do produto
         print(f"[REVERSAO] Revertendo {quantidade} unidade(s) do produto ID {produto_id}.")
-        cursor.execute("UPDATE produtos SET estoque = estoque - %s WHERE id = %s", (quantidade, produto_id))
+        cursor.execute(
+            "UPDATE produtos SET estoque = estoque - %s WHERE id = %s AND tenant_id = %s",
+            (quantidade, produto_id, tenant_resolvido)
+        )
+        if cursor.rowcount == 0:
+            raise ValueError("Produto da movimentacao nao pertence ao tenant atual.")
 
         # Deletar a movimentação
-        cursor.execute("DELETE FROM movimentacoes WHERE id = %s", (movimentacao_id,))
+        cursor.execute(
+            "DELETE FROM movimentacoes WHERE id = %s AND tenant_id = %s",
+            (movimentacao_id, tenant_resolvido)
+        )
         print(f"[REVERSAO] Movimentação {movimentacao_id} deletada.")
 
         conn.commit()
@@ -3050,24 +3279,40 @@ def reverter_e_deletar_movimentacao_aprovada(movimentacao_id, usuario_id):
     finally:
         conn.close()
 
-def contar_movimentacoes_pendentes():
+def contar_movimentacoes_pendentes(tenant_id=None):
     """Conta o número de movimentações pendentes"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) FROM movimentacoes WHERE status = 'pendente'")
-    count = cursor.fetchone()[0]
-    conn.close()
-    return count
 
-def listar_nfes_agrupadas(status=None):
+    try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para contar movimentacoes.")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM movimentacoes WHERE status = 'pendente' AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
+        count = cursor.fetchone()[0]
+        return count
+    finally:
+        conn.close()
+
+def listar_nfes_agrupadas(status=None, tenant_id=None):
     """
     Lista as NFes com movimentações agrupadas
     Retorna informações resumidas de cada NFe com contagem de produtos
     """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
+    tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar NFes agrupadas.")
+
     query = '''
         SELECT 
             COALESCE(m.xml_nfe_numero, 'MANUAL-' || m.id) as nfe_identificador,
@@ -3093,13 +3338,13 @@ def listar_nfes_agrupadas(status=None):
                 ELSE 'parcial'
             END as status_nfe
         FROM movimentacoes m
-        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
-        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
-        WHERE 1=1
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id AND f.tenant_id = m.tenant_id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id AND u.tenant_id = m.tenant_id
+        WHERE m.tenant_id = %s
     '''
-    
-    params = []
-    
+
+    params = [tenant_resolvido]
+
     if status:
         # Filtrar pelo status dos itens
         query += " AND m.status = %s"
@@ -3118,27 +3363,33 @@ def listar_nfes_agrupadas(status=None):
     conn.close()
     return nfes
 
-def listar_produtos_por_nfe(nfe_numero=None, nfe_identificador=None):
+def listar_produtos_por_nfe(nfe_numero=None, nfe_identificador=None, tenant_id=None):
     """
     Lista todos os produtos/movimentações de uma NFe específica
     """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
+    tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar produtos por NFe.")
+
     query = '''
         SELECT m.*, 
                f.nome as fornecedor_nome,
                u.nome_completo as usuario_nome,
                ua.nome_completo as usuario_aprovacao_nome
         FROM movimentacoes m
-        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
-        LEFT JOIN usuarios u ON m.usuario_criacao = u.id
-        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id
-        WHERE 1=1
+        LEFT JOIN fornecedores f ON m.fornecedor_id = f.id AND f.tenant_id = m.tenant_id
+        LEFT JOIN usuarios u ON m.usuario_criacao = u.id AND u.tenant_id = m.tenant_id
+        LEFT JOIN usuarios ua ON m.usuario_aprovacao = ua.id AND ua.tenant_id = m.tenant_id
+        WHERE m.tenant_id = %s
     '''
-    
-    params = []
-    
+
+    params = [tenant_resolvido]
+
     if nfe_numero:
         query += " AND m.xml_nfe_numero = %s"
         params.append(nfe_numero)
@@ -3155,14 +3406,19 @@ def listar_produtos_por_nfe(nfe_numero=None, nfe_identificador=None):
     conn.close()
     return produtos
 
-def aprovar_nfe_completa(nfe_numero, usuario_id):
+def aprovar_nfe_completa(nfe_numero, usuario_id, tenant_id=None):
     """
     Aprova todos os produtos pendentes de uma NFe de uma vez
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para aprovar NFe.")
+
         # Buscar todas as movimentações pendentes da NFe
         # Suporta tanto NFe importadas quanto movimentações manuais
         if nfe_numero.startswith('MANUAL-'):
@@ -3170,47 +3426,61 @@ def aprovar_nfe_completa(nfe_numero, usuario_id):
             id_manual = nfe_numero.replace('MANUAL-', '')
             cursor.execute('''
                 SELECT id FROM movimentacoes 
-                WHERE id = %s AND status = 'pendente' AND origem = 'manual'
-            ''', (int(id_manual),))
+                WHERE id = %s AND tenant_id = %s AND status = 'pendente' AND origem = 'manual'
+            ''', (int(id_manual), tenant_resolvido))
         else:
             # NFe importada
             cursor.execute('''
                 SELECT id FROM movimentacoes 
-                WHERE xml_nfe_numero = %s AND status = 'pendente'
-            ''', (nfe_numero,))
-        
+                WHERE xml_nfe_numero = %s AND tenant_id = %s AND status = 'pendente'
+            ''', (nfe_numero, tenant_resolvido))
+
         movimentacoes_pendentes = cursor.fetchall()
+        conn.close()
         produtos_aprovados = []
-        
+
         for mov in movimentacoes_pendentes:
             try:
-                produto_id = aprovar_movimentacao(mov[0], usuario_id)
+                produto_id = aprovar_movimentacao(mov[0], usuario_id, tenant_id=tenant_resolvido)
                 produtos_aprovados.append(produto_id)
             except Exception as e:
                 # Se falhar em uma movimentação específica, continua com as outras
                 print(f"[AVISO] Erro ao aprovar movimentação {mov[0]}: {str(e)}")
                 continue
-        
+
         return {
             'sucesso': True,
             'total_aprovados': len(produtos_aprovados),
             'produtos_ids': produtos_aprovados
         }
-        
+
     except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
         return {
             'sucesso': False,
             'erro': str(e)
         }
 
-def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento):
+def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento, tenant_id=None):
     """
     Cancela todos os produtos pendentes de uma NFe de uma vez (permite deletar depois)
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para cancelar NFe.")
+
         # Suporta tanto NFe importadas quanto movimentações manuais
         if nfe_numero.startswith('MANUAL-'):
             # Movimentação manual
@@ -3221,8 +3491,8 @@ def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento):
                     usuario_aprovacao = %s, 
                     data_aprovacao = CURRENT_TIMESTAMP,
                     motivo_rejeicao = %s
-                WHERE id = %s AND status = 'pendente' AND origem = 'manual'
-            ''', (usuario_id, motivo_cancelamento, int(id_manual)))
+                WHERE id = %s AND tenant_id = %s AND status = 'pendente' AND origem = 'manual'
+            ''', (usuario_id, motivo_cancelamento, int(id_manual), tenant_resolvido))
         else:
             # NFe importada
             cursor.execute('''
@@ -3231,13 +3501,13 @@ def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento):
                     usuario_aprovacao = %s, 
                     data_aprovacao = CURRENT_TIMESTAMP,
                     motivo_rejeicao = %s
-                WHERE xml_nfe_numero = %s AND status = 'pendente'
-            ''', (usuario_id, motivo_cancelamento, nfe_numero))
-        
+                WHERE xml_nfe_numero = %s AND tenant_id = %s AND status = 'pendente'
+            ''', (usuario_id, motivo_cancelamento, nfe_numero, tenant_resolvido))
+
         total_cancelados = cursor.rowcount
         conn.commit()
         conn.close()
-        
+
         return {
             'sucesso': True,
             'total_cancelados': total_cancelados
@@ -3251,9 +3521,9 @@ def cancelar_nfe_completa(nfe_numero, usuario_id, motivo_cancelamento):
         }
 
 # Mantém compatibilidade com código antigo
-def rejeitar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao):
+def rejeitar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao, tenant_id=None):
     """DEPRECATED: Use cancelar_nfe_completa()"""
-    return cancelar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao)
+    return cancelar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao, tenant_id=tenant_id)
 
 # FUNÇÕES DE VENDAS
 def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None):
@@ -5438,42 +5708,69 @@ def _extrair_dados_financeiros_nfe(root, ns, data_emissao, valor_total_nota):
     return parcelas, tipo_geracao, codigos_pagamento
 
 
-def _nfe_entrada_duplicada(cursor, nfe_chave, nfe_numero=None, fornecedor_id=None):
+def _nfe_entrada_duplicada(cursor, nfe_chave, nfe_numero=None, fornecedor_id=None, tenant_id=None):
+    tenant_normalizado = _normalizar_tenant_id(tenant_id)
+
     if nfe_chave:
-        cursor.execute("""
-            SELECT id
-            FROM movimentacoes
-            WHERE origem = 'xml_nfe' AND xml_nfe_chave = %s
-            LIMIT 1
-        """, (nfe_chave,))
+        if tenant_normalizado is not None:
+            cursor.execute("""
+                SELECT id
+                FROM movimentacoes
+                WHERE origem = 'xml_nfe' AND xml_nfe_chave = %s AND tenant_id = %s
+                LIMIT 1
+            """, (nfe_chave, tenant_normalizado))
+        else:
+            cursor.execute("""
+                SELECT id
+                FROM movimentacoes
+                WHERE origem = 'xml_nfe' AND xml_nfe_chave = %s
+                LIMIT 1
+            """, (nfe_chave,))
         if cursor.fetchone():
             return True
 
-        cursor.execute("""
-            SELECT id
-            FROM contas_pagar
-            WHERE tipo_lancamento = 'nf_compra' AND nfe_chave = %s
-            LIMIT 1
-        """, (nfe_chave,))
+        if tenant_normalizado is not None:
+            cursor.execute("""
+                SELECT id
+                FROM contas_pagar
+                WHERE tipo_lancamento = 'nf_compra' AND nfe_chave = %s AND tenant_id = %s
+                LIMIT 1
+            """, (nfe_chave, tenant_normalizado))
+        else:
+            cursor.execute("""
+                SELECT id
+                FROM contas_pagar
+                WHERE tipo_lancamento = 'nf_compra' AND nfe_chave = %s
+                LIMIT 1
+            """, (nfe_chave,))
         if cursor.fetchone():
             return True
 
     if nfe_numero and fornecedor_id:
-        cursor.execute("""
-            SELECT id
-            FROM movimentacoes
-            WHERE origem = 'xml_nfe' AND xml_nfe_numero = %s AND fornecedor_id = %s
-            LIMIT 1
-        """, (nfe_numero, fornecedor_id))
+        if tenant_normalizado is not None:
+            cursor.execute("""
+                SELECT id
+                FROM movimentacoes
+                WHERE origem = 'xml_nfe' AND xml_nfe_numero = %s AND fornecedor_id = %s AND tenant_id = %s
+                LIMIT 1
+            """, (nfe_numero, fornecedor_id, tenant_normalizado))
+        else:
+            cursor.execute("""
+                SELECT id
+                FROM movimentacoes
+                WHERE origem = 'xml_nfe' AND xml_nfe_numero = %s AND fornecedor_id = %s
+                LIMIT 1
+            """, (nfe_numero, fornecedor_id))
         if cursor.fetchone():
             return True
 
     return False
 
 
-def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_geracao, codigos_pagamento):
+def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_geracao, codigos_pagamento, tenant_id=None):
     contas_criadas = 0
     contas_existentes = 0
+    tenant_normalizado = _normalizar_tenant_id(tenant_id)
 
     descricao_base = f"NF Compra {dados_nfe['nfe_numero']}"
     codigos_pag_txt = ','.join(codigos_pagamento) if codigos_pagamento else 'N/A'
@@ -5486,14 +5783,25 @@ def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_ger
         if valor_parcela <= 0:
             continue
 
-        cursor.execute("""
-            SELECT id
-            FROM contas_pagar
-            WHERE tipo_lancamento = 'nf_compra'
-              AND nfe_chave = %s
-              AND COALESCE(nfe_parcela, '001') = %s
-            LIMIT 1
-        """, (dados_nfe['nfe_chave'], numero_parcela))
+        if tenant_normalizado is not None:
+            cursor.execute("""
+                SELECT id
+                FROM contas_pagar
+                WHERE tipo_lancamento = 'nf_compra'
+                  AND nfe_chave = %s
+                  AND COALESCE(nfe_parcela, '001') = %s
+                  AND tenant_id = %s
+                LIMIT 1
+            """, (dados_nfe['nfe_chave'], numero_parcela, tenant_normalizado))
+        else:
+            cursor.execute("""
+                SELECT id
+                FROM contas_pagar
+                WHERE tipo_lancamento = 'nf_compra'
+                  AND nfe_chave = %s
+                  AND COALESCE(nfe_parcela, '001') = %s
+                LIMIT 1
+            """, (dados_nfe['nfe_chave'], numero_parcela))
         if cursor.fetchone():
             contas_existentes += 1
             continue
@@ -5506,9 +5814,9 @@ def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_ger
         cursor.execute("""
             INSERT INTO contas_pagar (
                 descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id,
-                tipo_lancamento, nfe_chave, nfe_numero, nfe_parcela, nfe_data_emissao, status
+                tipo_lancamento, nfe_chave, nfe_numero, nfe_parcela, nfe_data_emissao, status, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, 'nf_compra', %s, %s, %s, %s, 'pendente')
+            VALUES (%s, %s, %s, %s, %s, %s, 'nf_compra', %s, %s, %s, %s, 'pendente', %s)
         """, (
             f"{descricao_base} - Parcela {numero_parcela}",
             valor_parcela,
@@ -5520,13 +5828,14 @@ def _criar_contas_pagar_nfe(cursor, fornecedor_id, dados_nfe, parcelas, tipo_ger
             dados_nfe['nfe_numero'],
             numero_parcela,
             dados_nfe['data_emissao'],
+            tenant_normalizado,
         ))
         contas_criadas += 1
 
     return contas_criadas, contas_existentes
 
 
-def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=1, usuario_id=None):
+def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_minimo=1, usuario_id=None, tenant_id=None):
     """
     Importa XML de NF-e de compra criando pre-entrada de estoque (pendente)
     e contas a pagar automaticas com rastreabilidade da nota fiscal.
@@ -5543,6 +5852,23 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
             'erro': 'Nao foi possivel preparar a estrutura de NF-e de entrada.',
             'movimentacoes_criadas': 0,
             'erros': ['Falha ao garantir colunas de rastreabilidade financeira.'],
+        }
+
+    conn_tenant = get_db_connection()
+    cursor_tenant = conn_tenant.cursor()
+    try:
+        tenant_resolvido = _resolver_tenant_id_movimentacoes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor_tenant, tenant_resolvido)
+    finally:
+        conn_tenant.close()
+
+    if tenant_resolvido is None:
+        return {
+            'sucesso': False,
+            'erro': 'Nao foi possivel resolver tenant_id para importacao de movimentacoes.',
+            'movimentacoes_criadas': 0,
+            'contas_pagar_criadas': 0,
+            'erros': ['tenant_id nao resolvido para o contexto atual.'],
         }
 
     try:
@@ -5605,6 +5931,7 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
                 estado=estado,
                 cep=cep,
                 observacoes=f"Importado de NF-e {nfe_numero}. Nome Fantasia: {nome_fantasia}" if nome_fantasia else f"Importado de NF-e {nfe_numero}",
+                tenant_id=tenant_resolvido,
             )
 
             if resultado_fornecedor.get('sucesso'):
@@ -5616,7 +5943,13 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
         cursor = conn.cursor()
 
         try:
-            if _nfe_entrada_duplicada(cursor, nfe_chave, nfe_numero, fornecedor_id):
+            if _nfe_entrada_duplicada(
+                cursor,
+                nfe_chave,
+                nfe_numero,
+                fornecedor_id,
+                tenant_id=tenant_resolvido
+            ):
                 conn.rollback()
                 return {
                     'sucesso': False,
@@ -5689,6 +6022,7 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
                         forcar_pendente=True,
                         conn=conn,
                         cursor=cursor,
+                        tenant_id=tenant_resolvido,
                     )
                     movimentacoes_criadas += 1
                 except Exception as e:
@@ -5718,6 +6052,7 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
                 parcelas=parcelas,
                 tipo_geracao=tipo_geracao_financeiro,
                 codigos_pagamento=codigos_pagamento,
+                tenant_id=tenant_resolvido,
             )
 
             conn.commit()
@@ -5733,6 +6068,7 @@ def importar_xml_para_movimentacoes(conteudo_xml, margem_padrao=100, estoque_min
             'contas_pagar_criadas': contas_pagar_criadas,
             'contas_pagar_existentes': contas_pagar_existentes,
             'fornecedor_id': fornecedor_id,
+            'tenant_id': tenant_resolvido,
             'nfe_numero': nfe_numero,
             'nfe_chave': nfe_chave,
             'tipo_geracao_financeiro': tipo_geracao_financeiro,
