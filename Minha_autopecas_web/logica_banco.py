@@ -288,6 +288,34 @@ def _resolver_tenant_id_movimentacoes(tenant_id=None, permitir_global=True):
 
     raise ValueError("tenant_id nao informado para operacao do modulo de movimentacoes.")
 
+def _resolver_tenant_id_vendas(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes do modulo de vendas/itens_venda.
+    Prioridade: parametro explicito > contexto Flask (g/session) > fallback de tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id nao informado para operacao do modulo de vendas.")
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -3526,7 +3554,7 @@ def rejeitar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao, tenant_id=Non
     return cancelar_nfe_completa(nfe_numero, usuario_id, motivo_rejeicao, tenant_id=tenant_id)
 
 # FUNÇÕES DE VENDAS
-def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None):
+def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=None, usuario_id=None, tenant_id=None):
     """Registra uma nova venda com seus itens
     
     Validações:
@@ -3537,77 +3565,125 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise Exception("Nao foi possivel resolver tenant_id para registrar venda.")
+
+        # Validar cliente dentro do tenant
+        if cliente_id:
+            cursor.execute(
+                "SELECT id FROM clientes WHERE id = %s AND tenant_id = %s",
+                (cliente_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise Exception(f"Cliente com ID {cliente_id} nao pertence ao tenant atual.")
+
         # IMPORTANTE: Validar se o caixa está aberto para vendas não-prazo
         if forma_pagamento != 'prazo':
-            cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+            cursor.execute(
+                "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+                (tenant_resolvido,)
+            )
             if cursor.fetchone()[0] == 0:
                 raise Exception("❌ CAIXA FECHADO! O caixa deve estar aberto para registrar vendas. Por favor, abra o caixa antes de continuar.")
         
         # Verificar estoque antes de processar a venda
+        itens_normalizados = []
         for item in itens:
-            cursor.execute('SELECT nome, estoque FROM produtos WHERE id = %s', (item['produto_id'],))
+            produto_id = int(item['produto_id'])
+            quantidade = int(float(item['quantidade']))
+            preco_unitario = float(item['preco_unitario'])
+
+            if quantidade <= 0:
+                raise Exception(f"Quantidade invalida para produto ID {produto_id}.")
+            if preco_unitario < 0:
+                raise Exception(f"Preco unitario invalido para produto ID {produto_id}.")
+
+            cursor.execute(
+                '''
+                SELECT nome, estoque
+                FROM produtos
+                WHERE id = %s AND tenant_id = %s AND ativo = TRUE
+                ''',
+                (produto_id, tenant_resolvido)
+            )
             produto = cursor.fetchone()
             
             if not produto:
-                raise Exception(f"Produto com ID {item['produto_id']} não encontrado")
+                raise Exception(f"Produto com ID {produto_id} nao encontrado no tenant atual.")
             
             nome_produto, estoque_atual = produto
-            if estoque_atual < item['quantidade']:
+            if estoque_atual < quantidade:
                 raise Exception(f"Estoque insuficiente para {nome_produto}. Disponível: {estoque_atual}, solicitado: {item['quantidade']}")
+
+            itens_normalizados.append({
+                'produto_id': produto_id,
+                'quantidade': quantidade,
+                'preco_unitario': preco_unitario
+            })
         
         # Calcula o total
-        total = sum(item['quantidade'] * item['preco_unitario'] for item in itens) - desconto
+        total = sum(item['quantidade'] * item['preco_unitario'] for item in itens_normalizados) - desconto
         
         # Insere a venda
         cursor.execute('''
-            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, data_venda)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, data_venda, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, agora_br()))
+        ''', (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, agora_br(), tenant_resolvido))
         
         venda_id = cursor.fetchone()[0]
         
         # Insere os itens da venda
-        for item in itens:
+        for item in itens_normalizados:
             cursor.execute('''
-                INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
             ''', (venda_id, item['produto_id'], item['quantidade'], 
-                  item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
+                  item['preco_unitario'], item['quantidade'] * item['preco_unitario'], tenant_resolvido))
             
             # Atualiza o estoque diretamente na mesma transação
             cursor.execute('''
                 UPDATE produtos 
                 SET estoque = estoque - %s 
-                WHERE id = %s
-            ''', (item['quantidade'], item['produto_id']))
+                WHERE id = %s AND tenant_id = %s
+            ''', (item['quantidade'], item['produto_id'], tenant_resolvido))
+            if cursor.rowcount == 0:
+                raise Exception(f"Falha ao baixar estoque do produto {item['produto_id']} no tenant atual.")
         
         # Se for venda a prazo, cria conta a receber
         if forma_pagamento == 'prazo':
             cursor.execute('''
-                INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id)
-                VALUES (%s, %s, (CURRENT_DATE + INTERVAL '30 days'), %s, %s)
-            ''', (f'Venda #{venda_id}', total, cliente_id, venda_id))
+                INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, venda_id, tenant_id)
+                VALUES (%s, %s, (CURRENT_DATE + INTERVAL '30 days'), %s, %s, %s)
+            ''', (f'Venda #{venda_id}', total, cliente_id, venda_id, tenant_resolvido))
         else:
             # Se não for a prazo, registrar entrada no caixa (se houver caixa aberto)
             try:
                 # Verificar se há caixa aberto
-                cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+                cursor.execute(
+                    "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+                    (tenant_resolvido,)
+                )
                 if cursor.fetchone()[0] > 0:
                     # Registrar movimentação de entrada no caixa
                     cliente_nome = "Cliente Avulso"
                     if cliente_id:
-                        cursor.execute("SELECT nome FROM clientes WHERE id = %s", (cliente_id,))
+                        cursor.execute(
+                            "SELECT nome FROM clientes WHERE id = %s AND tenant_id = %s",
+                            (cliente_id, tenant_resolvido)
+                        )
                         cliente_result = cursor.fetchone()
                         if cliente_result:
                             cliente_nome = cliente_result[0]
                     
                     cursor.execute('''
                         INSERT INTO caixa_movimentacoes (
-                            tipo, categoria, descricao, valor, usuario_id, venda_id
+                            tipo, categoria, descricao, valor, usuario_id, venda_id, tenant_id
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id, tenant_resolvido))
             except Exception as e:
                 # Se der erro no caixa, não afeta a venda
                 print(f"Aviso: Não foi possível registrar no caixa: {e}")
@@ -3621,18 +3697,25 @@ def registrar_venda(cliente_id, itens, forma_pagamento, desconto=0, observacoes=
     finally:
         conn.close()
 
-def listar_vendas(limit=50):
+def listar_vendas(limit=50, tenant_id=None):
     """Lista as vendas mais recentes"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar vendas.")
+
     cursor.execute('''
         SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda
         FROM vendas v
-        LEFT JOIN clientes c ON v.cliente_id = c.id
+        LEFT JOIN clientes c ON v.cliente_id = c.id AND c.tenant_id = v.tenant_id
+        WHERE v.tenant_id = %s
         ORDER BY v.data_venda DESC
         LIMIT %s
-    ''', (limit,))
+    ''', (tenant_resolvido, limit))
     
     vendas = []
     for row in cursor.fetchall():
@@ -3647,7 +3730,7 @@ def listar_vendas(limit=50):
     conn.close()
     return vendas
 
-def obter_venda_por_id(venda_id):
+def obter_venda_por_id(venda_id, tenant_id=None):
     """Obtem os detalhes completos de uma venda especifica"""
     try:
         garantir_estrutura_fiscal()
@@ -3659,6 +3742,11 @@ def obter_venda_por_id(venda_id):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para obter venda.")
+
         # Consulta robusta: usa to_jsonb para tolerar ausencia de colunas fiscais legadas.
         cursor.execute(
             '''
@@ -3686,13 +3774,14 @@ def obter_venda_por_id(venda_id):
                 v.observacoes,
                 v.data_venda AS created_at,
                 v.usuario_id,
-                COALESCE(u.nome_completo, 'Sistema') AS vendedor_nome
+                COALESCE(u.nome_completo, 'Sistema') AS vendedor_nome,
+                v.tenant_id
             FROM vendas v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
-            LEFT JOIN usuarios u ON v.usuario_id = u.id
-            WHERE v.id = %s
+            LEFT JOIN clientes c ON v.cliente_id = c.id AND c.tenant_id = v.tenant_id
+            LEFT JOIN usuarios u ON v.usuario_id = u.id AND u.tenant_id = v.tenant_id
+            WHERE v.id = %s AND v.tenant_id = %s
             ''',
-            (venda_id,),
+            (venda_id, tenant_resolvido),
         )
 
         venda_data = cursor.fetchone()
@@ -3712,11 +3801,11 @@ def obter_venda_por_id(venda_id):
                 iv.preco_unitario,
                 iv.subtotal
             FROM itens_venda iv
-            LEFT JOIN produtos p ON iv.produto_id = p.id
-            WHERE iv.venda_id = %s
+            LEFT JOIN produtos p ON iv.produto_id = p.id AND p.tenant_id = iv.tenant_id
+            WHERE iv.venda_id = %s AND iv.tenant_id = %s
             ORDER BY iv.id
             ''',
-            (venda_id,),
+            (venda_id, tenant_resolvido),
         )
 
         itens = []
@@ -3758,6 +3847,7 @@ def obter_venda_por_id(venda_id):
             'created_at': converter_utc_para_br(venda_data['created_at']),
             'data_venda': converter_utc_para_br(venda_data['created_at']),
             'usuario_id': venda_data['usuario_id'],
+            'tenant_id': venda_data['tenant_id'],
             'valor_pago': float(venda_data['total']),  # Para compatibilidade, usar o total
             'troco': 0,  # Para compatibilidade
             'vendedor_nome': venda_data['vendedor_nome'] or 'Sistema',
@@ -3775,23 +3865,30 @@ def obter_venda_por_id(venda_id):
     finally:
         conn.close()
 
-def limpar_sincronizacoes_incorretas():
+def limpar_sincronizacoes_incorretas(tenant_id=None):
     """Remove movimentações de caixa de vendas que não são do dia atual"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para limpar sincronizacoes.")
+
         hoje = hoje_br().strftime('%Y-%m-%d')
         
         # Buscar movimentações de vendas que não são de hoje
         cursor.execute('''
             SELECT cm.id, cm.venda_id, v.data_venda, cm.valor
             FROM caixa_movimentacoes cm
-            JOIN vendas v ON cm.venda_id = v.id
+            JOIN vendas v ON cm.venda_id = v.id AND v.tenant_id = cm.tenant_id
             WHERE cm.categoria = 'venda'
+            AND cm.tenant_id = %s
+            AND v.tenant_id = %s
             AND v.data_venda::date::text != %s
             AND cm.data_movimentacao::date = %s
-        ''', (hoje, hoje))
+        ''', (tenant_resolvido, tenant_resolvido, hoje, hoje))
         
         movimentacoes_incorretas = cursor.fetchall()
         
@@ -3803,7 +3900,10 @@ def limpar_sincronizacoes_incorretas():
             data_venda_formatada = data_venda[:10] if data_venda else ''
             print(f"DEBUG LIMPEZA: Removendo mov #{mov_id} - Venda #{venda_id} de {data_venda_formatada} (R$ {valor})")
             
-            cursor.execute('DELETE FROM caixa_movimentacoes WHERE id = %s', (mov_id,))
+            cursor.execute(
+                'DELETE FROM caixa_movimentacoes WHERE id = %s AND tenant_id = %s',
+                (mov_id, tenant_resolvido)
+            )
         
         conn.commit()
         return True, f"Removidas {len(movimentacoes_incorretas)} sincronizações incorretas"
@@ -3814,14 +3914,22 @@ def limpar_sincronizacoes_incorretas():
     finally:
         conn.close()
 
-def sincronizar_vendas_com_caixa():
+def sincronizar_vendas_com_caixa(tenant_id=None):
     """Sincroniza vendas existentes do dia atual com o caixa (caso não tenham sido registradas)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para sincronizar vendas com caixa.")
+
         # Verificar se há caixa aberto
-        cursor.execute("SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto'")
+        cursor.execute(
+            "SELECT COUNT(*) FROM caixa_sessoes WHERE status = 'aberto' AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
         if cursor.fetchone()[0] == 0:
             conn.close()
             return False, "Não há caixa aberto"
@@ -3833,13 +3941,15 @@ def sincronizar_vendas_com_caixa():
         cursor.execute('''
             SELECT v.id, v.cliente_id, v.total, v.forma_pagamento, v.usuario_id, v.data_venda
             FROM vendas v
-            WHERE v.data_venda::date::text = %s
+            WHERE v.tenant_id = %s
+            AND v.data_venda::date::text = %s
             AND v.forma_pagamento != 'prazo'
             AND NOT EXISTS (
                 SELECT 1 FROM caixa_movimentacoes cm 
                 WHERE cm.venda_id = v.id
+                  AND cm.tenant_id = v.tenant_id
             )
-        ''', (hoje,))
+        ''', (tenant_resolvido, hoje))
         
         vendas_nao_sincronizadas = cursor.fetchall()
         
@@ -3860,7 +3970,10 @@ def sincronizar_vendas_com_caixa():
             # Buscar nome do cliente
             cliente_nome = "Cliente Avulso"
             if cliente_id:
-                cursor.execute("SELECT nome FROM clientes WHERE id = %s", (cliente_id,))
+                cursor.execute(
+                    "SELECT nome FROM clientes WHERE id = %s AND tenant_id = %s",
+                    (cliente_id, tenant_resolvido)
+                )
                 cliente_result = cursor.fetchone()
                 if cliente_result:
                     cliente_nome = cliente_result[0]
@@ -3868,10 +3981,10 @@ def sincronizar_vendas_com_caixa():
             # Registrar no caixa
             cursor.execute('''
                 INSERT INTO caixa_movimentacoes (
-                    tipo, categoria, descricao, valor, usuario_id, venda_id
+                    tipo, categoria, descricao, valor, usuario_id, venda_id, tenant_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
-            ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', ('entrada', 'venda', f'Venda #{venda_id} - {cliente_nome}', total, usuario_id, venda_id, tenant_resolvido))
             
             vendas_sincronizadas += 1
             print(f"DEBUG SYNC: ✓ Venda #{venda_id} sincronizada - R$ {total}")
@@ -3886,16 +3999,22 @@ def sincronizar_vendas_com_caixa():
     finally:
         conn.close()
 
-def obter_vendas_do_dia():
+def obter_vendas_do_dia(tenant_id=None):
     """Obtém as vendas do dia atual"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para obter vendas do dia.")
+
     # Limpar sincronizações incorretas primeiro
-    limpar_sincronizacoes_incorretas()
+    limpar_sincronizacoes_incorretas(tenant_id=tenant_resolvido)
     
     # Sincronizar vendas do dia atual com o caixa
-    sincronizar_vendas_com_caixa()
+    sincronizar_vendas_com_caixa(tenant_id=tenant_resolvido)
     
     # Usar data específica do dia atual
     hoje = hoje_br().strftime('%Y-%m-%d')
@@ -3909,13 +4028,14 @@ def obter_vendas_do_dia():
                u.nome_completo as funcionario_nome, u.username as funcionario_username,
                v.usuario_id
         FROM vendas v
-        LEFT JOIN clientes c ON v.cliente_id = c.id
-        LEFT JOIN itens_venda iv ON v.id = iv.venda_id
-        LEFT JOIN usuarios u ON v.usuario_id = u.id
+        LEFT JOIN clientes c ON v.cliente_id = c.id AND c.tenant_id = v.tenant_id
+        LEFT JOIN itens_venda iv ON v.id = iv.venda_id AND iv.tenant_id = v.tenant_id
+        LEFT JOIN usuarios u ON v.usuario_id = u.id AND u.tenant_id = v.tenant_id
         WHERE v.data_venda::date::text = %s
+        AND v.tenant_id = %s
         GROUP BY v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, u.nome_completo, u.username, v.usuario_id
         ORDER BY v.data_venda DESC
-    ''', (hoje,))
+    ''', (hoje, tenant_resolvido))
     
     vendas_encontradas = cursor.fetchall()
     
@@ -7301,12 +7421,17 @@ def alterar_status_lancamento_financeiro(lancamento_id, novo_status, forma_pagam
     finally:
         conn.close()
 
-def listar_vendas_por_periodo(data_inicio, data_fim):
+def listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=None):
     """Lista vendas por período específico com estatísticas"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para listar vendas por periodo.")
+
         # Ajustar datas para incluir o dia completo
         data_inicio_completa = f"{data_inicio} 00:00:00"
         data_fim_completa = f"{data_fim} 23:59:59"
@@ -7314,12 +7439,13 @@ def listar_vendas_por_periodo(data_inicio, data_fim):
         # Buscar vendas do período
         cursor.execute('''
             SELECT v.id, c.nome, v.total, v.forma_pagamento, v.data_venda, v.desconto,
-                   (SELECT COUNT(*) FROM itens_venda iv WHERE iv.venda_id = v.id) as total_itens
+                   (SELECT COUNT(*) FROM itens_venda iv WHERE iv.venda_id = v.id AND iv.tenant_id = v.tenant_id) as total_itens
             FROM vendas v
-            LEFT JOIN clientes c ON v.cliente_id = c.id
+            LEFT JOIN clientes c ON v.cliente_id = c.id AND c.tenant_id = v.tenant_id
             WHERE v.data_venda BETWEEN %s AND %s
+              AND v.tenant_id = %s
             ORDER BY v.data_venda DESC
-        ''', (data_inicio_completa, data_fim_completa))
+        ''', (data_inicio_completa, data_fim_completa, tenant_resolvido))
         
         vendas = []
         for row in cursor.fetchall():
@@ -7382,7 +7508,7 @@ def deletar_lancamento_financeiro_db(lancamento_id):
     finally:
         conn.close()
 
-def deletar_venda(venda_id, restaurar_estoque=True):
+def deletar_venda(venda_id, restaurar_estoque=True, tenant_id=None):
     """
     Deleta uma venda específica do sistema
     
@@ -7397,6 +7523,11 @@ def deletar_venda(venda_id, restaurar_estoque=True):
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para deletar venda.")
+
         resultado = {
             'success': False,
             'venda_deletada': False,
@@ -7408,7 +7539,10 @@ def deletar_venda(venda_id, restaurar_estoque=True):
         }
         
         # Verificar se a venda existe
-        cursor.execute('SELECT id, total, forma_pagamento FROM vendas WHERE id = %s', (venda_id,))
+        cursor.execute(
+            'SELECT id, total, forma_pagamento FROM vendas WHERE id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         venda = cursor.fetchone()
         
         if not venda:
@@ -7420,9 +7554,9 @@ def deletar_venda(venda_id, restaurar_estoque=True):
             cursor.execute('''
                 SELECT iv.produto_id, p.nome, iv.quantidade
                 FROM itens_venda iv
-                JOIN produtos p ON iv.produto_id = p.id
-                WHERE iv.venda_id = %s
-            ''', (venda_id,))
+                JOIN produtos p ON iv.produto_id = p.id AND p.tenant_id = iv.tenant_id
+                WHERE iv.venda_id = %s AND iv.tenant_id = %s
+            ''', (venda_id, tenant_resolvido))
             itens_venda = cursor.fetchall()
             
             # Restaurar estoque de cada produto
@@ -7430,28 +7564,51 @@ def deletar_venda(venda_id, restaurar_estoque=True):
                 cursor.execute('''
                     UPDATE produtos 
                     SET estoque = estoque + %s
-                    WHERE id = %s
-                ''', (quantidade, produto_id))
+                    WHERE id = %s AND tenant_id = %s
+                ''', (quantidade, produto_id, tenant_resolvido))
+                if cursor.rowcount == 0:
+                    raise ValueError(f"Produto {produto_id} da venda nao pertence ao tenant atual.")
                 
                 resultado['estoque_restaurado'][nome_produto] = quantidade
         
         # Contar e deletar itens da venda
-        cursor.execute('SELECT COUNT(*) FROM itens_venda WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'SELECT COUNT(*) FROM itens_venda WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         resultado['itens_deletados'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM itens_venda WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'DELETE FROM itens_venda WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         
         # Contar e deletar movimentações de caixa relacionadas à venda
-        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         resultado['movimentacoes_caixa_deletadas'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'DELETE FROM caixa_movimentacoes WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         
         # Contar e deletar contas a receber relacionadas à venda
-        cursor.execute('SELECT COUNT(*) FROM contas_receber WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'SELECT COUNT(*) FROM contas_receber WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         resultado['contas_receber_deletadas'] = cursor.fetchone()[0]
-        cursor.execute('DELETE FROM contas_receber WHERE venda_id = %s', (venda_id,))
+        cursor.execute(
+            'DELETE FROM contas_receber WHERE venda_id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         
         # Deletar a venda
-        cursor.execute('DELETE FROM vendas WHERE id = %s', (venda_id,))
+        cursor.execute(
+            'DELETE FROM vendas WHERE id = %s AND tenant_id = %s',
+            (venda_id, tenant_resolvido)
+        )
         
         if cursor.rowcount > 0:
             resultado['venda_deletada'] = True

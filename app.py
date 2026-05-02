@@ -2446,13 +2446,14 @@ def importar_xml_movimentacoes_route():
 @app.route('/vendas')
 @login_required
 def vendas():
-    clientes_lista = listar_clientes()
+    tenant_id = get_current_tenant_id()
+    clientes_lista = listar_clientes(tenant_id=tenant_id)
     # Buscar vendas do dia para exibir na lista
-    vendas_dados = obter_vendas_do_dia()
+    vendas_dados = obter_vendas_do_dia(tenant_id=tenant_id)
     vendas_hoje = vendas_dados.get('vendas', [])
-    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
     produtos_lista = produtos_data['produtos']
-    usuarios_lista = listar_usuarios()
+    usuarios_lista = listar_usuarios(tenant_id=tenant_id)
     
     # Calcular estatísticas
     total_vendas_hoje = sum(venda.get('total', 0) for venda in vendas_hoje)
@@ -2485,7 +2486,7 @@ def api_vendas_periodo():
             return jsonify({'error': 'Parâmetros de data são obrigatórios'}), 400
         
         # Buscar vendas do período usando a nova função
-        vendas = listar_vendas_por_periodo(data_inicio, data_fim)
+        vendas = listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=get_current_tenant_id())
         
         # Calcular estatísticas
         total_vendas = len(vendas)
@@ -2516,7 +2517,7 @@ def api_venda_detalhes(venda_id):
     """API para obter detalhes completos de uma venda"""
     try:
         garantir_estrutura_fiscal()
-        venda = obter_venda_por_id(venda_id)
+        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
         if not venda:
             return jsonify({'error': 'Venda não encontrada'}), 404
             
@@ -2541,10 +2542,12 @@ def api_exportar_vendas(formato):
         if formato not in ['excel', 'pdf']:
             return jsonify({'error': 'Formato não suportado'}), 400
         
-        # Por enquanto, retornar um placeholder - implementar exportação real posteriormente
+        vendas = listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=get_current_tenant_id())
+        # Por enquanto, retornar um placeholder - exportacao real fica para etapa especifica
         return jsonify({
             'message': f'Exportação em {formato} será implementada em breve',
-            'periodo': f'{data_inicio} a {data_fim}'
+            'periodo': f'{data_inicio} a {data_fim}',
+            'total_vendas_filtradas': len(vendas)
         })
         
     except Exception as e:
@@ -2555,11 +2558,12 @@ def api_exportar_vendas(formato):
 @login_required
 def visualizar_venda(venda_id):
     try:
-        venda = obter_venda_por_id(venda_id)
+        tenant_id = get_current_tenant_id()
+        venda = obter_venda_por_id(venda_id, tenant_id=tenant_id)
         if not venda:
             flash('Venda não encontrada!', 'error')
             return redirect(url_for('vendas'))
-        config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+        config_empresa = obter_configuracoes_empresa(tenant_id)
         nfe = obter_nfe_por_venda(venda_id)
         return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa, nfe=nfe)
     except Exception as e:
@@ -2571,7 +2575,7 @@ def visualizar_venda(venda_id):
 def api_venda(venda_id):
     try:
         print(f"API: Buscando venda {venda_id}")
-        venda = obter_venda_por_id(venda_id)
+        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
         if not venda:
             print(f"API: Venda {venda_id} não encontrada")
             return jsonify({'error': 'Venda não encontrada'}), 404
@@ -2682,12 +2686,13 @@ def webhook_fiscal_nfe_route():
 
 
 @app.route('/vendas/<int:venda_id>/recibo')
+@login_required
 def recibo_venda(venda_id):
     """Gera recibo para impressão com informações completas da empresa"""
     try:
         from Minha_autopecas_web.logica_banco import obter_venda_por_id, obter_configuracoes_empresa
         
-        venda = obter_venda_por_id(venda_id)
+        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
         if not venda:
             flash('Venda não encontrada', 'error')
             return redirect(url_for('vendas'))
@@ -2767,7 +2772,15 @@ def registrar_venda_route():
                 flash(f'Item {i+1}: preco_unitario ausente', 'error')
                 return redirect(url_for('vendas'))
         
-        venda_id = registrar_venda(cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id)
+        venda_id = registrar_venda(
+            cliente_id,
+            itens,
+            forma_pagamento,
+            desconto,
+            observacoes,
+            current_user.id,
+            tenant_id=get_current_tenant_id()
+        )
         
         # Se a requisição é AJAX, retorna JSON com o ID da venda
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -2814,7 +2827,8 @@ def deletar_venda_route(venda_id):
             }), 403
         
         # Verificar se a venda existe antes de tentar deletar
-        venda = obter_venda_por_id(venda_id)
+        tenant_id = get_current_tenant_id()
+        venda = obter_venda_por_id(venda_id, tenant_id=tenant_id)
         if not venda:
             return jsonify({
                 'success': False,
@@ -2822,7 +2836,7 @@ def deletar_venda_route(venda_id):
             }), 404
         
         # Executar a deleção
-        resultado = deletar_venda(venda_id, restaurar_estoque=True)
+        resultado = deletar_venda(venda_id, restaurar_estoque=True, tenant_id=tenant_id)
         
         if resultado['success']:
             # Log da operação
