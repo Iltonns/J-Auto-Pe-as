@@ -1148,7 +1148,7 @@ def deletar_cliente_route(id):
 @app.route('/fornecedores')
 @login_required
 def fornecedores():
-    fornecedores_lista = listar_fornecedores()
+    fornecedores_lista = listar_fornecedores(get_current_tenant_id())
     return render_template('fornecedores.html', fornecedores=fornecedores_lista)
 
 @app.route('/fornecedores/adicionar', methods=['POST'], endpoint='adicionar_fornecedor')
@@ -1166,8 +1166,14 @@ def adicionar_fornecedor_route():
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
-        flash('Fornecedor adicionado com sucesso!', 'success')
+        fornecedor_id = adicionar_fornecedor(
+            nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
+            tenant_id=get_current_tenant_id()
+        )
+        if fornecedor_id:
+            flash('Fornecedor adicionado com sucesso!', 'success')
+        else:
+            flash('Não foi possível adicionar fornecedor para o tenant atual.', 'warning')
     except Exception as e:
         flash(f'Erro ao adicionar fornecedor: {str(e)}', 'error')
     
@@ -1189,7 +1195,10 @@ def adicionar_fornecedor_ajax():
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        fornecedor_id = adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        fornecedor_id = adicionar_fornecedor(
+            nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
+            tenant_id=get_current_tenant_id()
+        )
         
         if fornecedor_id:
             return jsonify({
@@ -1223,8 +1232,14 @@ def editar_fornecedor_route(id):
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        editar_fornecedor(id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
-        flash('Fornecedor atualizado com sucesso!', 'success')
+        atualizado = editar_fornecedor(
+            id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
+            tenant_id=get_current_tenant_id()
+        )
+        if atualizado:
+            flash('Fornecedor atualizado com sucesso!', 'success')
+        else:
+            flash('Fornecedor não encontrado para o tenant atual.', 'warning')
     except Exception as e:
         flash(f'Erro ao atualizar fornecedor: {str(e)}', 'error')
     
@@ -1234,8 +1249,11 @@ def editar_fornecedor_route(id):
 @login_required
 def deletar_fornecedor_route(id):
     try:
-        deletar_fornecedor(id)
-        flash('Fornecedor excluído com sucesso!', 'success')
+        removido = deletar_fornecedor(id, tenant_id=get_current_tenant_id())
+        if removido:
+            flash('Fornecedor excluído com sucesso!', 'success')
+        else:
+            flash('Fornecedor não encontrado para o tenant atual.', 'warning')
     except Exception as e:
         flash(f'Erro ao excluir fornecedor: {str(e)}', 'error')
     
@@ -1268,7 +1286,8 @@ def validar_duplicacao_fornecedor():
             cnpj=cnpj,
             email=email,
             telefone=telefone,
-            fornecedor_id_excluir=fornecedor_id_excluir
+            fornecedor_id_excluir=fornecedor_id_excluir,
+            tenant_id=get_current_tenant_id()
         )
         
         return jsonify({
@@ -1307,15 +1326,15 @@ def buscar_fornecedor_ajax():
             })
         
         # Tentar buscar por CNPJ primeiro
-        fornecedor = buscar_fornecedor_melhorado(cnpj=query)
+        fornecedor = buscar_fornecedor_melhorado(cnpj=query, tenant_id=get_current_tenant_id())
         
         # Se não encontrar, tentar por email
         if not fornecedor:
-            fornecedor = buscar_fornecedor_melhorado(email=query)
+            fornecedor = buscar_fornecedor_melhorado(email=query, tenant_id=get_current_tenant_id())
         
         # Se não encontrar, tentar por nome
         if not fornecedor:
-            fornecedor = buscar_fornecedor_melhorado(nome=query)
+            fornecedor = buscar_fornecedor_melhorado(nome=query, tenant_id=get_current_tenant_id())
         
         if fornecedor:
             return jsonify({
@@ -1338,12 +1357,12 @@ def buscar_fornecedor_ajax():
 @app.route('/fornecedores/<int:id>/produtos')
 @login_required
 def produtos_fornecedor(id):
-    fornecedor = buscar_fornecedor(id)
+    fornecedor = buscar_fornecedor(id, tenant_id=get_current_tenant_id())
     if not fornecedor:
         flash('Fornecedor não encontrado!', 'error')
         return redirect(url_for('fornecedores'))
     
-    produtos_lista = listar_produtos_por_fornecedor(id)
+    produtos_lista = listar_produtos_por_fornecedor(id, tenant_id=get_current_tenant_id())
     return render_template('produtos_fornecedor.html', fornecedor=fornecedor, produtos=produtos_lista)
 
 # PRODUTOS

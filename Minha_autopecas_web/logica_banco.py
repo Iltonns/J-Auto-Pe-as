@@ -204,6 +204,34 @@ def _resolver_tenant_id_clientes(tenant_id=None, permitir_global=True):
 
     raise ValueError("tenant_id não informado para operação do módulo de clientes.")
 
+def _resolver_tenant_id_fornecedores(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operações do módulo de fornecedores.
+    Prioridade: parâmetro explícito > contexto Flask (g/session) > fallback de tenant.
+    """
+    tenant_resolvido = _normalizar_tenant_id(tenant_id)
+    if tenant_resolvido is not None:
+        return tenant_resolvido
+
+    try:
+        from flask import has_request_context, g, session
+
+        if has_request_context():
+            tenant_resolvido = _normalizar_tenant_id(getattr(g, 'current_tenant_id', None))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+
+            tenant_resolvido = _normalizar_tenant_id(session.get('tenant_id'))
+            if tenant_resolvido is not None:
+                return tenant_resolvido
+    except Exception:
+        pass
+
+    if permitir_global:
+        return None
+
+    raise ValueError("tenant_id não informado para operação do módulo de fornecedores.")
+
 def add_column_if_not_exists(cursor, conn, table_name, column_definition):
     """Adiciona uma coluna em uma tabela se ela não existir"""
     try:
@@ -6094,20 +6122,25 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None):
 # FUNÇÕES DE FORNECEDORES
 # ========================
 
-def listar_fornecedores():
-    """Lista todos os fornecedores ativos"""
+def listar_fornecedores(tenant_id=None):
+    """Lista todos os fornecedores ativos do tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
         cursor.execute('''
             SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
                    cep, contato_pessoa, observacoes, ativo, created_at
-            FROM fornecedores 
-            WHERE ativo = TRUE
+            FROM fornecedores
+            WHERE ativo = TRUE AND tenant_id = %s
             ORDER BY nome
-        ''')
-        
+        ''', (tenant_resolvido,))
+
         fornecedores = []
         for row in cursor.fetchall():
             fornecedor = {
@@ -6126,7 +6159,7 @@ def listar_fornecedores():
                 'created_at': row[12]
             }
             fornecedores.append(fornecedor)
-        
+
         return fornecedores
     except Exception as e:
         print(f"Erro ao listar fornecedores: {e}")
@@ -6134,19 +6167,24 @@ def listar_fornecedores():
     finally:
         conn.close()
 
-def buscar_fornecedor(fornecedor_id):
-    """Busca um fornecedor específico pelo ID"""
+def buscar_fornecedor(fornecedor_id, tenant_id=None):
+    """Busca um fornecedor específico pelo ID no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return None
+
         cursor.execute('''
             SELECT id, nome, cnpj, telefone, email, endereco, cidade, estado, 
                    cep, contato_pessoa, observacoes, ativo, created_at
-            FROM fornecedores 
-            WHERE id = %s
-        ''', (fornecedor_id,))
-        
+            FROM fornecedores
+            WHERE id = %s AND tenant_id = %s
+        ''', (fornecedor_id, tenant_resolvido))
+
         row = cursor.fetchone()
         if row:
             return {
@@ -6171,7 +6209,7 @@ def buscar_fornecedor(fornecedor_id):
     finally:
         conn.close()
 
-def buscar_fornecedor_por_cnpj(cnpj):
+def buscar_fornecedor_por_cnpj(cnpj, tenant_id=None):
     """
     Busca um fornecedor pelo CNPJ (normalizado).
     Agora usa a validação robusta de fornecedor.
@@ -6186,10 +6224,10 @@ def buscar_fornecedor_por_cnpj(cnpj):
         return None
     
     # Usar a função robusta de busca
-    return buscar_fornecedor_melhorado(cnpj=cnpj)
+    return buscar_fornecedor_melhorado(cnpj=cnpj, tenant_id=tenant_id)
 
 def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=None, 
-                        cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
+                        cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None, tenant_id=None):
     """
     Adiciona um novo fornecedor com validação robusta de duplicação.
     
@@ -6203,12 +6241,18 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Tenant não resolvido para cadastro de fornecedor")
+
         # Validar duplicação usando a função robusta
         validacao = validar_fornecedor_duplicado(
             nome=nome,
             cnpj=cnpj,
             email=email,
-            telefone=telefone
+            telefone=telefone,
+            tenant_id=tenant_resolvido
         )
         
         if validacao['duplicado']:
@@ -6216,10 +6260,10 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
         
         cursor.execute('''
             INSERT INTO fornecedores (nome, cnpj, telefone, email, endereco, cidade, 
-                                    estado, cep, contato_pessoa, observacoes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    estado, cep, contato_pessoa, observacoes, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes))
+        ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes, tenant_resolvido))
         
         fornecedor_id = cursor.fetchone()[0]
         conn.commit()
@@ -6232,7 +6276,7 @@ def adicionar_fornecedor(nome, cnpj=None, telefone=None, email=None, endereco=No
         conn.close()
 
 def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None, endereco=None, 
-                     cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None):
+                     cidade=None, estado=None, cep=None, contato_pessoa=None, observacoes=None, tenant_id=None):
     """
     Edita um fornecedor existente com validação robusta de duplicação.
     
@@ -6246,13 +6290,19 @@ def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None,
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
         # Validar duplicação usando a função robusta (excluindo este fornecedor)
         validacao = validar_fornecedor_duplicado(
             nome=nome,
             cnpj=cnpj,
             email=email,
             telefone=telefone,
-            fornecedor_id_excluir=fornecedor_id
+            fornecedor_id_excluir=fornecedor_id,
+            tenant_id=tenant_resolvido
         )
         
         if validacao['duplicado']:
@@ -6262,9 +6312,9 @@ def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None,
             UPDATE fornecedores 
             SET nome = %s, cnpj = %s, telefone = %s, email = %s, endereco = %s, 
                 cidade = %s, estado = %s, cep = %s, contato_pessoa = %s, observacoes = %s
-            WHERE id = %s
+            WHERE id = %s AND tenant_id = %s
         ''', (nome, cnpj, telefone, email, endereco, cidade, estado, cep, 
-              contato_pessoa, observacoes, fornecedor_id))
+              contato_pessoa, observacoes, fornecedor_id, tenant_resolvido))
         
         conn.commit()
         return cursor.rowcount > 0
@@ -6275,22 +6325,40 @@ def editar_fornecedor(fornecedor_id, nome, cnpj=None, telefone=None, email=None,
     finally:
         conn.close()
 
-def deletar_fornecedor(fornecedor_id):
+def deletar_fornecedor(fornecedor_id, tenant_id=None):
     """Deleta (desativa) um fornecedor"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return False
+
+        cursor.execute(
+            'SELECT id FROM fornecedores WHERE id = %s AND tenant_id = %s',
+            (fornecedor_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            return False
+
         # Verificar se há produtos vinculados a este fornecedor
         cursor.execute('SELECT COUNT(*) FROM produtos WHERE fornecedor_id = %s AND ativo = TRUE', (fornecedor_id,))
         produtos_vinculados = cursor.fetchone()[0]
         
         if produtos_vinculados > 0:
             # Se há produtos vinculados, apenas desativar
-            cursor.execute('UPDATE fornecedores SET ativo = FALSE WHERE id = %s', (fornecedor_id,))
+            cursor.execute(
+                'UPDATE fornecedores SET ativo = FALSE WHERE id = %s AND tenant_id = %s',
+                (fornecedor_id, tenant_resolvido)
+            )
         else:
             # Se não há produtos vinculados, pode deletar fisicamente
-            cursor.execute('DELETE FROM fornecedores WHERE id = %s', (fornecedor_id,))
+            cursor.execute(
+                'DELETE FROM fornecedores WHERE id = %s AND tenant_id = %s',
+                (fornecedor_id, tenant_resolvido)
+            )
         
         conn.commit()
         return cursor.rowcount > 0
@@ -6301,18 +6369,23 @@ def deletar_fornecedor(fornecedor_id):
     finally:
         conn.close()
 
-def obter_fornecedores_para_select():
+def obter_fornecedores_para_select(tenant_id=None):
     """Retorna lista de fornecedores para uso em dropdowns"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
         cursor.execute('''
             SELECT id, nome 
             FROM fornecedores 
-            WHERE ativo = TRUE 
+            WHERE ativo = TRUE AND tenant_id = %s
             ORDER BY nome
-        ''')
+        ''', (tenant_resolvido,))
         
         fornecedores = []
         for row in cursor.fetchall():
@@ -6328,13 +6401,18 @@ def obter_fornecedores_para_select():
     finally:
         conn.close()
 
-def contar_fornecedores():
+def contar_fornecedores(tenant_id=None):
     """Conta o total de fornecedores ativos"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        cursor.execute('SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE')
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return 0
+
+        cursor.execute('SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE AND tenant_id = %s', (tenant_resolvido,))
         return cursor.fetchone()[0]
     except Exception as e:
         print(f"Erro ao contar fornecedores: {e}")
@@ -6342,18 +6420,35 @@ def contar_fornecedores():
     finally:
         conn.close()
 
-def listar_produtos_por_fornecedor(fornecedor_id):
+def listar_produtos_por_fornecedor(fornecedor_id, tenant_id=None):
     """Lista todos os produtos de um fornecedor específico"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
+        cursor.execute(
+            '''
+            SELECT id
+            FROM fornecedores
+            WHERE id = %s AND tenant_id = %s AND ativo = TRUE
+            ''',
+            (fornecedor_id, tenant_resolvido)
+        )
+        if not cursor.fetchone():
+            return []
+
         cursor.execute('''
             SELECT p.id, p.nome, p.preco, p.estoque, p.preco_custo, p.codigo_barras
             FROM produtos p
-            WHERE p.fornecedor_id = %s AND p.ativo = TRUE
+            JOIN fornecedores f ON f.id = p.fornecedor_id
+            WHERE p.fornecedor_id = %s AND p.ativo = TRUE AND f.tenant_id = %s
             ORDER BY p.nome
-        ''', (fornecedor_id,))
+        ''', (fornecedor_id, tenant_resolvido))
         
         produtos = []
         for row in cursor.fetchall():
@@ -7022,7 +7117,7 @@ def obter_categorias_cadastradas():
 # FUNÇÕES ROBUSTAS DE VALIDAÇÃO DE FORNECEDORES
 # ========================================
 
-def validar_fornecedor_duplicado(nome=None, cnpj=None, email=None, telefone=None, fornecedor_id_excluir=None):
+def validar_fornecedor_duplicado(nome=None, cnpj=None, email=None, telefone=None, fornecedor_id_excluir=None, tenant_id=None):
     """
     Valida se um fornecedor já está cadastrado no sistema usando múltiplos critérios.
     
@@ -7054,9 +7149,19 @@ def validar_fornecedor_duplicado(nome=None, cnpj=None, email=None, telefone=None
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_fornecedores(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return {
+                'duplicado': False,
+                'fornecedor_existente': None,
+                'critério': 'tenant',
+                'mensagem': 'Tenant não resolvido para validação de fornecedor'
+            }
+
         # Buscar todos os fornecedores (exceto o que está sendo editado)
-        query = 'SELECT id, nome, cnpj, email, telefone FROM fornecedores WHERE ativo = TRUE'
-        params = []
+        query = 'SELECT id, nome, cnpj, email, telefone FROM fornecedores WHERE ativo = TRUE AND tenant_id = %s'
+        params = [tenant_resolvido]
         
         if fornecedor_id_excluir:
             query += ' AND id != %s'
@@ -7183,7 +7288,7 @@ def validar_fornecedor_duplicado(nome=None, cnpj=None, email=None, telefone=None
         conn.close()
 
 
-def buscar_fornecedor_melhorado(nome=None, cnpj=None, email=None):
+def buscar_fornecedor_melhorado(nome=None, cnpj=None, email=None, tenant_id=None):
     """
     Busca um fornecedor usando múltiplos critérios com precedência.
     
@@ -7198,7 +7303,8 @@ def buscar_fornecedor_melhorado(nome=None, cnpj=None, email=None):
     validacao = validar_fornecedor_duplicado(
         nome=nome, 
         cnpj=cnpj, 
-        email=email
+        email=email,
+        tenant_id=tenant_id
     )
     
     if validacao['duplicado']:
@@ -7209,7 +7315,7 @@ def buscar_fornecedor_melhorado(nome=None, cnpj=None, email=None):
 
 def adicionar_ou_atualizar_fornecedor_automatico(nome, cnpj=None, email=None, telefone=None, 
                                                   endereco=None, cidade=None, estado=None, 
-                                                  cep=None, observacoes=None):
+                                                  cep=None, observacoes=None, tenant_id=None):
     """
     Adiciona um novo fornecedor ou retorna o existente se já cadastrado.
     Evita duplicações usando validação robusta.
@@ -7229,7 +7335,8 @@ def adicionar_ou_atualizar_fornecedor_automatico(nome, cnpj=None, email=None, te
             nome=nome,
             cnpj=cnpj,
             email=email,
-            telefone=telefone
+            telefone=telefone,
+            tenant_id=tenant_id
         )
         
         if validacao['duplicado']:
@@ -7251,11 +7358,12 @@ def adicionar_ou_atualizar_fornecedor_automatico(nome, cnpj=None, email=None, te
             cidade=cidade,
             estado=estado,
             cep=cep,
-            observacoes=observacoes
+            observacoes=observacoes,
+            tenant_id=tenant_id
         )
         
         if fornecedor_id:
-            fornecedor = buscar_fornecedor(fornecedor_id)
+            fornecedor = buscar_fornecedor(fornecedor_id, tenant_id=tenant_id)
             return {
                 'sucesso': True,
                 'fornecedor_id': fornecedor_id,
