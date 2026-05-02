@@ -316,6 +316,13 @@ def _resolver_tenant_id_vendas(tenant_id=None, permitir_global=True):
 
     raise ValueError("tenant_id nao informado para operacao do modulo de vendas.")
 
+def _resolver_tenant_id_contas(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes de contas a pagar/receber.
+    Reaproveita a mesma estrategia de contexto de vendas.
+    """
+    return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -330,6 +337,21 @@ def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
         raise ValueError("Fornecedor informado nao pertence ao tenant atual.")
 
     return fornecedor_normalizado
+
+def _validar_cliente_do_tenant(cursor, cliente_id, tenant_id):
+    """Valida se cliente pertence ao tenant informado."""
+    cliente_normalizado = _normalizar_tenant_id(cliente_id)
+    if cliente_normalizado is None:
+        return None
+
+    cursor.execute(
+        "SELECT id FROM clientes WHERE id = %s AND tenant_id = %s",
+        (cliente_normalizado, tenant_id)
+    )
+    if not cursor.fetchone():
+        raise ValueError("Cliente informado nao pertence ao tenant atual.")
+
+    return cliente_normalizado
 
 def _validar_duplicidade_produto(cursor, tenant_id, nome=None, codigo_barras=None, codigo_fornecedor=None, produto_id_excluir=None):
     """Valida duplicidades de produto dentro do tenant."""
@@ -4082,21 +4104,29 @@ def obter_vendas_do_dia(tenant_id=None):
     return resultado
 
 # FUNÇÕES DE CONTAS A PAGAR
-def listar_contas_pagar_hoje():
+def listar_contas_pagar_hoje(tenant_id=None):
     """Lista contas a pagar com vencimento hoje"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar contas a pagar.")
+
     hoje = hoje_br().strftime('%Y-%m-%d')
-    
+
     cursor.execute('''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome
         FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.data_vencimento::date = %s AND cp.status = 'pendente'
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id AND f.tenant_id = cp.tenant_id
+        WHERE cp.data_vencimento::date = %s
+          AND cp.status = 'pendente'
+          AND cp.tenant_id = %s
         ORDER BY cp.valor DESC
-    ''', (hoje,))
+    ''', (hoje, tenant_resolvido))
     
     contas = []
     for row in cursor.fetchall():
@@ -4114,24 +4144,31 @@ def listar_contas_pagar_hoje():
     conn.close()
     return contas
 
-def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
+def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente', tenant_id=None):
     """Lista contas a pagar com filtros de período"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar contas a pagar por periodo.")
+
     hoje = hoje_br().strftime('%Y-%m-%d')
-    
+
     base_query = '''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome,
                (cp.data_vencimento::date - %s::date) as dias_restantes,
                cp.data_pagamento
         FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
+        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id AND f.tenant_id = cp.tenant_id
         WHERE cp.status = %s
+          AND cp.tenant_id = %s
     '''
-    
-    params = [hoje, status]
+
+    params = [hoje, status, tenant_resolvido]
     
     # Para contas pagas, usar data_pagamento; para pendentes, usar data_vencimento
     campo_data = 'cp.data_pagamento' if status == 'pago' else 'cp.data_vencimento'
@@ -4195,17 +4232,28 @@ def listar_contas_pagar_por_periodo(filtro='todos', data_inicio=None, data_fim=N
     conn.close()
     return contas
 
-def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None, auto_sincronizar=True):
+def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None, auto_sincronizar=True, tenant_id=None):
     """Adiciona uma nova conta a pagar"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para adicionar conta a pagar.")
+
+        fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
+
         # Verificar se já existe conta similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM contas_pagar 
-            WHERE descricao = %s AND valor = %s AND data_vencimento = %s AND status = 'pendente'
-        ''', (descricao, valor, data_vencimento))
+            WHERE descricao = %s
+              AND valor = %s
+              AND data_vencimento = %s
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (descricao, valor, data_vencimento, tenant_resolvido))
         
         conta_existente = cursor.fetchone()
         if conta_existente:
@@ -4213,10 +4261,10 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
             return False, f"Já existe uma conta similar pendente (ID: {conta_existente[0]})"
         
         cursor.execute('''
-            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, tenant_resolvido))
         
         conta_id = cursor.fetchone()[0]
         conn.commit()
@@ -4230,35 +4278,53 @@ def adicionar_conta_pagar(descricao, valor, data_vencimento, categoria=None, obs
         conn.close()
         return False, f"Erro ao criar conta: {str(e)}"
 
-def pagar_conta(conta_id, data_pagamento=None):
+def pagar_conta(conta_id, data_pagamento=None, tenant_id=None):
     """Marca uma conta como paga"""
     if not data_pagamento:
         data_pagamento = hoje_br().isoformat()
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE contas_pagar 
-        SET status = 'pago', data_pagamento = %s
-        WHERE id = %s
-    ''', (data_pagamento, conta_id))
-    
-    conn.commit()
-    conn.close()
 
-def duplicar_conta_pagar(conta_id):
+    try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para pagar conta.")
+
+        cursor.execute('''
+            UPDATE contas_pagar 
+            SET status = 'pago', data_pagamento = %s
+            WHERE id = %s AND tenant_id = %s
+        ''', (data_pagamento, conta_id, tenant_resolvido))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Conta a pagar nao encontrada para o tenant atual.")
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def duplicar_conta_pagar(conta_id, tenant_id=None):
     """Duplica uma conta a pagar existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para duplicar conta a pagar.")
+
         # Buscar dados da conta original
         cursor.execute('''
             SELECT descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id
             FROM contas_pagar
-            WHERE id = %s
-        ''', (conta_id,))
+            WHERE id = %s AND tenant_id = %s
+        ''', (conta_id, tenant_resolvido))
         
         conta = cursor.fetchone()
         if not conta:
@@ -4272,10 +4338,10 @@ def duplicar_conta_pagar(conta_id):
         
         # Inserir nova conta
         cursor.execute('''
-            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pendente')
+            INSERT INTO contas_pagar (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, status, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pendente', %s)
             RETURNING id
-        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id))
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, tenant_resolvido))
         
         nova_conta_id = cursor.fetchone()[0]
         conn.commit()
@@ -4288,20 +4354,31 @@ def duplicar_conta_pagar(conta_id):
         conn.close()
         return False, f"Erro ao duplicar conta: {str(e)}"
 
-def excluir_conta_pagar(conta_id):
+def excluir_conta_pagar(conta_id, tenant_id=None):
     """Exclui uma conta a pagar"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para excluir conta a pagar.")
+
         # Verificar se a conta existe
-        cursor.execute('SELECT id FROM contas_pagar WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'SELECT id FROM contas_pagar WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         if not cursor.fetchone():
             conn.close()
             return False, "Conta não encontrada"
         
         # Excluir a conta
-        cursor.execute('DELETE FROM contas_pagar WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'DELETE FROM contas_pagar WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         conn.commit()
         conn.close()
         
@@ -4312,20 +4389,25 @@ def excluir_conta_pagar(conta_id):
         conn.close()
         return False, f"Erro ao excluir conta: {str(e)}"
 
-def obter_conta_pagar(conta_id):
+def obter_conta_pagar(conta_id, tenant_id=None):
     """Obtém os dados de uma conta a pagar"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para obter conta a pagar.")
+
         cursor.execute('''
             SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.categoria, 
                    cp.observacoes, cp.fornecedor_id, cp.status, cp.data_pagamento,
                    f.nome as fornecedor_nome
             FROM contas_pagar cp
-            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-            WHERE cp.id = %s
-        ''', (conta_id,))
+            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id AND f.tenant_id = cp.tenant_id
+            WHERE cp.id = %s AND cp.tenant_id = %s
+        ''', (conta_id, tenant_resolvido))
         
         row = cursor.fetchone()
         conn.close()
@@ -4355,14 +4437,24 @@ def obter_conta_pagar(conta_id):
         conn.close()
         return False, f"Erro ao obter conta: {str(e)}"
 
-def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None):
+def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=None, observacoes=None, fornecedor_id=None, tenant_id=None):
     """Edita uma conta a pagar existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para editar conta a pagar.")
+
+        fornecedor_id = _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_resolvido)
+
         # Verificar se a conta existe
-        cursor.execute('SELECT id FROM contas_pagar WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'SELECT id FROM contas_pagar WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         if not cursor.fetchone():
             conn.close()
             return False, "Conta não encontrada"
@@ -4372,8 +4464,8 @@ def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=No
             UPDATE contas_pagar
             SET descricao = %s, valor = %s, data_vencimento = %s, 
                 categoria = %s, observacoes = %s, fornecedor_id = %s
-            WHERE id = %s
-        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, conta_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id, conta_id, tenant_resolvido))
         
         conn.commit()
         conn.close()
@@ -4386,21 +4478,29 @@ def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=No
         return False, f"Erro ao editar conta: {str(e)}"
 
 # FUNÇÕES DE CONTAS A RECEBER
-def listar_contas_receber_hoje():
+def listar_contas_receber_hoje(tenant_id=None):
     """Lista contas a receber com vencimento hoje"""
     garantir_colunas_contas_receber()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar contas a receber.")
+
     hoje = hoje_br().strftime('%Y-%m-%d')
-    
+
     cursor.execute('''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome
         FROM contas_receber cr
-        LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE cr.data_vencimento::date = %s AND cr.status = 'pendente'
+        LEFT JOIN clientes c ON cr.cliente_id = c.id AND c.tenant_id = cr.tenant_id
+        WHERE cr.data_vencimento::date = %s
+          AND cr.status = 'pendente'
+          AND cr.tenant_id = %s
         ORDER BY cr.valor DESC
-    ''', (hoje,))
+    ''', (hoje, tenant_resolvido))
     
     contas = []
     for row in cursor.fetchall():
@@ -4416,24 +4516,31 @@ def listar_contas_receber_hoje():
     conn.close()
     return contas
 
-def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente'):
+def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim=None, status='pendente', tenant_id=None):
     """Lista contas a receber com filtros de período"""
     garantir_colunas_contas_receber()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
+    tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar contas a receber por periodo.")
+
     hoje = hoje_br().strftime('%Y-%m-%d')
-    
+
     base_query = '''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome,
                (cr.data_vencimento::date - %s::date) as dias_restantes,
                cr.data_recebimento
         FROM contas_receber cr
-        LEFT JOIN clientes c ON cr.cliente_id = c.id
+        LEFT JOIN clientes c ON cr.cliente_id = c.id AND c.tenant_id = cr.tenant_id
         WHERE cr.status = %s
+          AND cr.tenant_id = %s
     '''
-    
-    params = [hoje, status]
+
+    params = [hoje, status, tenant_resolvido]
     
     # Para contas recebidas, usar data_recebimento; para pendentes, usar data_vencimento
     campo_data = 'cr.data_recebimento' if status == 'recebido' else 'cr.data_vencimento'
@@ -4490,34 +4597,58 @@ def listar_contas_receber_por_periodo(filtro='todos', data_inicio=None, data_fim
     conn.close()
     return contas
 
-def receber_conta(conta_id, data_recebimento=None):
+def receber_conta(conta_id, data_recebimento=None, tenant_id=None):
     """Marca uma conta como recebida"""
     if not data_recebimento:
         data_recebimento = hoje_br().isoformat()
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE contas_receber 
-        SET status = 'recebido', data_recebimento = %s
-        WHERE id = %s
-    ''', (data_recebimento, conta_id))
-    
-    conn.commit()
-    conn.close()
 
-def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None, auto_sincronizar=True):
+    try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para receber conta.")
+
+        cursor.execute('''
+            UPDATE contas_receber 
+            SET status = 'recebido', data_recebimento = %s
+            WHERE id = %s AND tenant_id = %s
+        ''', (data_recebimento, conta_id, tenant_resolvido))
+
+        if cursor.rowcount == 0:
+            raise ValueError("Conta a receber nao encontrada para o tenant atual.")
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, observacoes=None, auto_sincronizar=True, tenant_id=None):
     """Adiciona uma nova conta a receber"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para adicionar conta a receber.")
+
+        cliente_id = _validar_cliente_do_tenant(cursor, cliente_id, tenant_resolvido)
+
         # Verificar se já existe conta similar para evitar duplicatas
         cursor.execute('''
             SELECT id FROM contas_receber 
-            WHERE descricao = %s AND valor = %s AND data_vencimento = %s AND status = 'pendente'
-        ''', (descricao, valor, data_vencimento))
+            WHERE descricao = %s
+              AND valor = %s
+              AND data_vencimento = %s
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (descricao, valor, data_vencimento, tenant_resolvido))
         
         conta_existente = cursor.fetchone()
         if conta_existente:
@@ -4525,10 +4656,10 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
             return False, f"Já existe uma conta similar pendente (ID: {conta_existente[0]})"
         
         cursor.execute('''
-            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_resolvido))
         
         conta_id = cursor.fetchone()[0]
         conn.commit()
@@ -4542,18 +4673,23 @@ def adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id=None, 
         conn.close()
         return False, f"Erro ao criar conta: {str(e)}"
 
-def duplicar_conta_receber(conta_id):
+def duplicar_conta_receber(conta_id, tenant_id=None):
     """Duplica uma conta a receber existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para duplicar conta a receber.")
+
         # Buscar dados da conta original
         cursor.execute('''
             SELECT descricao, valor, data_vencimento, cliente_id, observacoes
             FROM contas_receber
-            WHERE id = %s
-        ''', (conta_id,))
+            WHERE id = %s AND tenant_id = %s
+        ''', (conta_id, tenant_resolvido))
         
         conta = cursor.fetchone()
         if not conta:
@@ -4567,10 +4703,10 @@ def duplicar_conta_receber(conta_id):
         
         # Inserir nova conta
         cursor.execute('''
-            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, status)
-            VALUES (%s, %s, %s, %s, %s, 'pendente')
+            INSERT INTO contas_receber (descricao, valor, data_vencimento, cliente_id, observacoes, status, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, 'pendente', %s)
             RETURNING id
-        ''', (descricao, valor, data_vencimento, cliente_id, observacoes))
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes, tenant_resolvido))
         
         nova_conta_id = cursor.fetchone()[0]
         conn.commit()
@@ -4583,20 +4719,31 @@ def duplicar_conta_receber(conta_id):
         conn.close()
         return False, f"Erro ao duplicar conta: {str(e)}"
 
-def excluir_conta_receber(conta_id):
+def excluir_conta_receber(conta_id, tenant_id=None):
     """Exclui uma conta a receber"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para excluir conta a receber.")
+
         # Verificar se a conta existe
-        cursor.execute('SELECT id FROM contas_receber WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'SELECT id FROM contas_receber WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         if not cursor.fetchone():
             conn.close()
             return False, "Conta não encontrada"
         
         # Excluir a conta
-        cursor.execute('DELETE FROM contas_receber WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'DELETE FROM contas_receber WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         conn.commit()
         conn.close()
         
@@ -4607,20 +4754,25 @@ def excluir_conta_receber(conta_id):
         conn.close()
         return False, f"Erro ao excluir conta: {str(e)}"
 
-def obter_conta_receber(conta_id):
+def obter_conta_receber(conta_id, tenant_id=None):
     """Obtém os dados de uma conta a receber"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para obter conta a receber.")
+
         cursor.execute('''
             SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, 
                    cr.observacoes, cr.cliente_id, cr.status, cr.data_recebimento,
                    c.nome as cliente_nome
             FROM contas_receber cr
-            LEFT JOIN clientes c ON cr.cliente_id = c.id
-            WHERE cr.id = %s
-        ''', (conta_id,))
+            LEFT JOIN clientes c ON cr.cliente_id = c.id AND c.tenant_id = cr.tenant_id
+            WHERE cr.id = %s AND cr.tenant_id = %s
+        ''', (conta_id, tenant_resolvido))
         
         row = cursor.fetchone()
         conn.close()
@@ -4649,14 +4801,24 @@ def obter_conta_receber(conta_id):
         conn.close()
         return False, f"Erro ao obter conta: {str(e)}"
 
-def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id=None, observacoes=None):
+def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id=None, observacoes=None, tenant_id=None):
     """Edita uma conta a receber existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para editar conta a receber.")
+
+        cliente_id = _validar_cliente_do_tenant(cursor, cliente_id, tenant_resolvido)
+
         # Verificar se a conta existe
-        cursor.execute('SELECT id FROM contas_receber WHERE id = %s', (conta_id,))
+        cursor.execute(
+            'SELECT id FROM contas_receber WHERE id = %s AND tenant_id = %s',
+            (conta_id, tenant_resolvido)
+        )
         if not cursor.fetchone():
             conn.close()
             return False, "Conta não encontrada"
@@ -4666,8 +4828,8 @@ def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id
             UPDATE contas_receber
             SET descricao = %s, valor = %s, data_vencimento = %s, 
                 cliente_id = %s, observacoes = %s
-            WHERE id = %s
-        ''', (descricao, valor, data_vencimento, cliente_id, observacoes, conta_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (descricao, valor, data_vencimento, cliente_id, observacoes, conta_id, tenant_resolvido))
         
         conn.commit()
         conn.close()

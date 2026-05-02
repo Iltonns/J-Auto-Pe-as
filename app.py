@@ -2878,13 +2878,14 @@ def deletar_venda_route(venda_id):
 @app.route('/contas-a-pagar-hoje')
 @required_permission('financeiro')
 def contas_a_pagar_hoje():
+    tenant_id = get_current_tenant_id()
     filtro = request.args.get('filtro', 'hoje')
     status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
-    fornecedores = obter_fornecedores_para_select()
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
+    fornecedores = obter_fornecedores_para_select(tenant_id=tenant_id)
     hoje = hoje_br()
     
     # Calcular estatísticas
@@ -2921,6 +2922,7 @@ def contas_a_pagar_hoje():
 @app.route('/contas-pagar/adicionar', methods=['POST'])
 @required_permission('financeiro')
 def adicionar_conta_pagar_route():
+    tenant_id = get_current_tenant_id()
     descricao = request.form['descricao']
     valor = float(request.form['valor'])
     data_vencimento = request.form['data_vencimento']
@@ -2935,7 +2937,15 @@ def adicionar_conta_pagar_route():
         fornecedor_id = None
     
     try:
-        sucesso, mensagem = adicionar_conta_pagar(descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
+        sucesso, mensagem = adicionar_conta_pagar(
+            descricao,
+            valor,
+            data_vencimento,
+            categoria,
+            observacoes,
+            fornecedor_id,
+            tenant_id=tenant_id
+        )
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -2949,7 +2959,7 @@ def adicionar_conta_pagar_route():
 @required_permission('financeiro')
 def pagar_conta_route(id):
     try:
-        pagar_conta(id)
+        pagar_conta(id, tenant_id=get_current_tenant_id())
         flash('Conta marcada como paga!', 'success')
     except Exception as e:
         flash(f'Erro ao pagar conta: {str(e)}', 'error')
@@ -2960,7 +2970,7 @@ def pagar_conta_route(id):
 @required_permission('financeiro')
 def duplicar_conta_pagar_route(id):
     try:
-        sucesso, mensagem = duplicar_conta_pagar(id)
+        sucesso, mensagem = duplicar_conta_pagar(id, tenant_id=get_current_tenant_id())
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -2974,7 +2984,7 @@ def duplicar_conta_pagar_route(id):
 @required_permission('financeiro')
 def excluir_conta_pagar_route(id):
     try:
-        sucesso, mensagem = excluir_conta_pagar(id)
+        sucesso, mensagem = excluir_conta_pagar(id, tenant_id=get_current_tenant_id())
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -2988,7 +2998,7 @@ def excluir_conta_pagar_route(id):
 @required_permission('financeiro')
 def obter_conta_pagar_route(id):
     try:
-        sucesso, resultado = obter_conta_pagar(id)
+        sucesso, resultado = obter_conta_pagar(id, tenant_id=get_current_tenant_id())
         if sucesso:
             return jsonify({'success': True, 'conta': resultado})
         else:
@@ -3012,7 +3022,16 @@ def editar_conta_pagar_route(id):
         else:
             fornecedor_id = None
         
-        sucesso, mensagem = editar_conta_pagar(id, descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
+        sucesso, mensagem = editar_conta_pagar(
+            id,
+            descricao,
+            valor,
+            data_vencimento,
+            categoria,
+            observacoes,
+            fornecedor_id,
+            tenant_id=get_current_tenant_id()
+        )
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3026,13 +3045,14 @@ def editar_conta_pagar_route(id):
 @app.route('/contas-a-receber-hoje')
 @required_permission('financeiro')
 def contas_a_receber_hoje():
+    tenant_id = get_current_tenant_id()
     filtro = request.args.get('filtro', 'hoje')
     status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
-    clientes = listar_clientes()
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
+    clientes = listar_clientes(tenant_id=tenant_id)
     hoje = hoje_br()
     
     # Calcular estatísticas
@@ -3070,7 +3090,7 @@ def contas_a_receber_hoje():
 @required_permission('financeiro')
 def receber_conta_route(id):
     try:
-        receber_conta(id)
+        receber_conta(id, tenant_id=get_current_tenant_id())
         flash('Conta marcada como recebida!', 'success')
     except Exception as e:
         flash(f'Erro ao receber conta: {str(e)}', 'error')
@@ -3080,6 +3100,7 @@ def receber_conta_route(id):
 @app.route('/contas-receber/adicionar', methods=['POST'])
 @required_permission('financeiro')
 def adicionar_conta_receber_route():
+    tenant_id = get_current_tenant_id()
     try:
         descricao = request.form.get('descricao')
         valor = float(request.form.get('valor'))
@@ -3087,7 +3108,14 @@ def adicionar_conta_receber_route():
         cliente_id = request.form.get('cliente_id') or None
         observacoes = request.form.get('observacoes')
         
-        sucesso, mensagem = adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id, observacoes)
+        sucesso, mensagem = adicionar_conta_receber(
+            descricao,
+            valor,
+            data_vencimento,
+            cliente_id,
+            observacoes,
+            tenant_id=tenant_id
+        )
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3101,7 +3129,7 @@ def adicionar_conta_receber_route():
 @required_permission('financeiro')
 def duplicar_conta_receber_route(id):
     try:
-        sucesso, mensagem = duplicar_conta_receber(id)
+        sucesso, mensagem = duplicar_conta_receber(id, tenant_id=get_current_tenant_id())
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3115,7 +3143,7 @@ def duplicar_conta_receber_route(id):
 @required_permission('financeiro')
 def excluir_conta_receber_route(id):
     try:
-        sucesso, mensagem = excluir_conta_receber(id)
+        sucesso, mensagem = excluir_conta_receber(id, tenant_id=get_current_tenant_id())
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3129,7 +3157,7 @@ def excluir_conta_receber_route(id):
 @required_permission('financeiro')
 def obter_conta_receber_route(id):
     try:
-        sucesso, resultado = obter_conta_receber(id)
+        sucesso, resultado = obter_conta_receber(id, tenant_id=get_current_tenant_id())
         if sucesso:
             return jsonify({'success': True, 'conta': resultado})
         else:
@@ -3152,7 +3180,15 @@ def editar_conta_receber_route(id):
         else:
             cliente_id = None
         
-        sucesso, mensagem = editar_conta_receber(id, descricao, valor, data_vencimento, cliente_id, observacoes)
+        sucesso, mensagem = editar_conta_receber(
+            id,
+            descricao,
+            valor,
+            data_vencimento,
+            cliente_id,
+            observacoes,
+            tenant_id=get_current_tenant_id()
+        )
         if sucesso:
             flash(mensagem, 'success')
         else:
