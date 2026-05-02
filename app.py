@@ -3215,10 +3215,11 @@ def editar_conta_receber_route(id):
 @app.route('/orcamentos')
 @login_required
 def orcamentos():
-    orcamentos_lista = listar_orcamentos()
-    produtos_data = listar_produtos(page=1, per_page=999999)
+    tenant_id = get_current_tenant_id()
+    orcamentos_lista = listar_orcamentos(tenant_id=tenant_id)
+    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
     produtos = produtos_data['produtos']
-    clientes = listar_clientes()
+    clientes = listar_clientes(tenant_id=tenant_id)
     return render_template('orcamentos.html', 
                          orcamentos=orcamentos_lista, 
                          produtos=produtos, 
@@ -3228,6 +3229,7 @@ def orcamentos():
 @login_required
 def criar_orcamento_route():
     try:
+        tenant_id = get_current_tenant_id()
         # Receber dados do formulário
         cliente_id = request.form.get('cliente_id') or None
         desconto = float(request.form.get('desconto', 0))
@@ -3257,7 +3259,8 @@ def criar_orcamento_route():
             cliente_id=int(cliente_id) if cliente_id else None,
             desconto=desconto,
             observacoes=observacoes,
-            usuario_id=current_user.id
+            usuario_id=current_user.id,
+            tenant_id=tenant_id
         )
         
         flash('Orçamento criado com sucesso!', 'success')
@@ -3270,7 +3273,7 @@ def criar_orcamento_route():
 @app.route('/orcamentos/<int:id>')
 @login_required
 def visualizar_orcamento(id):
-    orcamento = obter_orcamento(id)
+    orcamento = obter_orcamento(id, tenant_id=get_current_tenant_id())
     if not orcamento:
         flash('Orçamento não encontrado', 'error')
         return redirect(url_for('orcamentos'))
@@ -3281,7 +3284,8 @@ def visualizar_orcamento(id):
 @app.route('/orcamentos/<int:id>/editar')
 @login_required
 def editar_orcamento_route(id):
-    orcamento = obter_orcamento(id)
+    tenant_id = get_current_tenant_id()
+    orcamento = obter_orcamento(id, tenant_id=tenant_id)
     if not orcamento:
         flash('Orçamento não encontrado!', 'error')
         return redirect(url_for('orcamentos'))
@@ -3292,9 +3296,9 @@ def editar_orcamento_route(id):
         return redirect(url_for('visualizar_orcamento', id=id))
     
     # Obter dados necessários
-    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
     produtos = produtos_data['produtos']
-    clientes = listar_clientes()
+    clientes = listar_clientes(tenant_id=tenant_id)
     
     return render_template('editar_orcamento.html', 
                          orcamento=orcamento, 
@@ -3305,6 +3309,7 @@ def editar_orcamento_route(id):
 @login_required
 def atualizar_orcamento_route(id):
     try:
+        tenant_id = get_current_tenant_id()
         # Obter dados do formulário
         cliente_id = request.form.get('cliente_id')
         if cliente_id == '':
@@ -3333,7 +3338,7 @@ def atualizar_orcamento_route(id):
             itens.append(item)
         
         # Atualizar orçamento
-        sucesso = atualizar_orcamento(id, itens, cliente_id, desconto, observacoes)
+        sucesso = atualizar_orcamento(id, itens, cliente_id, desconto, observacoes, tenant_id=tenant_id)
         
         if sucesso:
             flash('Orçamento atualizado com sucesso!', 'success')
@@ -3350,12 +3355,13 @@ def atualizar_orcamento_route(id):
 @login_required
 def converter_orcamento_route(id):
     try:
+        tenant_id = get_current_tenant_id()
         forma_pagamento = request.form.get('forma_pagamento')
         if not forma_pagamento:
             flash('Forma de pagamento é obrigatória', 'error')
             return redirect(url_for('visualizar_orcamento', id=id))
         
-        venda_id = converter_orcamento_em_venda(id, forma_pagamento)
+        venda_id = converter_orcamento_em_venda(id, forma_pagamento, tenant_id=tenant_id)
         flash('Orçamento convertido em venda com sucesso!', 'success')
         return redirect(url_for('vendas'))
         
@@ -3367,7 +3373,7 @@ def converter_orcamento_route(id):
 @login_required
 def excluir_orcamento_route(id):
     try:
-        sucesso = excluir_orcamento(id)
+        sucesso = excluir_orcamento(id, tenant_id=get_current_tenant_id())
         if sucesso:
             flash('Orçamento excluído com sucesso!', 'success')
         else:

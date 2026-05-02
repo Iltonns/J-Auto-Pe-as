@@ -330,6 +330,13 @@ def _resolver_tenant_id_financeiro_caixa(tenant_id=None, permitir_global=True):
     """
     return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
 
+def _resolver_tenant_id_orcamentos(tenant_id=None, permitir_global=True):
+    """
+    Resolve tenant_id para operacoes de orcamentos/itens_orcamento.
+    Reaproveita a mesma estrategia de contexto de vendas.
+    """
+    return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
+
 def _validar_fornecedor_do_tenant(cursor, fornecedor_id, tenant_id):
     """Valida se fornecedor pertence ao tenant informado."""
     fornecedor_normalizado = _normalizar_tenant_id(fornecedor_id)
@@ -5228,17 +5235,59 @@ def gerar_numero_orcamento():
     numero = f"ORC{agora_orc.strftime('%Y%m%d')}{random.randint(1000, 9999)}"
     return numero
 
-def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_id=None):
+def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_id=None, tenant_id=None):
     """Cria um novo orçamento"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para criar orcamento.")
+
+        if usuario_id is not None:
+            cursor.execute(
+                "SELECT id FROM usuarios WHERE id = %s AND tenant_id = %s",
+                (usuario_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError("Usuario informado nao pertence ao tenant atual.")
+
+        cliente_id = _validar_cliente_do_tenant(cursor, cliente_id, tenant_resolvido)
+
+        if not itens:
+            raise ValueError("Adicione pelo menos um item ao orcamento.")
+
+        itens_normalizados = []
+        for item in itens:
+            produto_id = int(item['produto_id'])
+            quantidade = int(float(item['quantidade']))
+            preco_unitario = float(item['preco_unitario'])
+
+            if quantidade <= 0:
+                raise ValueError(f"Quantidade invalida para produto ID {produto_id}.")
+            if preco_unitario < 0:
+                raise ValueError(f"Preco unitario invalido para produto ID {produto_id}.")
+
+            cursor.execute(
+                "SELECT id FROM produtos WHERE id = %s AND tenant_id = %s",
+                (produto_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError(f"Produto com ID {produto_id} nao pertence ao tenant atual.")
+
+            itens_normalizados.append({
+                'produto_id': produto_id,
+                'quantidade': quantidade,
+                'preco_unitario': preco_unitario,
+            })
+
         # Gerar número do orçamento
         numero_orcamento = gerar_numero_orcamento()
         
         # Calcular total sem desconto
-        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens)
+        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens_normalizados)
         
         # Calcular desconto em valor (porcentagem sobre o total)
         valor_desconto = total_sem_desconto * (desconto / 100)
@@ -5246,20 +5295,20 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
         
         # Inserir orçamento (salvar o total final e a porcentagem de desconto)
         cursor.execute('''
-            INSERT INTO orcamentos (numero_orcamento, cliente_id, total, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO orcamentos (numero_orcamento, cliente_id, total, desconto, observacoes, usuario_id, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (numero_orcamento, cliente_id, total_com_desconto, desconto, observacoes, usuario_id))
+        ''', (numero_orcamento, cliente_id, total_com_desconto, desconto, observacoes, usuario_id, tenant_resolvido))
         
         orcamento_id = cursor.fetchone()[0]
         
         # Inserir itens do orçamento
-        for item in itens:
+        for item in itens_normalizados:
             subtotal = item['quantidade'] * item['preco_unitario']
             cursor.execute('''
-                INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
-            ''', (orcamento_id, item['produto_id'], item['quantidade'], item['preco_unitario'], subtotal))
+                INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (orcamento_id, item['produto_id'], item['quantidade'], item['preco_unitario'], subtotal, tenant_resolvido))
         
         conn.commit()
         return orcamento_id
@@ -5269,18 +5318,24 @@ def criar_orcamento(itens, cliente_id=None, desconto=0, observacoes="", usuario_
     finally:
         conn.close()
 
-def listar_orcamentos():
+def listar_orcamentos(tenant_id=None):
     """Lista todos os orçamentos"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+    tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para listar orcamentos.")
+
     cursor.execute('''
         SELECT o.id, o.numero_orcamento, o.total, o.status, o.created_at,
-               c.nome as cliente_nome
+               o.cliente_id, o.desconto, o.tenant_id, c.nome as cliente_nome
         FROM orcamentos o
-        LEFT JOIN clientes c ON o.cliente_id = c.id
+        LEFT JOIN clientes c ON o.cliente_id = c.id AND c.tenant_id = o.tenant_id
+        WHERE o.tenant_id = %s
         ORDER BY o.created_at DESC
-    ''')
+    ''', (tenant_resolvido,))
     
     orcamentos = []
     for row in cursor.fetchall():
@@ -5290,25 +5345,35 @@ def listar_orcamentos():
             'total': row[2],
             'status': row[3],
             'created_at': row[4],
-            'cliente_nome': row[5] or 'Cliente não informado'
+            'cliente_id': row[5],
+            'desconto': row[6],
+            'tenant_id': row[7],
+            'cliente_nome': row[8] or 'Cliente não informado'
         })
     
     conn.close()
     return orcamentos
 
-def obter_orcamento(orcamento_id):
+def obter_orcamento(orcamento_id, tenant_id=None):
     """Obtém um orçamento específico com seus itens"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+    tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    if tenant_resolvido is None:
+        conn.close()
+        raise ValueError("Nao foi possivel resolver tenant_id para obter orcamento.")
+
     # Buscar orçamento
     cursor.execute('''
-        SELECT o.*, c.nome as cliente_nome, c.telefone as cliente_telefone,
-               c.email as cliente_email
+        SELECT
+            o.id, o.numero_orcamento, o.cliente_id, o.total, o.desconto, o.observacoes,
+            o.status, o.data_validade, o.created_at, o.usuario_id, o.tenant_id,
+            c.nome as cliente_nome, c.telefone as cliente_telefone, c.email as cliente_email
         FROM orcamentos o
-        LEFT JOIN clientes c ON o.cliente_id = c.id
-        WHERE o.id = %s
-    ''', (orcamento_id,))
+        LEFT JOIN clientes c ON o.cliente_id = c.id AND c.tenant_id = o.tenant_id
+        WHERE o.id = %s AND o.tenant_id = %s
+    ''', (orcamento_id, tenant_resolvido))
     
     orcamento_data = cursor.fetchone()
     if not orcamento_data:
@@ -5317,21 +5382,24 @@ def obter_orcamento(orcamento_id):
     
     # Buscar itens do orçamento
     cursor.execute('''
-        SELECT io.*, p.nome as produto_nome
+        SELECT
+            io.id, io.orcamento_id, io.produto_id, io.quantidade,
+            io.preco_unitario, io.subtotal, io.tenant_id, p.nome as produto_nome
         FROM itens_orcamento io
-        JOIN produtos p ON io.produto_id = p.id
-        WHERE io.orcamento_id = %s
-    ''', (orcamento_id,))
+        JOIN produtos p ON io.produto_id = p.id AND p.tenant_id = io.tenant_id
+        WHERE io.orcamento_id = %s AND io.tenant_id = %s
+    ''', (orcamento_id, tenant_resolvido))
     
     itens = []
     for row in cursor.fetchall():
         itens.append({
             'id': row[0],
             'produto_id': row[2],
-            'produto_nome': row[6],
+            'produto_nome': row[7],
             'quantidade': row[3],
             'preco_unitario': row[4],
-            'subtotal': row[5]
+            'subtotal': row[5],
+            'tenant_id': row[6]
         })
     
     # Calcular totais para exibição
@@ -5352,23 +5420,61 @@ def obter_orcamento(orcamento_id):
         'data_validade': orcamento_data[7],
         'created_at': orcamento_data[8],
         'usuario_id': orcamento_data[9],
-        'cliente_nome': orcamento_data[10] or 'Cliente não informado',
-        'cliente_telefone': orcamento_data[11] or '',
-        'cliente_email': orcamento_data[12] or '',
+        'tenant_id': orcamento_data[10],
+        'cliente_nome': orcamento_data[11] or 'Cliente não informado',
+        'cliente_telefone': orcamento_data[12] or '',
+        'cliente_email': orcamento_data[13] or '',
         'itens': itens
     }
     
     conn.close()
     return orcamento
 
-def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observacoes=""):
+def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observacoes="", tenant_id=None):
     """Atualiza um orçamento existente"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para atualizar orcamento.")
+
+        cliente_id = _validar_cliente_do_tenant(cursor, cliente_id, tenant_resolvido)
+
+        if not itens:
+            raise ValueError("Adicione pelo menos um item ao orcamento.")
+
+        itens_normalizados = []
+        for item in itens:
+            produto_id = int(item['produto_id'])
+            quantidade = int(float(item['quantidade']))
+            preco_unitario = float(item['preco_unitario'])
+
+            if quantidade <= 0:
+                raise ValueError(f"Quantidade invalida para produto ID {produto_id}.")
+            if preco_unitario < 0:
+                raise ValueError(f"Preco unitario invalido para produto ID {produto_id}.")
+
+            cursor.execute(
+                "SELECT id FROM produtos WHERE id = %s AND tenant_id = %s",
+                (produto_id, tenant_resolvido)
+            )
+            if not cursor.fetchone():
+                raise ValueError(f"Produto com ID {produto_id} nao pertence ao tenant atual.")
+
+            itens_normalizados.append({
+                'produto_id': produto_id,
+                'quantidade': quantidade,
+                'preco_unitario': preco_unitario,
+            })
+
         # Verificar se o orçamento existe e está pendente
-        cursor.execute('SELECT status FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute(
+            'SELECT status FROM orcamentos WHERE id = %s AND tenant_id = %s',
+            (orcamento_id, tenant_resolvido)
+        )
         resultado = cursor.fetchone()
         
         if not resultado:
@@ -5378,7 +5484,7 @@ def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observ
             raise Exception("Apenas orçamentos pendentes podem ser editados")
         
         # Calcular novo total sem desconto
-        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens)
+        total_sem_desconto = sum(item['quantidade'] * item['preco_unitario'] for item in itens_normalizados)
         
         # Calcular desconto em valor (porcentagem sobre o total)
         valor_desconto = total_sem_desconto * (desconto / 100)
@@ -5388,19 +5494,22 @@ def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observ
         cursor.execute('''
             UPDATE orcamentos 
             SET cliente_id = %s, total = %s, desconto = %s, observacoes = %s
-            WHERE id = %s
-        ''', (cliente_id, total_com_desconto, desconto, observacoes, orcamento_id))
+            WHERE id = %s AND tenant_id = %s
+        ''', (cliente_id, total_com_desconto, desconto, observacoes, orcamento_id, tenant_resolvido))
         
         # Remover itens antigos
-        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = %s', (orcamento_id,))
+        cursor.execute(
+            'DELETE FROM itens_orcamento WHERE orcamento_id = %s AND tenant_id = %s',
+            (orcamento_id, tenant_resolvido)
+        )
         
         # Inserir novos itens
-        for item in itens:
+        for item in itens_normalizados:
             cursor.execute('''
-                INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO itens_orcamento (orcamento_id, produto_id, quantidade, preco_unitario, subtotal, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
             ''', (orcamento_id, item['produto_id'], item['quantidade'], 
-                  item['preco_unitario'], item['quantidade'] * item['preco_unitario']))
+                  item['preco_unitario'], item['quantidade'] * item['preco_unitario'], tenant_resolvido))
         
         conn.commit()
         return True
@@ -5411,14 +5520,22 @@ def atualizar_orcamento(orcamento_id, itens, cliente_id=None, desconto=0, observ
     finally:
         conn.close()
 
-def excluir_orcamento(orcamento_id):
+def excluir_orcamento(orcamento_id, tenant_id=None):
     """Exclui um orçamento e seus itens"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para excluir orcamento.")
+
         # Verificar se o orçamento existe
-        cursor.execute('SELECT status FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute(
+            'SELECT status FROM orcamentos WHERE id = %s AND tenant_id = %s',
+            (orcamento_id, tenant_resolvido)
+        )
         resultado = cursor.fetchone()
         
         if not resultado:
@@ -5429,10 +5546,16 @@ def excluir_orcamento(orcamento_id):
             raise Exception("Apenas orçamentos pendentes ou rejeitados podem ser excluídos")
         
         # Excluir itens do orçamento primeiro (devido à foreign key)
-        cursor.execute('DELETE FROM itens_orcamento WHERE orcamento_id = %s', (orcamento_id,))
+        cursor.execute(
+            'DELETE FROM itens_orcamento WHERE orcamento_id = %s AND tenant_id = %s',
+            (orcamento_id, tenant_resolvido)
+        )
         
         # Excluir o orçamento
-        cursor.execute('DELETE FROM orcamentos WHERE id = %s', (orcamento_id,))
+        cursor.execute(
+            'DELETE FROM orcamentos WHERE id = %s AND tenant_id = %s',
+            (orcamento_id, tenant_resolvido)
+        )
         
         conn.commit()
         return True
@@ -5443,47 +5566,79 @@ def excluir_orcamento(orcamento_id):
     finally:
         conn.close()
 
-def converter_orcamento_em_venda(orcamento_id, forma_pagamento):
+def converter_orcamento_em_venda(orcamento_id, forma_pagamento, tenant_id=None):
     """Converte um orçamento aprovado em venda"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_orcamentos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Nao foi possivel resolver tenant_id para converter orcamento.")
+
         # Buscar orçamento
-        orcamento = obter_orcamento(orcamento_id)
+        orcamento = obter_orcamento(orcamento_id, tenant_id=tenant_resolvido)
         if not orcamento:
             raise ValueError("Orçamento não encontrado")
+
+        if orcamento.get('status') != 'pendente':
+            raise ValueError("Apenas orcamentos pendentes podem ser convertidos em venda.")
+
+        cliente_id = _validar_cliente_do_tenant(cursor, orcamento['cliente_id'], tenant_resolvido)
         
         # Criar venda
         cursor.execute('''
-            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (orcamento['cliente_id'], orcamento['total'], forma_pagamento, 
-              orcamento['desconto'], orcamento['observacoes'], orcamento['usuario_id']))
+            INSERT INTO vendas (cliente_id, total, forma_pagamento, desconto, observacoes, usuario_id, data_venda, tenant_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (
+            cliente_id,
+            orcamento['total'],
+            forma_pagamento,
+            orcamento['desconto'],
+            orcamento['observacoes'],
+            orcamento['usuario_id'],
+            agora_br(),
+            tenant_resolvido
+        ))
         
         venda_id = cursor.fetchone()[0]
         
         # Copiar itens para venda
         for item in orcamento['itens']:
+            cursor.execute(
+                "SELECT id, estoque FROM produtos WHERE id = %s AND tenant_id = %s",
+                (item['produto_id'], tenant_resolvido)
+            )
+            produto = cursor.fetchone()
+            if not produto:
+                raise ValueError(f"Produto com ID {item['produto_id']} nao pertence ao tenant atual.")
+            if produto[1] < item['quantidade']:
+                raise ValueError(
+                    f"Estoque insuficiente para o produto ID {item['produto_id']}. "
+                    f"Disponivel: {produto[1]}, solicitado: {item['quantidade']}."
+                )
+
             cursor.execute('''
-                INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal, tenant_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
             ''', (venda_id, item['produto_id'], item['quantidade'], 
-                  item['preco_unitario'], item['subtotal']))
+                  item['preco_unitario'], item['subtotal'], tenant_resolvido))
             
             # Atualizar estoque
             cursor.execute('''
                 UPDATE produtos 
                 SET estoque = estoque - %s 
-                WHERE id = %s
-            ''', (item['quantidade'], item['produto_id']))
+                WHERE id = %s AND tenant_id = %s
+            ''', (item['quantidade'], item['produto_id'], tenant_resolvido))
         
         # Atualizar status do orçamento
         cursor.execute('''
             UPDATE orcamentos 
             SET status = 'convertido' 
-            WHERE id = %s
-        ''', (orcamento_id,))
+            WHERE id = %s AND tenant_id = %s
+        ''', (orcamento_id, tenant_resolvido))
         
         conn.commit()
         return venda_id
