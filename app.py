@@ -79,7 +79,7 @@ from Minha_autopecas_web.logica_banco import (
     obter_marcas_cadastradas, obter_categorias_cadastradas,
     garantir_estrutura_fiscal, obter_nfe_por_venda,
     listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant,
-    obter_tenant_padrao_id
+    obter_tenant_padrao_id, resolver_tenant_para_login
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -458,16 +458,15 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        tenant_login = _normalize_tenant_id(
-            request.form.get('tenant_id') or request.args.get('tenant_id')
-        )
+        tenant_input = request.form.get('tenant_id') or request.args.get('tenant_id')
+        tenant_login = resolver_tenant_para_login(tenant_input)
 
         if not username or not password:
             flash('Usuário e senha são obrigatórios.', 'error')
             return render_template('login.html')
 
         if tenant_login is None:
-            flash('tenant_id é obrigatório para login.', 'error')
+            flash('Informe um tenant válido (ID, slug ou nome da empresa).', 'error')
             return render_template('login.html')
 
         user_data = verificar_usuario(
@@ -521,7 +520,7 @@ def logout():
 @app.route('/recuperar-senha', methods=['GET', 'POST'])
 def recuperar_senha():
     token_prefill = (request.args.get('token') or '').strip()
-    tenant_prefill = _normalize_tenant_id(request.args.get('tenant_id'))
+    tenant_prefill = resolver_tenant_para_login(request.args.get('tenant_id'))
 
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip()
@@ -529,12 +528,12 @@ def recuperar_senha():
         nova_senha = request.form.get('nova_senha')
         confirmar_senha = request.form.get('confirmar_senha')
         acao = (request.form.get('acao') or '').strip().lower()
-        tenant_reset = _normalize_tenant_id(
+        tenant_reset = resolver_tenant_para_login(
             request.form.get('tenant_id') or request.args.get('tenant_id')
         )
 
         if tenant_reset is None:
-            flash('tenant_id é obrigatório para recuperação de senha.', 'error')
+            flash('Informe um tenant válido (ID, slug ou nome da empresa).', 'error')
             return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_prefill)
 
         solicitacao_token = acao in {'solicitar-token', 'solicitar_token', 'request_token'}

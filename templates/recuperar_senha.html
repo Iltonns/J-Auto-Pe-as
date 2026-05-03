@@ -75,14 +75,13 @@
 
                     <form method="POST" action="{{ url_for('recuperar_senha') }}" id="recoveryForm">
                         <div class="mb-3">
-                            <label for="tenant_id" class="form-label">Tenant ID</label>
-                            <input type="number"
+                            <label for="tenant_id" class="form-label">Tenant (ID, slug ou nome)</label>
+                            <input type="text"
                                    class="form-control"
                                    id="tenant_id"
                                    name="tenant_id"
-                                   min="1"
                                    value="{{ tenant_id_reset or request.args.get('tenant_id', '') }}"
-                                   placeholder="Ex.: 1"
+                                   placeholder="Ex.: 1, minha-empresa ou Nome da Empresa"
                                    required>
                         </div>
 
