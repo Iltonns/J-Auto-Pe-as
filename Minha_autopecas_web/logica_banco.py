@@ -5,6 +5,8 @@ import psycopg2.extras
 import psycopg2.errors
 import os
 import re
+import secrets
+import hashlib
 import unicodedata
 from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -38,6 +40,7 @@ _fiscal_schema_checked = False
 _nfe_entrada_schema_checked = False
 _clientes_schema_checked = False
 _contas_receber_schema_checked = False
+_password_resets_schema_checked = False
 
 def agora_br():
     """Retorna o datetime atual no horário de Brasília"""
@@ -146,6 +149,15 @@ def _obter_tenant_padrao_id(cursor):
         return None
 
     return None
+
+def obter_tenant_padrao_id():
+    """Retorna o tenant padrão atual (slug erp-auto-pecas ou primeiro tenant)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        return _obter_tenant_padrao_id(cursor)
+    finally:
+        conn.close()
 
 def _resolver_tenant_id_configuracoes(tenant_id=None):
     """
@@ -373,7 +385,7 @@ def _resolver_tenant_id_orcamentos(tenant_id=None, permitir_global=True):
     """
     return _resolver_tenant_id_vendas(tenant_id=tenant_id, permitir_global=permitir_global)
 
-def _resolver_tenant_id_fiscal(tenant_id=None, permitir_global=True):
+def _resolver_tenant_id_fiscal(tenant_id=None, permitir_global=False):
     """
     Resolve tenant_id para operacoes fiscais (NF-e).
     Reaproveita a mesma estrategia de contexto de vendas.
@@ -1341,70 +1353,37 @@ def popular_dados_exemplo():
     conn.close()
 
 # FUNÇÕES DE USUÁRIOS
-def verificar_usuario(username, password, tenant_id=None, permitir_escopo_global=False):
-    """
-    Verifica usuário/senha e status ativo.
-    Para manter compatibilidade do login, quando tenant não é resolvido
-    a busca pode ocorrer em escopo global (permitir_global=True).
-    """
+def verificar_usuario(username, password, tenant_id=None):
+    """Verifica usuário/senha e status ativo, sempre no escopo de um tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         possui_is_superadmin = _usuarios_tem_coluna_is_superadmin(cursor)
-        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
-        if permitir_escopo_global and _normalizar_tenant_id(tenant_id) is None:
-            tenant_resolvido = None
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
 
-        if tenant_resolvido is not None:
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, password_hash, ativo, tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE username = %s
-                      AND (tenant_id = %s OR tenant_id IS NULL)
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (username, tenant_resolvido)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, password_hash, ativo, tenant_id
-                    FROM usuarios
-                    WHERE username = %s
-                      AND (tenant_id = %s OR tenant_id IS NULL)
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (username, tenant_resolvido)
-                )
+        if possui_is_superadmin:
+            cursor.execute(
+                '''
+                SELECT id, password_hash, ativo, tenant_id, is_superadmin
+                FROM usuarios
+                WHERE username = %s AND tenant_id = %s
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (username, tenant_resolvido)
+            )
         else:
-            # Escopo global somente para compatibilidade de autenticação sem contexto de tenant.
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, password_hash, ativo, tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE username = %s
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (username,)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, password_hash, ativo, tenant_id
-                    FROM usuarios
-                    WHERE username = %s
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (username,)
-                )
+            cursor.execute(
+                '''
+                SELECT id, password_hash, ativo, tenant_id
+                FROM usuarios
+                WHERE username = %s AND tenant_id = %s
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (username, tenant_resolvido)
+            )
 
         user = cursor.fetchone()
         if not user:
@@ -1414,12 +1393,11 @@ def verificar_usuario(username, password, tenant_id=None, permitir_escopo_global
             return None
 
         if not user[2]:
-            # Usuário existe mas está inativo
             return False
 
         tenant_usuario = _normalizar_tenant_id(user[3])
         if tenant_usuario is None:
-            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+            return None
 
         return {
             'id': user[0],
@@ -1431,69 +1409,40 @@ def verificar_usuario(username, password, tenant_id=None, permitir_escopo_global
         conn.close()
 
 def buscar_usuario_por_id(user_id, tenant_id=None, permitir_global=False):
-    """Busca um usuário pelo ID, respeitando o tenant quando disponível."""
+    """Busca um usuário pelo ID no escopo obrigatório de tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         possui_is_superadmin = _usuarios_tem_coluna_is_superadmin(cursor)
-        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=permitir_global)
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
 
-        if tenant_resolvido is not None:
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           permissao_contas_pagar, permissao_contas_receber, tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE id = %s AND (tenant_id = %s OR tenant_id IS NULL)
-                    LIMIT 1
-                    ''',
-                    (user_id, tenant_resolvido)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           permissao_contas_pagar, permissao_contas_receber, tenant_id
-                    FROM usuarios
-                    WHERE id = %s AND (tenant_id = %s OR tenant_id IS NULL)
-                    LIMIT 1
-                    ''',
-                    (user_id, tenant_resolvido)
-                )
+        if possui_is_superadmin:
+            cursor.execute(
+                '''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       permissao_contas_pagar, permissao_contas_receber, tenant_id, is_superadmin
+                FROM usuarios
+                WHERE id = %s AND tenant_id = %s
+                LIMIT 1
+                ''',
+                (user_id, tenant_resolvido)
+            )
         else:
-            # Escopo global somente quando explicitamente permitido (compatibilidade).
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           permissao_contas_pagar, permissao_contas_receber, tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE id = %s
-                    LIMIT 1
-                    ''',
-                    (user_id,)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           permissao_contas_pagar, permissao_contas_receber, tenant_id
-                    FROM usuarios
-                    WHERE id = %s
-                    LIMIT 1
-                    ''',
-                    (user_id,)
-                )
+            cursor.execute(
+                '''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       permissao_contas_pagar, permissao_contas_receber, tenant_id
+                FROM usuarios
+                WHERE id = %s AND tenant_id = %s
+                LIMIT 1
+                ''',
+                (user_id, tenant_resolvido)
+            )
 
         user = cursor.fetchone()
         if not user:
@@ -1501,7 +1450,7 @@ def buscar_usuario_por_id(user_id, tenant_id=None, permitir_global=False):
 
         tenant_usuario = _normalizar_tenant_id(user[14] if len(user) > 14 else None)
         if tenant_usuario is None:
-            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+            return None
 
         return {
             'id': user[0],
@@ -1525,77 +1474,46 @@ def buscar_usuario_por_id(user_id, tenant_id=None, permitir_global=False):
         conn.close()
 
 def buscar_usuario_por_email(email, tenant_id=None, permitir_global=False):
-    """Busca um usuário pelo email, respeitando tenant quando disponível."""
+    """Busca um usuário pelo email no escopo obrigatório de tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         possui_is_superadmin = _usuarios_tem_coluna_is_superadmin(cursor)
-        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=permitir_global)
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
 
-        if tenant_resolvido is not None:
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE email = %s
-                      AND ativo = TRUE
-                      AND (tenant_id = %s OR tenant_id IS NULL)
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (email, tenant_resolvido)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           tenant_id
-                    FROM usuarios
-                    WHERE email = %s
-                      AND ativo = TRUE
-                      AND (tenant_id = %s OR tenant_id IS NULL)
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (email, tenant_resolvido)
-                )
+        if possui_is_superadmin:
+            cursor.execute(
+                '''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       tenant_id, is_superadmin
+                FROM usuarios
+                WHERE email = %s
+                  AND ativo = TRUE
+                  AND tenant_id = %s
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (email, tenant_resolvido)
+            )
         else:
-            # Escopo global somente quando explicitamente permitido.
-            if possui_is_superadmin:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           tenant_id, is_superadmin
-                    FROM usuarios
-                    WHERE email = %s AND ativo = TRUE
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (email,)
-                )
-            else:
-                cursor.execute(
-                    '''
-                    SELECT id, username, email, nome_completo, ativo,
-                           permissao_vendas, permissao_estoque, permissao_clientes,
-                           permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
-                           tenant_id
-                    FROM usuarios
-                    WHERE email = %s AND ativo = TRUE
-                    ORDER BY id
-                    LIMIT 1
-                    ''',
-                    (email,)
-                )
+            cursor.execute(
+                '''
+                SELECT id, username, email, nome_completo, ativo,
+                       permissao_vendas, permissao_estoque, permissao_clientes,
+                       permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
+                       tenant_id
+                FROM usuarios
+                WHERE email = %s
+                  AND ativo = TRUE
+                  AND tenant_id = %s
+                ORDER BY id
+                LIMIT 1
+                ''',
+                (email, tenant_resolvido)
+            )
 
         user = cursor.fetchone()
         if not user:
@@ -1603,7 +1521,7 @@ def buscar_usuario_por_email(email, tenant_id=None, permitir_global=False):
 
         tenant_usuario = _normalizar_tenant_id(user[12] if len(user) > 12 else None)
         if tenant_usuario is None:
-            tenant_usuario = _resolver_tenant_fallback(cursor, tenant_resolvido)
+            return None
 
         return {
             'id': user[0],
@@ -1644,6 +1562,238 @@ def validar_senha_segura(senha):
     
     return True, "Senha válida"
 
+def garantir_estrutura_password_resets():
+    """Garante a existência da tabela de tokens de recuperação de senha."""
+    global _password_resets_schema_checked
+    if _password_resets_schema_checked:
+        return True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id BIGSERIAL PRIMARY KEY,
+                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                email TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP,
+                requested_ip TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            '''
+        )
+        cursor.execute(
+            '''
+            CREATE INDEX IF NOT EXISTS idx_password_resets_tenant_user_status
+            ON password_resets (tenant_id, user_id, used_at, expires_at)
+            '''
+        )
+        cursor.execute(
+            '''
+            CREATE INDEX IF NOT EXISTS idx_password_resets_tenant_email
+            ON password_resets (tenant_id, email)
+            '''
+        )
+        conn.commit()
+        _password_resets_schema_checked = True
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao garantir estrutura de password_resets: {e}")
+        return False
+    finally:
+        conn.close()
+
+def _hash_token_reset(token):
+    token_limpo = (str(token).strip() if token is not None else '')
+    if not token_limpo:
+        return None
+    return hashlib.sha256(token_limpo.encode('utf-8')).hexdigest()
+
+def criar_token_reset_senha(email, tenant_id=None, validade_minutos=30, requested_ip=None, user_agent=None):
+    """Gera token temporário de redefinição de senha para usuário do tenant informado."""
+    if not garantir_estrutura_password_resets():
+        return False, "Estrutura de recuperação de senha indisponível.", None
+
+    email_limpo = (str(email).strip().lower() if email is not None else '')
+    if not email_limpo:
+        return False, "Email é obrigatório para solicitar redefinição.", None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
+        try:
+            validade = int(validade_minutos)
+        except (TypeError, ValueError):
+            validade = 30
+        validade = max(5, min(validade, 180))
+
+        cursor.execute(
+            '''
+            SELECT id, email
+            FROM usuarios
+            WHERE LOWER(email) = %s
+              AND tenant_id = %s
+              AND ativo = TRUE
+            ORDER BY id
+            LIMIT 1
+            ''',
+            (email_limpo, tenant_resolvido)
+        )
+        user = cursor.fetchone()
+
+        # Resposta neutra para reduzir enumeração de usuários.
+        if not user:
+            return True, "Se o email existir para este tenant, um token de redefinição foi gerado.", None
+
+        user_id = int(user[0])
+        email_usuario = (user[1] or email_limpo).strip().lower()
+
+        cursor.execute(
+            '''
+            UPDATE password_resets
+            SET used_at = CURRENT_TIMESTAMP
+            WHERE tenant_id = %s
+              AND user_id = %s
+              AND used_at IS NULL
+            ''',
+            (tenant_resolvido, user_id)
+        )
+
+        token_raw = secrets.token_urlsafe(48)
+        token_hash = _hash_token_reset(token_raw)
+        expires_at = datetime.utcnow() + timedelta(minutes=validade)
+
+        cursor.execute(
+            '''
+            INSERT INTO password_resets (
+                tenant_id, user_id, email, token_hash, expires_at, requested_ip, user_agent
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''',
+            (tenant_resolvido, user_id, email_usuario, token_hash, expires_at, requested_ip, user_agent)
+        )
+        conn.commit()
+        return True, "Token de redefinição gerado com sucesso.", token_raw
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao gerar token de redefinição: {str(e)}", None
+    finally:
+        conn.close()
+
+def validar_token_reset_senha(token, tenant_id=None):
+    """Valida se o token existe, pertence ao tenant e não expirou."""
+    if not garantir_estrutura_password_resets():
+        return None
+
+    token_hash = _hash_token_reset(token)
+    if not token_hash:
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
+        cursor.execute(
+            '''
+            SELECT pr.id, pr.user_id, pr.email, pr.tenant_id, pr.expires_at
+            FROM password_resets pr
+            JOIN usuarios u ON u.id = pr.user_id AND u.tenant_id = pr.tenant_id
+            WHERE pr.token_hash = %s
+              AND pr.tenant_id = %s
+              AND pr.used_at IS NULL
+              AND pr.expires_at > CURRENT_TIMESTAMP
+              AND u.ativo = TRUE
+            LIMIT 1
+            ''',
+            (token_hash, tenant_resolvido)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            'reset_id': int(row[0]),
+            'user_id': int(row[1]),
+            'email': row[2],
+            'tenant_id': int(row[3]),
+            'expires_at': row[4]
+        }
+    finally:
+        conn.close()
+
+def consumir_token_reset_senha(token, nova_senha, tenant_id=None):
+    """Consome um token de redefinição e atualiza a senha do usuário do tenant."""
+    if not garantir_estrutura_password_resets():
+        return False, "Estrutura de recuperação de senha indisponível."
+
+    valida, mensagem = validar_senha_segura(nova_senha)
+    if not valida:
+        return False, mensagem
+
+    token_hash = _hash_token_reset(token)
+    if not token_hash:
+        return False, "Token de redefinição inválido."
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
+
+        cursor.execute(
+            '''
+            SELECT id, user_id
+            FROM password_resets
+            WHERE token_hash = %s
+              AND tenant_id = %s
+              AND used_at IS NULL
+              AND expires_at > CURRENT_TIMESTAMP
+            FOR UPDATE
+            ''',
+            (token_hash, tenant_resolvido)
+        )
+        row = cursor.fetchone()
+        if not row:
+            conn.rollback()
+            return False, "Token inválido ou expirado."
+
+        reset_id = int(row[0])
+        user_id = int(row[1])
+        password_hash = generate_password_hash(nova_senha)
+
+        cursor.execute(
+            '''
+            UPDATE usuarios
+            SET password_hash = %s
+            WHERE id = %s AND tenant_id = %s AND ativo = TRUE
+            ''',
+            (password_hash, user_id, tenant_resolvido)
+        )
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return False, "Usuário não encontrado para este tenant."
+
+        cursor.execute(
+            '''
+            UPDATE password_resets
+            SET used_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND tenant_id = %s
+            ''',
+            (reset_id, tenant_resolvido)
+        )
+
+        conn.commit()
+        return True, "Senha atualizada com sucesso."
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao processar token de redefinição: {str(e)}"
+    finally:
+        conn.close()
+
 def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None, tenant_id=None):
     """
     Atualiza a senha de um usuário
@@ -1658,10 +1808,7 @@ def atualizar_senha_usuario(user_id, nova_senha, senha_atual=None, tenant_id=Non
     cursor = conn.cursor()
     
     try:
-        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
-        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
-        if tenant_resolvido is None:
-            return False, "Tenant não resolvido para atualização de senha"
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
 
         # Se senha_atual foi fornecida, validar
         if senha_atual is not None:
@@ -1934,20 +2081,11 @@ def verificar_permissao(user_id, permissao, tenant_id=None):
     cursor = conn.cursor()
 
     try:
-        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=True)
-        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
-
-        if tenant_resolvido is not None:
-            cursor.execute(
-                f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND tenant_id = %s AND ativo = TRUE",
-                (user_id, tenant_resolvido)
-            )
-        else:
-            # Compatibilidade global quando tenant não puder ser resolvido.
-            cursor.execute(
-                f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND ativo = TRUE",
-                (user_id,)
-            )
+        tenant_resolvido = _resolver_tenant_id_usuarios(tenant_id, permitir_global=False)
+        cursor.execute(
+            f"SELECT permissao_{permissao}, permissao_admin FROM usuarios WHERE id = %s AND tenant_id = %s AND ativo = TRUE",
+            (user_id, tenant_resolvido)
+        )
 
         result = cursor.fetchone()
         if result:
@@ -3412,27 +3550,29 @@ def deletar_todos_os_produtos(tenant_id=None):
         conn.close()
 
 
-def limpar_completamente_produtos():
-    """Remove completamente todos os produtos do banco - CUIDADO!"""
+def limpar_completamente_produtos(tenant_id=None):
+    """Remove completamente os produtos do tenant informado - CUIDADO!"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Deletar primeiro os itens de venda relacionados
-        cursor.execute("DELETE FROM itens_venda")
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Não foi possível resolver tenant_id para limpeza completa de produtos.")
+
+        # Deletar primeiro os itens de venda relacionados ao tenant.
+        cursor.execute("DELETE FROM itens_venda WHERE tenant_id = %s", (tenant_resolvido,))
         
-        # Deletar todos os produtos
-        cursor.execute("DELETE FROM produtos")
-        
-        # Reset do auto increment
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='produtos'")
+        # Deletar todos os produtos do tenant.
+        cursor.execute("DELETE FROM produtos WHERE tenant_id = %s", (tenant_resolvido,))
         
         conn.commit()
-        print("✓ Todos os produtos removidos completamente do banco")
+        print(f"Produtos removidos completamente para tenant_id={tenant_resolvido}")
         
     except Exception as e:
         conn.rollback()
-        print(f"✗ Erro ao limpar produtos: {e}")
+        print(f"Erro ao limpar produtos do tenant: {e}")
         raise e
     finally:
         conn.close()
@@ -5618,97 +5758,120 @@ def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id
         conn.close()
         return False, f"Erro ao editar conta: {str(e)}"
 
-def listar_contas_atrasadas():
-    """Lista contas a pagar e a receber que estão em atraso (vencimento anterior ao dia de hoje)"""
+def listar_contas_atrasadas(tenant_id=None):
+    """Lista contas a pagar/receber em atraso no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     contas_atrasadas = []
-    
-    # Contas a pagar atrasadas
-    cursor.execute('''
-        SELECT 'pagar' as tipo, cp.id, cp.descricao, cp.valor, cp.data_vencimento, 
-               f.nome as entidade, (CURRENT_DATE - cp.data_vencimento::date) as dias_atraso
-        FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id
-        WHERE cp.data_vencimento::date < CURRENT_DATE AND cp.status = 'pendente'
-        ORDER BY cp.data_vencimento ASC
-    ''')
-    
-    for row in cursor.fetchall():
-        contas_atrasadas.append({
-            'tipo': 'pagar',
-            'tipo_label': 'A Pagar',
-            'id': row[1],
-            'descricao': row[2],
-            'valor': float(row[3]) if row[3] else 0,
-            'data_vencimento': row[4],
-            'entidade': row[5] or 'Sem fornecedor',
-            'dias_atraso': int(row[6]) if row[6] else 0
-        })
-    
-    # Contas a receber atrasadas
-    cursor.execute('''
-        SELECT 'receber' as tipo, cr.id, cr.descricao, cr.valor, cr.data_vencimento, 
-               c.nome as entidade, (CURRENT_DATE - cr.data_vencimento::date) as dias_atraso
-        FROM contas_receber cr
-        LEFT JOIN clientes c ON cr.cliente_id = c.id
-        WHERE cr.data_vencimento::date < CURRENT_DATE AND cr.status = 'pendente'
-        ORDER BY cr.data_vencimento ASC
-    ''')
-    
-    for row in cursor.fetchall():
-        contas_atrasadas.append({
-            'tipo': 'receber',
-            'tipo_label': 'A Receber',
-            'id': row[1],
-            'descricao': row[2],
-            'valor': float(row[3]) if row[3] else 0,
-            'data_vencimento': row[4],
-            'entidade': row[5] or 'Sem cliente',
-            'dias_atraso': int(row[6]) if row[6] else 0
-        })
-    
-    conn.close()
-    
-    # Ordenar por dias de atraso (maiores primeiro)
-    contas_atrasadas.sort(key=lambda x: x['dias_atraso'], reverse=True)
-    
-    return contas_atrasadas
+    try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
 
-def contar_contas_atrasadas():
-    """Conta o total de contas em atraso (pagar + receber)"""
+        # Contas a pagar atrasadas
+        cursor.execute('''
+            SELECT 'pagar' as tipo, cp.id, cp.descricao, cp.valor, cp.data_vencimento,
+                   f.nome as entidade, (CURRENT_DATE - cp.data_vencimento::date) as dias_atraso
+            FROM contas_pagar cp
+            LEFT JOIN fornecedores f ON cp.fornecedor_id = f.id AND f.tenant_id = cp.tenant_id
+            WHERE cp.data_vencimento::date < CURRENT_DATE
+              AND cp.status = 'pendente'
+              AND cp.tenant_id = %s
+            ORDER BY cp.data_vencimento ASC
+        ''', (tenant_resolvido,))
+
+        for row in cursor.fetchall():
+            contas_atrasadas.append({
+                'tipo': 'pagar',
+                'tipo_label': 'A Pagar',
+                'id': row[1],
+                'descricao': row[2],
+                'valor': float(row[3]) if row[3] else 0,
+                'data_vencimento': row[4],
+                'entidade': row[5] or 'Sem fornecedor',
+                'dias_atraso': int(row[6]) if row[6] else 0
+            })
+
+        # Contas a receber atrasadas
+        cursor.execute('''
+            SELECT 'receber' as tipo, cr.id, cr.descricao, cr.valor, cr.data_vencimento,
+                   c.nome as entidade, (CURRENT_DATE - cr.data_vencimento::date) as dias_atraso
+            FROM contas_receber cr
+            LEFT JOIN clientes c ON cr.cliente_id = c.id AND c.tenant_id = cr.tenant_id
+            WHERE cr.data_vencimento::date < CURRENT_DATE
+              AND cr.status = 'pendente'
+              AND cr.tenant_id = %s
+            ORDER BY cr.data_vencimento ASC
+        ''', (tenant_resolvido,))
+
+        for row in cursor.fetchall():
+            contas_atrasadas.append({
+                'tipo': 'receber',
+                'tipo_label': 'A Receber',
+                'id': row[1],
+                'descricao': row[2],
+                'valor': float(row[3]) if row[3] else 0,
+                'data_vencimento': row[4],
+                'entidade': row[5] or 'Sem cliente',
+                'dias_atraso': int(row[6]) if row[6] else 0
+            })
+
+        # Ordenar por dias de atraso (maiores primeiro)
+        contas_atrasadas.sort(key=lambda x: x['dias_atraso'], reverse=True)
+        return contas_atrasadas
+    finally:
+        conn.close()
+
+def contar_contas_atrasadas(tenant_id=None):
+    """Conta o total de contas em atraso (pagar + receber) no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT COUNT(*)
-        FROM (
-            SELECT 1 FROM contas_pagar 
-            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-            UNION ALL
-            SELECT 1 FROM contas_receber 
-            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-        ) as contas
-    ''')
-    
-    total = cursor.fetchone()[0] or 0
-    conn.close()
-    
-    return total
+    try:
+        tenant_resolvido = _resolver_tenant_id_contas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return 0
+
+        cursor.execute('''
+            SELECT COUNT(*)
+            FROM (
+                SELECT 1
+                FROM contas_pagar
+                WHERE data_vencimento::date < CURRENT_DATE
+                  AND status = 'pendente'
+                  AND tenant_id = %s
+                UNION ALL
+                SELECT 1
+                FROM contas_receber
+                WHERE data_vencimento::date < CURRENT_DATE
+                  AND status = 'pendente'
+                  AND tenant_id = %s
+            ) as contas
+        ''', (tenant_resolvido, tenant_resolvido))
+
+        total = cursor.fetchone()[0] or 0
+        return total
+    finally:
+        conn.close()
 
 # FUNÇÕES DE ESTATÍSTICAS
-def obter_estatisticas_dashboard():
-    """Obtém estatísticas para o dashboard."""
+def obter_estatisticas_dashboard(tenant_id=None):
+    """Obtém estatísticas para o dashboard no tenant atual."""
     conn = None
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Não foi possível resolver tenant_id para dashboard.")
 
-        def consultar_valor(query, default=0):
+        def consultar_valor(query, params=(), default=0):
             try:
-                cursor.execute(query)
+                cursor.execute(query, params)
                 row = cursor.fetchone()
                 if not row:
                     return default
@@ -5716,21 +5879,38 @@ def obter_estatisticas_dashboard():
             except Exception:
                 return default
 
-        total_produtos = consultar_valor("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE")
-        total_clientes = consultar_valor("SELECT COUNT(*) FROM clientes")
-        total_fornecedores = consultar_valor("SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE")
-        valor_estoque = consultar_valor("SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE")
-        produtos_estoque_baixo = consultar_valor(
-            "SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo"
+        total_produtos = consultar_valor(
+            "SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND tenant_id = %s",
+            (tenant_resolvido,)
         )
-        produtos_sem_estoque = consultar_valor("SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0")
+        total_clientes = consultar_valor(
+            "SELECT COUNT(*) FROM clientes WHERE tenant_id = %s",
+            (tenant_resolvido,)
+        )
+        total_fornecedores = consultar_valor(
+            "SELECT COUNT(*) FROM fornecedores WHERE ativo = TRUE AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
+        valor_estoque = consultar_valor(
+            "SELECT SUM(preco * estoque) FROM produtos WHERE ativo = TRUE AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
+        produtos_estoque_baixo = consultar_valor(
+            "SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
+        produtos_sem_estoque = consultar_valor(
+            "SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND estoque = 0 AND tenant_id = %s",
+            (tenant_resolvido,)
+        )
 
         try:
             cursor.execute('''
                 SELECT COUNT(*), SUM(total)
                 FROM vendas
                 WHERE to_char(data_venda, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
-            ''')
+                  AND tenant_id = %s
+            ''', (tenant_resolvido,))
             vendas_mes = cursor.fetchone() or (0, 0)
         except Exception:
             vendas_mes = (0, 0)
@@ -5740,7 +5920,8 @@ def obter_estatisticas_dashboard():
                 SELECT COUNT(*), SUM(total)
                 FROM vendas
                 WHERE data_venda::date = CURRENT_DATE
-            ''')
+                  AND tenant_id = %s
+            ''', (tenant_resolvido,))
             vendas_dia = cursor.fetchone() or (0, 0)
         except Exception:
             vendas_dia = (0, 0)
@@ -5748,38 +5929,48 @@ def obter_estatisticas_dashboard():
         valor_atraso_receber = consultar_valor('''
             SELECT SUM(valor)
             FROM contas_receber
-            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-        ''')
+            WHERE data_vencimento::date < CURRENT_DATE
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         valor_atraso_pagar = consultar_valor('''
             SELECT SUM(valor)
             FROM contas_pagar
-            WHERE data_vencimento::date < CURRENT_DATE AND status = 'pendente'
-        ''')
+            WHERE data_vencimento::date < CURRENT_DATE
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         movimentacoes_pendentes = consultar_valor('''
             SELECT COUNT(*)
             FROM movimentacoes_produtos
             WHERE status = 'pendente'
-        ''')
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         orcamentos_pendentes = consultar_valor('''
             SELECT COUNT(*)
             FROM orcamentos
             WHERE status = 'pendente'
-        ''')
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         contas_pagar_hoje = consultar_valor('''
             SELECT COUNT(*)
             FROM contas_pagar
-            WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
-        ''')
+            WHERE data_vencimento::date = CURRENT_DATE
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         contas_receber_hoje = consultar_valor('''
             SELECT COUNT(*)
             FROM contas_receber
-            WHERE data_vencimento::date = CURRENT_DATE AND status = 'pendente'
-        ''')
+            WHERE data_vencimento::date = CURRENT_DATE
+              AND status = 'pendente'
+              AND tenant_id = %s
+        ''', (tenant_resolvido,))
 
         return {
             'total_produtos': total_produtos,
@@ -5823,29 +6014,39 @@ def obter_estatisticas_dashboard():
         if conn:
             conn.close()
 
-def produtos_estoque_baixo():
-    """Lista produtos com estoque baixo"""
+def produtos_estoque_baixo(tenant_id=None):
+    """Lista produtos com estoque baixo no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT id, nome, estoque, estoque_minimo
-        FROM produtos
-        WHERE ativo = TRUE AND estoque > 0 AND estoque <= estoque_minimo
-        ORDER BY estoque
-    ''')
-    
-    produtos = []
-    for row in cursor.fetchall():
-        produtos.append({
-            'id': row[0],
-            'nome': row[1],
-            'estoque': row[2],
-            'estoque_minimo': row[3]
-        })
-    
-    conn.close()
-    return produtos
+    try:
+        tenant_resolvido = _resolver_tenant_id_produtos(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return []
+
+        cursor.execute('''
+            SELECT id, nome, estoque, estoque_minimo
+            FROM produtos
+            WHERE ativo = TRUE
+              AND estoque > 0
+              AND estoque <= estoque_minimo
+              AND tenant_id = %s
+            ORDER BY estoque
+        ''', (tenant_resolvido,))
+
+        produtos = []
+        for row in cursor.fetchall():
+            produtos.append({
+                'id': row[0],
+                'nome': row[1],
+                'estoque': row[2],
+                'estoque_minimo': row[3]
+            })
+
+        return produtos
+    finally:
+        conn.close()
 
 # FUNÇÕES DE ORÇAMENTOS
 def gerar_numero_orcamento():
@@ -8192,10 +8393,10 @@ def listar_produtos_por_fornecedor(fornecedor_id, tenant_id=None):
         cursor.execute('''
             SELECT p.id, p.nome, p.preco, p.estoque, p.preco_custo, p.codigo_barras
             FROM produtos p
-            JOIN fornecedores f ON f.id = p.fornecedor_id
-            WHERE p.fornecedor_id = %s AND p.ativo = TRUE AND f.tenant_id = %s
+            JOIN fornecedores f ON f.id = p.fornecedor_id AND f.tenant_id = p.tenant_id
+            WHERE p.fornecedor_id = %s AND p.ativo = TRUE AND f.tenant_id = %s AND p.tenant_id = %s
             ORDER BY p.nome
-        ''', (fornecedor_id, tenant_resolvido))
+        ''', (fornecedor_id, tenant_resolvido, tenant_resolvido))
         
         produtos = []
         for row in cursor.fetchall():
@@ -8800,7 +9001,7 @@ def deletar_venda(venda_id, restaurar_estoque=True, tenant_id=None):
     finally:
         conn.close()
 
-def deletar_todas_vendas(restaurar_estoque=True):
+def deletar_todas_vendas(restaurar_estoque=True, tenant_id=None):
     """
     Deleta todas as vendas do sistema
     
@@ -8814,6 +9015,11 @@ def deletar_todas_vendas(restaurar_estoque=True):
     cursor = conn.cursor()
     
     try:
+        tenant_resolvido = _resolver_tenant_id_vendas(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            raise ValueError("Não foi possível resolver tenant_id para deletar vendas.")
+
         resultado = {
             'vendas_deletadas': 0,
             'itens_deletados': 0,
@@ -8827,9 +9033,10 @@ def deletar_todas_vendas(restaurar_estoque=True):
             cursor.execute('''
                 SELECT iv.produto_id, p.nome, SUM(iv.quantidade) as total_vendido
                 FROM itens_venda iv
-                JOIN produtos p ON iv.produto_id = p.id
+                JOIN produtos p ON iv.produto_id = p.id AND p.tenant_id = iv.tenant_id
+                WHERE iv.tenant_id = %s
                 GROUP BY iv.produto_id, p.nome
-            ''')
+            ''', (tenant_resolvido,))
             produtos_vendidos = cursor.fetchall()
             
             # Restaurar estoque
@@ -8837,35 +9044,35 @@ def deletar_todas_vendas(restaurar_estoque=True):
                 cursor.execute('''
                     UPDATE produtos 
                     SET estoque = estoque + %s
-                    WHERE id = %s
-                ''', (quantidade_vendida, produto_id))
+                    WHERE id = %s AND tenant_id = %s
+                ''', (quantidade_vendida, produto_id, tenant_resolvido))
                 
                 resultado['estoque_restaurado'][nome_produto] = quantidade_vendida
         
         # Contar registros antes de deletar
-        cursor.execute('SELECT COUNT(*) FROM vendas')
+        cursor.execute('SELECT COUNT(*) FROM vendas WHERE tenant_id = %s', (tenant_resolvido,))
         resultado['vendas_deletadas'] = cursor.fetchone()[0]
         
-        cursor.execute('SELECT COUNT(*) FROM itens_venda')
+        cursor.execute('SELECT COUNT(*) FROM itens_venda WHERE tenant_id = %s', (tenant_resolvido,))
         resultado['itens_deletados'] = cursor.fetchone()[0]
         
-        cursor.execute('SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id IS NOT NULL')
+        cursor.execute(
+            'SELECT COUNT(*) FROM caixa_movimentacoes WHERE venda_id IS NOT NULL AND tenant_id = %s',
+            (tenant_resolvido,)
+        )
         resultado['movimentacoes_caixa_deletadas'] = cursor.fetchone()[0]
         
         # Deletar movimentações de caixa relacionadas às vendas
-        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id IS NOT NULL')
+        cursor.execute('DELETE FROM caixa_movimentacoes WHERE venda_id IS NOT NULL AND tenant_id = %s', (tenant_resolvido,))
         
         # Deletar contas a receber relacionadas às vendas
-        cursor.execute('DELETE FROM contas_receber WHERE venda_id IS NOT NULL')
+        cursor.execute('DELETE FROM contas_receber WHERE venda_id IS NOT NULL AND tenant_id = %s', (tenant_resolvido,))
         
         # Deletar itens de venda
-        cursor.execute('DELETE FROM itens_venda')
+        cursor.execute('DELETE FROM itens_venda WHERE tenant_id = %s', (tenant_resolvido,))
         
         # Deletar vendas
-        cursor.execute('DELETE FROM vendas')
-        
-        # Reset dos IDs auto-increment
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('vendas', 'itens_venda')")
+        cursor.execute('DELETE FROM vendas WHERE tenant_id = %s', (tenant_resolvido,))
         
         conn.commit()
         return resultado
@@ -9273,6 +9480,7 @@ def garantir_estrutura_fiscal():
         add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "codigo_municipio_ibge TEXT")
         add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "ambiente_fiscal TEXT DEFAULT 'homologacao'")
         add_column_if_not_exists(cursor, conn, 'configuracoes_empresa', "serie_nfe INTEGER DEFAULT 1")
+        tenant_padrao_id = _obter_tenant_padrao_id(cursor)
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS fiscal_nfe_numeracao (
@@ -9281,7 +9489,7 @@ def garantir_estrutura_fiscal():
                 serie INTEGER NOT NULL DEFAULT 1,
                 ultimo_numero INTEGER NOT NULL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tenant_id INTEGER DEFAULT 1
+                tenant_id INTEGER
             )
         ''')
 
@@ -9307,7 +9515,7 @@ def garantir_estrutura_fiscal():
                 data_autorizacao TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tenant_id INTEGER DEFAULT 1,
+                tenant_id INTEGER,
                 FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
                 FOREIGN KEY (emitida_por) REFERENCES usuarios (id)
             )
@@ -9336,7 +9544,7 @@ def garantir_estrutura_fiscal():
                 valor_unitario DECIMAL(12,4) NOT NULL,
                 valor_total DECIMAL(12,4) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tenant_id INTEGER DEFAULT 1,
+                tenant_id INTEGER,
                 FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
                 FOREIGN KEY (produto_id) REFERENCES produtos (id)
             )
@@ -9354,29 +9562,39 @@ def garantir_estrutura_fiscal():
                 response_json JSONB,
                 usuario_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tenant_id INTEGER DEFAULT 1,
+                tenant_id INTEGER,
                 FOREIGN KEY (nfe_id) REFERENCES fiscal_nfe (id) ON DELETE CASCADE,
                 FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
             )
         ''')
 
-        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_numeracao', "tenant_id INTEGER DEFAULT 1")
-        add_column_if_not_exists(cursor, conn, 'fiscal_nfe', "tenant_id INTEGER DEFAULT 1")
-        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_itens', "tenant_id INTEGER DEFAULT 1")
-        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_eventos', "tenant_id INTEGER DEFAULT 1")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_numeracao', "tenant_id INTEGER")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe', "tenant_id INTEGER")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_itens', "tenant_id INTEGER")
+        add_column_if_not_exists(cursor, conn, 'fiscal_nfe_eventos', "tenant_id INTEGER")
 
-        cursor.execute(
-            "UPDATE fiscal_nfe_numeracao SET tenant_id = 1 WHERE tenant_id IS NULL"
-        )
-        cursor.execute(
-            "UPDATE fiscal_nfe SET tenant_id = 1 WHERE tenant_id IS NULL"
-        )
-        cursor.execute(
-            "UPDATE fiscal_nfe_itens SET tenant_id = 1 WHERE tenant_id IS NULL"
-        )
-        cursor.execute(
-            "UPDATE fiscal_nfe_eventos SET tenant_id = 1 WHERE tenant_id IS NULL"
-        )
+        cursor.execute("ALTER TABLE fiscal_nfe_numeracao ALTER COLUMN tenant_id DROP DEFAULT")
+        cursor.execute("ALTER TABLE fiscal_nfe ALTER COLUMN tenant_id DROP DEFAULT")
+        cursor.execute("ALTER TABLE fiscal_nfe_itens ALTER COLUMN tenant_id DROP DEFAULT")
+        cursor.execute("ALTER TABLE fiscal_nfe_eventos ALTER COLUMN tenant_id DROP DEFAULT")
+
+        if tenant_padrao_id is not None:
+            cursor.execute(
+                "UPDATE fiscal_nfe_numeracao SET tenant_id = %s WHERE tenant_id IS NULL",
+                (tenant_padrao_id,)
+            )
+            cursor.execute(
+                "UPDATE fiscal_nfe SET tenant_id = %s WHERE tenant_id IS NULL",
+                (tenant_padrao_id,)
+            )
+            cursor.execute(
+                "UPDATE fiscal_nfe_itens SET tenant_id = %s WHERE tenant_id IS NULL",
+                (tenant_padrao_id,)
+            )
+            cursor.execute(
+                "UPDATE fiscal_nfe_eventos SET tenant_id = %s WHERE tenant_id IS NULL",
+                (tenant_padrao_id,)
+            )
 
         cursor.execute(
             "ALTER TABLE fiscal_nfe_numeracao DROP CONSTRAINT IF EXISTS fiscal_nfe_numeracao_ano_serie_key"
@@ -9419,8 +9637,7 @@ def reservar_proximo_numero_nfe(serie=1, ano=None, conn=None, cursor=None, tenan
         cursor = conn.cursor()
         close_conn = True
 
-    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
-    tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
     if tenant_resolvido is None:
         raise ValueError("Nao foi possivel resolver tenant_id para reservar numeracao de NF-e.")
 
@@ -9564,8 +9781,7 @@ def criar_rascunho_nfe_para_venda(venda_id, usuario_id=None, ambiente='homologac
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
-        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
         if tenant_resolvido is None:
             raise ValueError("Nao foi possivel resolver tenant_id para criar rascunho NF-e.")
 
@@ -9635,28 +9851,16 @@ def obter_nfe_por_venda(venda_id, tenant_id=None, permitir_global=False):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
-
-        if tenant_resolvido is not None:
-            cursor.execute(
-                '''
-                SELECT *
-                FROM fiscal_nfe
-                WHERE venda_id = %s AND tenant_id = %s
-                LIMIT 1
-                ''',
-                (venda_id, tenant_resolvido)
-            )
-        else:
-            cursor.execute(
-                '''
-                SELECT *
-                FROM fiscal_nfe
-                WHERE venda_id = %s
-                LIMIT 1
-                ''',
-                (venda_id,)
-            )
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
+        cursor.execute(
+            '''
+            SELECT *
+            FROM fiscal_nfe
+            WHERE venda_id = %s AND tenant_id = %s
+            LIMIT 1
+            ''',
+            (venda_id, tenant_resolvido)
+        )
 
         nfe = cursor.fetchone()
         if not nfe:
@@ -9677,11 +9881,8 @@ def obter_nfe_por_id(nfe_id, tenant_id=None, permitir_global=False):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
-        if tenant_resolvido is not None:
-            cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s AND tenant_id = %s", (nfe_id, tenant_resolvido))
-        else:
-            cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s", (nfe_id,))
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
+        cursor.execute("SELECT * FROM fiscal_nfe WHERE id = %s AND tenant_id = %s", (nfe_id, tenant_resolvido))
         nfe = cursor.fetchone()
         return dict(nfe) if nfe else None
     except Exception as e:
@@ -9725,16 +9926,13 @@ def atualizar_dados_nfe(nfe_id, tenant_id=None, permitir_global=False, **campos)
     updates.append("updated_at = CURRENT_TIMESTAMP")
     params.append(nfe_id)
 
-    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
-    if tenant_resolvido is not None:
-        params.append(tenant_resolvido)
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
+    params.append(tenant_resolvido)
 
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        query = f"UPDATE fiscal_nfe SET {', '.join(updates)} WHERE id = %s"
-        if tenant_resolvido is not None:
-            query += " AND tenant_id = %s"
+        query = f"UPDATE fiscal_nfe SET {', '.join(updates)} WHERE id = %s AND tenant_id = %s"
         cursor.execute(query, params)
         conn.commit()
         return cursor.rowcount > 0
@@ -9755,8 +9953,7 @@ def registrar_evento_nfe(nfe_id, tipo_evento, status='registrado', protocolo=Non
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
-        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
         if tenant_resolvido is None:
             raise ValueError("Nao foi possivel resolver tenant_id para registrar evento de NF-e.")
 
@@ -9808,27 +10005,16 @@ def obter_itens_nfe(nfe_id, tenant_id=None, permitir_global=False):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
-        if tenant_resolvido is not None:
-            cursor.execute(
-                '''
-                SELECT *
-                FROM fiscal_nfe_itens
-                WHERE nfe_id = %s AND tenant_id = %s
-                ORDER BY id
-                ''',
-                (nfe_id, tenant_resolvido)
-            )
-        else:
-            cursor.execute(
-                '''
-                SELECT *
-                FROM fiscal_nfe_itens
-                WHERE nfe_id = %s
-                ORDER BY id
-                ''',
-                (nfe_id,)
-            )
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
+        cursor.execute(
+            '''
+            SELECT *
+            FROM fiscal_nfe_itens
+            WHERE nfe_id = %s AND tenant_id = %s
+            ORDER BY id
+            ''',
+            (nfe_id, tenant_resolvido)
+        )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     except Exception as e:
@@ -9847,8 +10033,7 @@ def obter_dados_venda_para_nfe(venda_id, tenant_id=None):
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=True)
-        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
         if tenant_resolvido is None:
             return {'sucesso': False, 'erro': 'Nao foi possivel resolver tenant_id para dados fiscais da venda.'}
 
@@ -9952,7 +10137,7 @@ def obter_dados_venda_para_nfe(venda_id, tenant_id=None):
         conn.close()
 
 
-def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=None, tenant_id=None, permitir_global=True):
+def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=None, tenant_id=None, permitir_global=False):
     """
     Atualiza NF-e por webhook de provedor externo.
     Permite buscar por nfe_id ou venda_id.
@@ -9963,16 +10148,21 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
     if not nfe_id and not venda_id:
         return {'sucesso': False, 'erro': 'Informe nfe_id ou venda_id.'}
 
-    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=permitir_global)
+    tenant_resolvido = _resolver_tenant_id_fiscal(tenant_id, permitir_global=False)
+    if tenant_resolvido is None:
+        return {'sucesso': False, 'erro': 'tenant_id obrigatório para webhook fiscal.'}
 
     nfe = None
     if nfe_id:
-        nfe = obter_nfe_por_id(nfe_id, tenant_id=tenant_resolvido, permitir_global=permitir_global)
+        nfe = obter_nfe_por_id(nfe_id, tenant_id=tenant_resolvido, permitir_global=False)
     elif venda_id:
-        nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_resolvido, permitir_global=permitir_global)
+        nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_resolvido, permitir_global=False)
 
     if not nfe:
         return {'sucesso': False, 'erro': 'NF-e nao encontrada.'}
+    tenant_nfe = _normalizar_tenant_id(nfe.get('tenant_id'))
+    if tenant_nfe is None or tenant_nfe != tenant_resolvido:
+        return {'sucesso': False, 'erro': 'NF-e nao pertence ao tenant informado.'}
     if venda_id and nfe.get('venda_id') and str(nfe.get('venda_id')) != str(venda_id):
         return {'sucesso': False, 'erro': 'NF-e nao corresponde a venda informada.'}
 
@@ -10006,11 +10196,10 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
     if status == 'autorizada':
         campos['data_autorizacao'] = agora_br()
 
-    tenant_evento = tenant_resolvido if tenant_resolvido is not None else nfe.get('tenant_id')
     sucesso = atualizar_dados_nfe(
         nfe['id'],
-        tenant_id=tenant_evento,
-        permitir_global=permitir_global,
+        tenant_id=tenant_resolvido,
+        permitir_global=False,
         **campos
     )
     if not sucesso:
@@ -10023,7 +10212,7 @@ def atualizar_nfe_por_webhook(nfe_id=None, venda_id=None, status=None, payload=N
         protocolo=protocolo,
         justificativa=motivo,
         response_json=payload or {},
-        tenant_id=tenant_evento
+        tenant_id=tenant_resolvido
     )
 
     return {'sucesso': True, 'nfe_id': nfe['id']}

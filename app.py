@@ -35,6 +35,7 @@ def hoje_br():
 from Minha_autopecas_web.logica_banco import (
     init_db, criar_usuario_admin, verificar_usuario, buscar_usuario_por_id,
     buscar_usuario_por_email, atualizar_senha_usuario, validar_senha_segura,
+    criar_token_reset_senha, validar_token_reset_senha, consumir_token_reset_senha,
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
@@ -77,7 +78,8 @@ from Minha_autopecas_web.logica_banco import (
     # Funções para autocomplete de marcas e categorias
     obter_marcas_cadastradas, obter_categorias_cadastradas,
     garantir_estrutura_fiscal, obter_nfe_por_venda,
-    listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant
+    listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant,
+    obter_tenant_padrao_id
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -145,13 +147,14 @@ class User(UserMixin):
         self.username = user_data['username']
         self.email = user_data.get('email', '')
         self.is_superadmin = bool(user_data.get('is_superadmin', False))
-        tenant_id = user_data.get('tenant_id', 1)
+        tenant_id = user_data.get('tenant_id')
         try:
-            self.tenant_id = int(tenant_id) if tenant_id is not None else 1
+            self.tenant_id = int(tenant_id) if tenant_id is not None else _default_tenant_id()
         except (TypeError, ValueError):
-            self.tenant_id = 1
+            self.tenant_id = _default_tenant_id()
 
-DEFAULT_TENANT_ID = 1
+DEFAULT_TENANT_ID = None
+_DEFAULT_TENANT_CACHE = None
 PUBLIC_ENDPOINTS = {
     'login',
     'logout',
@@ -170,6 +173,27 @@ def _normalize_tenant_id(raw_tenant_id):
     except (TypeError, ValueError):
         return None
 
+def _default_tenant_id(refresh=False):
+    """Resolve tenant padrão dinamicamente (sem hardcode fixo)."""
+    global _DEFAULT_TENANT_CACHE
+
+    if refresh:
+        _DEFAULT_TENANT_CACHE = None
+
+    if _DEFAULT_TENANT_CACHE is not None:
+        return _DEFAULT_TENANT_CACHE
+
+    tenant_id = _normalize_tenant_id(DEFAULT_TENANT_ID)
+    if tenant_id is None:
+        try:
+            tenant_id = _normalize_tenant_id(obter_tenant_padrao_id())
+        except Exception as e:
+            app.logger.warning("Falha ao resolver tenant padrão dinâmico: %s", e)
+            tenant_id = None
+
+    _DEFAULT_TENANT_CACHE = tenant_id
+    return tenant_id
+
 def _is_public_endpoint(endpoint):
     """Identifica endpoints públicos que não exigem contexto de tenant autenticado."""
     if not endpoint:
@@ -177,7 +201,7 @@ def _is_public_endpoint(endpoint):
     return endpoint in PUBLIC_ENDPOINTS
 
 def get_current_tenant_id():
-    """Retorna o tenant atual da sessão/autenticação (fallback temporário: tenant padrão id=1)."""
+    """Retorna tenant atual da sessão/autenticação com fallback dinâmico."""
     tenant_id = None
 
     if has_request_context():
@@ -188,7 +212,7 @@ def get_current_tenant_id():
             tenant_id = getattr(current_user, 'tenant_id', None)
 
     tenant_id = _normalize_tenant_id(tenant_id)
-    return tenant_id if tenant_id is not None else DEFAULT_TENANT_ID
+    return tenant_id if tenant_id is not None else _default_tenant_id()
 
 def _montar_mapa_permissoes(user_data):
     """Monta um mapa de permissoes do usuario para cache na request atual."""
@@ -251,8 +275,7 @@ def check_session_validity():
 def load_user(user_id):
     user_data = buscar_usuario_por_id(
         int(user_id),
-        tenant_id=session.get('tenant_id'),
-        permitir_global=True
+        tenant_id=session.get('tenant_id')
     )
     if user_data and user_data.get('ativo', False):
         return User(user_data)
@@ -264,7 +287,7 @@ def ensure_tenant_context():
     Camada central de contexto multi-tenant para requests autenticadas.
     Garante tenant_id coerente em session/current_user e disponível em g.
     """
-    g.current_tenant_id = DEFAULT_TENANT_ID
+    g.current_tenant_id = _default_tenant_id()
 
     if _is_public_endpoint(request.endpoint) or not current_user.is_authenticated:
         return
@@ -273,12 +296,12 @@ def ensure_tenant_context():
     session_tenant_id = _normalize_tenant_id(session.get('tenant_id'))
 
     if user_tenant_id is None and session_tenant_id is None:
-        resolved_tenant_id = DEFAULT_TENANT_ID
+        resolved_tenant_id = _default_tenant_id(refresh=True)
         app.logger.warning(
             "tenant_id ausente para usuario autenticado id=%s em %s; aplicando fallback temporario tenant_id=%s.",
             current_user.id,
             request.endpoint,
-            DEFAULT_TENANT_ID
+            resolved_tenant_id
         )
     elif user_tenant_id is None:
         resolved_tenant_id = session_tenant_id
@@ -305,6 +328,17 @@ def ensure_tenant_context():
                 current_user.id,
                 request.endpoint
             )
+
+    if resolved_tenant_id is None:
+        app.logger.warning(
+            "Não foi possível resolver tenant_id para usuario id=%s em %s; encerrando sessão.",
+            current_user.id,
+            request.endpoint
+        )
+        logout_user()
+        session.clear()
+        flash('Não foi possível resolver o tenant da sessão. Faça login novamente.', 'error')
+        return redirect(url_for('login'))
 
     session['tenant_id'] = resolved_tenant_id
     g.current_tenant_id = resolved_tenant_id
@@ -422,16 +456,31 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        tenant_login = _normalize_tenant_id(
+            request.form.get('tenant_id') or request.args.get('tenant_id')
+        )
+
+        if not username or not password:
+            flash('Usuário e senha são obrigatórios.', 'error')
+            return render_template('login.html')
+
+        if tenant_login is None:
+            flash('tenant_id é obrigatório para login.', 'error')
+            return render_template('login.html')
+
         user_data = verificar_usuario(
             username,
             password,
-            tenant_id=session.get('tenant_id'),
-            permitir_escopo_global=True
+            tenant_id=tenant_login
         )
         if user_data:
+            tenant_usuario = _normalize_tenant_id(user_data.get('tenant_id'))
+            if tenant_usuario is None or tenant_usuario != tenant_login:
+                flash('Usuário não pertence ao tenant informado.', 'error')
+                return render_template('login.html')
+
             user = User(user_data)
             login_user(user)
             
@@ -439,7 +488,7 @@ def login():
             import uuid
             session_id = str(uuid.uuid4())
             session['session_id'] = session_id
-            session['tenant_id'] = user.tenant_id
+            session['tenant_id'] = tenant_usuario
             
             # Armazenar esta sessão como a sessão ativa do usuário
             # Isso automaticamente invalida qualquer sessão anterior
@@ -471,46 +520,71 @@ def logout():
 
 @app.route('/recuperar-senha', methods=['GET', 'POST'])
 def recuperar_senha():
+    token_prefill = (request.args.get('token') or '').strip()
+    tenant_prefill = _normalize_tenant_id(request.args.get('tenant_id'))
+
     if request.method == 'POST':
-        email = request.form.get('email')
+        email = (request.form.get('email') or '').strip()
+        token = (request.form.get('token') or request.args.get('token') or '').strip()
         nova_senha = request.form.get('nova_senha')
         confirmar_senha = request.form.get('confirmar_senha')
-        
-        if not email or not nova_senha or not confirmar_senha:
-            flash('Todos os campos são obrigatórios!', 'error')
-            return render_template('recuperar_senha.html')
-        
+        acao = (request.form.get('acao') or '').strip().lower()
+        tenant_reset = _normalize_tenant_id(
+            request.form.get('tenant_id') or request.args.get('tenant_id')
+        )
+
+        if tenant_reset is None:
+            flash('tenant_id é obrigatório para recuperação de senha.', 'error')
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_prefill)
+
+        solicitacao_token = acao in {'solicitar-token', 'solicitar_token', 'request_token'}
+        if solicitacao_token or (email and not token and not nova_senha and not confirmar_senha):
+            if not email:
+                flash('Informe o email para solicitar o token de recuperação.', 'error')
+                return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
+            sucesso, mensagem, token_gerado = criar_token_reset_senha(
+                email=email,
+                tenant_id=tenant_reset,
+                requested_ip=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+            if sucesso:
+                flash(mensagem or 'Se o email existir para este tenant, um token foi gerado.', 'info')
+                if token_gerado and (app.debug or os.getenv('EXPOSE_RESET_TOKEN', '').strip().lower() in {'1', 'true', 'yes'}):
+                    flash(f'Token de recuperação (ambiente de desenvolvimento): {token_gerado}', 'warning')
+            else:
+                flash(mensagem or 'Falha ao gerar token de recuperação.', 'error')
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
+        if not token:
+            flash('Token de recuperação é obrigatório para redefinir a senha.', 'error')
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
+        if not nova_senha or not confirmar_senha:
+            flash('Informe a nova senha e a confirmação.', 'error')
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
         if nova_senha != confirmar_senha:
             flash('As senhas não coincidem!', 'error')
-            return render_template('recuperar_senha.html')
-        
-        if len(nova_senha) < 6:
-            flash('A senha deve ter pelo menos 6 caracteres!', 'error')
-            return render_template('recuperar_senha.html')
-        
-        # Buscar usuário por email
-        usuario = buscar_usuario_por_email(
-            email,
-            tenant_id=get_current_tenant_id(),
-            permitir_global=True
-        )
-        if not usuario:
-            flash('Email não encontrado em nosso sistema!', 'error')
-            return render_template('recuperar_senha.html')
-        
-        # Atualizar senha
-        success, mensagem = atualizar_senha_usuario(
-            usuario['id'],
-            nova_senha,
-            tenant_id=get_current_tenant_id()
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
+        if not validar_token_reset_senha(token, tenant_id=tenant_reset):
+            flash('Token inválido ou expirado.', 'error')
+            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
+
+        success, mensagem = consumir_token_reset_senha(
+            token=token,
+            nova_senha=nova_senha,
+            tenant_id=tenant_reset
         )
         if success:
             flash(mensagem or 'Senha atualizada com sucesso! Você já pode fazer login.', 'success')
             return redirect(url_for('login'))
-        else:
-            flash(mensagem or 'Erro ao atualizar senha. Tente novamente.', 'error')
-    
-    return render_template('recuperar_senha.html')
+
+        flash(mensagem or 'Erro ao atualizar senha. Tente novamente.', 'error')
+
+    return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_prefill)
 
 # ROTAS DE CRIAÇÃO DE USUÁRIO (apenas para admins logados)
 @app.route('/criar-usuario', methods=['POST'])
@@ -801,6 +875,7 @@ def atualizar_configuracoes_empresa_route():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    tenant_id = get_current_tenant_id()
     pode_admin = has_permission_cached('admin')
     pode_estoque = pode_admin or has_permission_cached('estoque')
     pode_vendas = pode_admin or has_permission_cached('vendas')
@@ -808,12 +883,12 @@ def dashboard():
     pode_contas_pagar = pode_financeiro or pode_admin or has_permission_cached('contas_pagar')
     pode_contas_receber = pode_financeiro or pode_admin or has_permission_cached('contas_receber')
 
-    estatisticas = obter_estatisticas_dashboard()
-    produtos_baixo_estoque = produtos_estoque_baixo() if pode_estoque else []
-    vendas_recentes = listar_vendas(limit=10) if pode_vendas else []
-    contas_pagar_hoje = listar_contas_pagar_hoje() if pode_contas_pagar else []
-    contas_receber_hoje = listar_contas_receber_hoje() if pode_contas_receber else []
-    contas_atrasadas = listar_contas_atrasadas() if pode_financeiro else []
+    estatisticas = obter_estatisticas_dashboard(tenant_id=tenant_id)
+    produtos_baixo_estoque = produtos_estoque_baixo(tenant_id=tenant_id) if pode_estoque else []
+    vendas_recentes = listar_vendas(limit=10, tenant_id=tenant_id) if pode_vendas else []
+    contas_pagar_hoje = listar_contas_pagar_hoje(tenant_id=tenant_id) if pode_contas_pagar else []
+    contas_receber_hoje = listar_contas_receber_hoje(tenant_id=tenant_id) if pode_contas_receber else []
+    contas_atrasadas = listar_contas_atrasadas(tenant_id=tenant_id) if pode_financeiro else []
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -1870,8 +1945,14 @@ def deletar_produto_route(id):
 
 @app.route('/produtos/deletar-todos', methods=['POST'])
 @login_required
+@superadmin_required
 def deletar_todos_produtos_route():
     """Deleta todos os produtos (função de teste)"""
+    confirmacao = (request.form.get('confirmacao') or request.form.get('confirmar') or '').strip().upper()
+    if confirmacao not in {'CONFIRMAR', 'SIM'}:
+        flash('Confirmação obrigatória. Informe CONFIRMAR para deletar todos os produtos.', 'error')
+        return redirect(url_for('produtos'))
+
     try:
         total_deletados = deletar_todos_os_produtos(tenant_id=get_current_tenant_id())
         flash(f'Todos os produtos foram removidos com sucesso! ({total_deletados} produtos)', 'success')
@@ -1882,11 +1963,18 @@ def deletar_todos_produtos_route():
 
 @app.route('/produtos/limpar-completamente', methods=['POST'])
 @login_required
+@superadmin_required
 def limpar_produtos_completamente_route():
-    """Remove completamente todos os produtos do banco (cuidado!)"""
+    """Remove completamente produtos do tenant atual (ação destrutiva)."""
+    confirmacao = (request.form.get('confirmacao') or request.form.get('confirmar') or '').strip().upper()
+    if confirmacao not in {'CONFIRMAR', 'SIM'}:
+        flash('Confirmação obrigatória. Informe CONFIRMAR para executar a limpeza completa.', 'error')
+        return redirect(url_for('produtos'))
+
     try:
-        limpar_completamente_produtos()
-        flash('Todos os produtos foram removidos completamente do banco de dados!', 'success')
+        tenant_id = get_current_tenant_id()
+        limpar_completamente_produtos(tenant_id=tenant_id)
+        flash(f'Todos os produtos do tenant {tenant_id} foram removidos completamente do banco de dados!', 'success')
     except Exception as e:
         flash(f'Erro ao limpar produtos: {str(e)}', 'error')
     
@@ -2785,8 +2873,17 @@ def webhook_fiscal_nfe_route():
         if auth.lower().startswith('bearer '):
             token = auth[7:].strip()
 
+    if not token:
+        return jsonify({'sucesso': False, 'mensagem': 'Token de webhook obrigatório.'}), 401
+
     try:
-        tenant_id = payload.get('tenant_id') if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            return jsonify({'sucesso': False, 'mensagem': 'Payload inválido.'}), 400
+
+        tenant_id = _normalize_tenant_id(payload.get('tenant_id'))
+        if tenant_id is None:
+            return jsonify({'sucesso': False, 'mensagem': 'tenant_id obrigatório no payload do webhook.'}), 400
+
         resultado = processar_webhook_nfe(payload, token=token, tenant_id=tenant_id)
     except Exception as e:
         print(f"Erro inesperado no webhook fiscal NF-e: {e}")
