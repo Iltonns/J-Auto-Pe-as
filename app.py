@@ -122,6 +122,21 @@ def salvar_foto_produto(file):
         return f'/static/images/produtos/{unique_filename}'
     return None
 
+def salvar_logo_empresa(file, tenant_id):
+    """Salva a logo da empresa e retorna o caminho relativo em static."""
+    if not file or not allowed_file(file.filename):
+        return None
+
+    extensao = file.filename.rsplit('.', 1)[1].lower()
+    nome_arquivo = f"tenant_{tenant_id}_{uuid.uuid4().hex}.{extensao}"
+    pasta_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'empresa')
+    os.makedirs(pasta_logo, exist_ok=True)
+
+    caminho_absoluto = os.path.join(pasta_logo, secure_filename(nome_arquivo))
+    file.save(caminho_absoluto)
+
+    return f"images/empresa/{os.path.basename(caminho_absoluto)}"
+
 # Função para remover foto do produto
 def remover_foto_produto(foto_url):
     if foto_url:
@@ -841,6 +856,29 @@ def configuracoes_empresa():
 @required_permission('admin')
 def atualizar_configuracoes_empresa_route():
     try:
+        tenant_id = get_current_tenant_id()
+        config_atual = obter_configuracoes_empresa(tenant_id)
+        logo_path = (config_atual or {}).get('logo_path', 'logo.jpg')
+        arquivo_logo = request.files.get('logo_empresa')
+
+        if arquivo_logo and arquivo_logo.filename:
+            nova_logo_path = salvar_logo_empresa(arquivo_logo, tenant_id)
+            if not nova_logo_path:
+                flash('Formato de logo inválido. Use PNG, JPG, JPEG ou GIF.', 'error')
+                return redirect(url_for('configuracoes_empresa'))
+
+            logo_anterior = (config_atual or {}).get('logo_path')
+            if logo_anterior and logo_anterior.startswith('images/empresa/'):
+                caminho_logo_anterior = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    'static',
+                    logo_anterior
+                )
+                if os.path.exists(caminho_logo_anterior):
+                    os.remove(caminho_logo_anterior)
+
+            logo_path = nova_logo_path
+
         dados = {
             'nome_empresa': request.form['nome_empresa'],
             'cnpj': request.form['cnpj'],
@@ -857,10 +895,11 @@ def atualizar_configuracoes_empresa_route():
             'telefone': request.form['telefone'],
             'email': request.form['email'],
             'website': request.form['website'],
-            'observacoes': request.form['observacoes']
+            'observacoes': request.form['observacoes'],
+            'logo_path': logo_path
         }
         
-        if atualizar_configuracoes_empresa(dados, get_current_tenant_id()):
+        if atualizar_configuracoes_empresa(dados, tenant_id):
             flash('Configurações da empresa atualizadas com sucesso!', 'success')
         else:
             flash('Erro ao atualizar configurações da empresa!', 'error')
@@ -3699,15 +3738,30 @@ def criar_cabecalho_empresa(doc, styles, config_empresa):
     logo_path = None
     if config_empresa.get('logo_path'):
         # Logo personalizada
-        logo_full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', config_empresa['logo_path'].lstrip('/'))
+        logo_relativa = config_empresa['logo_path'].lstrip('/')
+        logo_full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', logo_relativa)
         if os.path.exists(logo_full_path):
             logo_path = logo_full_path
+        elif '/' not in logo_relativa and logo_relativa != 'logo.jpg':
+            logo_legada = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                'static',
+                'images',
+                'empresa',
+                logo_relativa
+            )
+            if os.path.exists(logo_legada):
+                logo_path = logo_legada
     
     # Se não houver logo personalizada, tentar logo padrão
     if not logo_path:
         default_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'empresa', 'logo.png')
         if os.path.exists(default_logo):
             logo_path = default_logo
+        else:
+            default_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'logo.jpg')
+            if os.path.exists(default_logo):
+                logo_path = default_logo
     
     # Se tiver logo, criar layout com logo e texto
     if logo_path:
