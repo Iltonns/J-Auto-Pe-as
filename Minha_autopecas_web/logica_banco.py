@@ -8692,7 +8692,7 @@ def atualizar_configuracoes_empresa(dados, tenant_id=None):
                     nome_empresa = %s, cnpj = %s, ie = %s, crt = %s, cnae = %s, codigo_municipio_ibge = %s,
                     ambiente_fiscal = %s, serie_nfe = %s,
                     endereco = %s, cidade = %s, estado = %s, cep = %s, telefone = %s, email = %s, 
-                    website = %s, observacoes = %s, updated_at = CURRENT_TIMESTAMP
+                    website = %s, logo_path = %s, observacoes = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = (
                     SELECT id FROM configuracoes_empresa
                     WHERE tenant_id = %s
@@ -8706,6 +8706,7 @@ def atualizar_configuracoes_empresa(dados, tenant_id=None):
                 dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
                 dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
                 dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
+                dados.get('logo_path', 'logo.jpg'),
                 dados.get('observacoes', ''),
                 tenant_id,
                 tenant_id
@@ -8715,14 +8716,15 @@ def atualizar_configuracoes_empresa(dados, tenant_id=None):
             cursor.execute('''
                 INSERT INTO configuracoes_empresa (
                     nome_empresa, cnpj, ie, crt, cnae, codigo_municipio_ibge, ambiente_fiscal, serie_nfe,
-                    endereco, cidade, estado, cep, telefone, email, website, observacoes, tenant_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    endereco, cidade, estado, cep, telefone, email, website, logo_path, observacoes, tenant_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 dados.get('nome_empresa', ''), dados.get('cnpj', ''), dados.get('ie', ''), dados.get('crt', '1'),
                 dados.get('cnae', ''), dados.get('codigo_municipio_ibge', ''),
                 dados.get('ambiente_fiscal', 'homologacao'), int(dados.get('serie_nfe', 1) or 1),
                 dados.get('endereco', ''), dados.get('cidade', ''), dados.get('estado', ''), dados.get('cep', ''),
                 dados.get('telefone', ''), dados.get('email', ''), dados.get('website', ''),
+                dados.get('logo_path', 'logo.jpg'),
                 dados.get('observacoes', ''),
                 tenant_id
             ))

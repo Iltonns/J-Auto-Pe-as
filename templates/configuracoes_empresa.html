@@ -25,7 +25,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('atualizar_configuracoes_empresa_route') }}" id="formConfiguracoes">
+                    <form method="POST" action="{{ url_for('atualizar_configuracoes_empresa_route') }}" id="formConfiguracoes" enctype="multipart/form-data">
                         <div class="row">
                             <div class="col-md-8">
                                 <div class="mb-3">
@@ -190,6 +190,16 @@
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="mb-3">
+                                    <label for="logo_empresa" class="form-label">Logo da Empresa</label>
+                                    <input type="file" class="form-control" id="logo_empresa" name="logo_empresa" accept=".png,.jpg,.jpeg,.gif">
+                                    <small class="text-muted">Formatos permitidos: PNG, JPG, JPEG e GIF (máx. 5MB).</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
                                     <label for="observacoes" class="form-label">Observações</label>
                                     <textarea class="form-control" id="observacoes" name="observacoes" rows="3" 
                                               placeholder="Informações adicionais da empresa...">{{ config.observacoes }}</textarea>
@@ -223,7 +233,7 @@
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <img src="{{ url_for('static', filename=config.logo_path) }}" 
+                        <img src="{{ url_for('static', filename=config.logo_path or 'logo.jpg') }}" 
                              alt="Logo da Empresa" 
                              style="max-height: 60px; max-width: 150px;"
                              onerror="this.style.display='none'">
@@ -263,13 +273,13 @@
                 </div>
                 <div class="card-body">
                     <p class="small mb-2">
-                        Para alterar a logo da empresa, substitua o arquivo <code>static/logo.jpg</code> por sua imagem.
+                        Agora você pode enviar a logo direto nesta tela, no campo <strong>Logo da Empresa</strong>.
                     </p>
                     <p class="small mb-0 text-muted">
                         <strong>Recomendações:</strong><br>
                         • Formato: JPG, PNG<br>
-                        • Tamanho máximo: 500x200px<br>
-                        • Peso: até 1MB
+                        • Tamanho sugerido: 500x200px<br>
+                        • Peso: até 5MB
                     </p>
                 </div>
             </div>
