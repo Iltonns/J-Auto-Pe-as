@@ -38,16 +38,16 @@ function updateToggleButton(isCompact) {
 // Carregar preferência salva
 function loadLayoutPreference() {
     const savedMode = localStorage.getItem('layout-mode');
-    // Por padrão, ativar o layout compacto se não houver preferência salva
-    if (savedMode === 'normal') {
-        document.body.classList.remove('layout-compacto');
-        updateToggleButton(false);
-    } else {
-        // Ativar compacto por padrão
+    // Por padrão, usar layout normal se não houver preferência salva
+    if (savedMode === 'compact') {
         document.body.classList.add('layout-compacto');
         updateToggleButton(true);
+    } else {
+        // Manter layout normal por padrão
+        document.body.classList.remove('layout-compacto');
+        updateToggleButton(false);
         if (!savedMode) {
-            localStorage.setItem('layout-mode', 'compact');
+            localStorage.setItem('layout-mode', 'normal');
         }
     }
 }
