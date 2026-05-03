@@ -888,6 +888,9 @@ def dashboard():
     contas_pagar_hoje = listar_contas_pagar_hoje(tenant_id=tenant_id) if pode_contas_pagar else []
     contas_receber_hoje = listar_contas_receber_hoje(tenant_id=tenant_id) if pode_contas_receber else []
     contas_atrasadas = listar_contas_atrasadas(tenant_id=tenant_id) if pode_financeiro else []
+    config_empresa = obter_configuracoes_empresa(tenant_id)
+    empresa_nome = (config_empresa or {}).get('nome_empresa') or f"Tenant {tenant_id}"
+    usuario_nome = (getattr(current_user, 'username', '') or 'usuário').strip()
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -895,7 +898,9 @@ def dashboard():
                          vendas_recentes=vendas_recentes,
                          contas_pagar_hoje=contas_pagar_hoje,
                          contas_receber_hoje=contas_receber_hoje,
-                         contas_atrasadas=contas_atrasadas)
+                         contas_atrasadas=contas_atrasadas,
+                         usuario_nome=usuario_nome,
+                         empresa_nome=empresa_nome)
 
 # =====================================================
 # ROTAS DO CAIXA FINANCEIRO
