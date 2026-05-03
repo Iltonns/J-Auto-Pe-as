@@ -321,8 +321,8 @@
         background: var(--layout-header-gradient-products) !important;
         color: white !important;
         font-weight: 600;
-        font-size: 0.85rem;
-        padding: 12px 8px;
+        font-size: 0.9rem;
+        padding: 15px 10px;
         border: none !important;
         text-align: center;
         vertical-align: middle;
@@ -330,24 +330,25 @@
     }
     
     /* Larguras específicas das colunas */
-    #tabelaProdutos th:nth-child(1) { width: 60px; }  /* Foto */
-    #tabelaProdutos th:nth-child(2) { width: 50px; }  /* ID */
-    #tabelaProdutos th:nth-child(3) { width: 220px; text-align: left; } /* Nome */
+    #tabelaProdutos th:nth-child(1) { width: 70px; }  /* Foto */
+    #tabelaProdutos th:nth-child(2) { width: 55px; }  /* ID */
+    #tabelaProdutos th:nth-child(3) { width: 200px; text-align: left; } /* Nome */
     #tabelaProdutos th:nth-child(4) { width: 100px; } /* Marca */
-    #tabelaProdutos th:nth-child(5) { width: 120px; } /* Categoria */
-    #tabelaProdutos th:nth-child(6) { width: 120px; } /* Preço */
-    #tabelaProdutos th:nth-child(7) { width: 100px; } /* Estoque */
-    #tabelaProdutos th:nth-child(8) { width: 120px; } /* Código */
-    #tabelaProdutos th:nth-child(9) { width: 120px; } /* Cód. Fornecedor */
-    #tabelaProdutos th:nth-child(10) { width: 100px; } /* Status */
-    #tabelaProdutos th:nth-child(11) { width: 140px; } /* Ações */
+    #tabelaProdutos th:nth-child(5) { width: 110px; } /* Categoria */
+    #tabelaProdutos th:nth-child(6) { width: 100px; } /* Preço Custo */
+    #tabelaProdutos th:nth-child(7) { width: 100px; } /* Preço Venda */
+    #tabelaProdutos th:nth-child(8) { width: 90px; }  /* Estoque */
+    #tabelaProdutos th:nth-child(9) { width: 110px; } /* Código */
+    #tabelaProdutos th:nth-child(10) { width: 120px; } /* Cód. Fornecedor */
+    #tabelaProdutos th:nth-child(11) { width: 95px; } /* Status */
+    #tabelaProdutos th:nth-child(12) { width: 160px; } /* Ações */
     
     /* Células da tabela */
     #tabelaProdutos td {
-        padding: 12px 8px;
+        padding: 14px 10px;
         vertical-align: middle;
         border-bottom: 1px solid #dee2e6;
-        font-size: 0.875rem;
+        font-size: 0.9rem;
         word-wrap: break-word;
         overflow: hidden;
     }
@@ -358,41 +359,31 @@
     #tabelaProdutos td:nth-child(3) { text-align: left; }   /* Nome */
     #tabelaProdutos td:nth-child(4) { text-align: center; } /* Marca */
     #tabelaProdutos td:nth-child(5) { text-align: center; } /* Categoria */
-    #tabelaProdutos td:nth-child(6) { text-align: right; }  /* Preço */
-    #tabelaProdutos td:nth-child(7) { text-align: center; } /* Estoque */
-    #tabelaProdutos td:nth-child(8) { text-align: center; } /* Código */
-    #tabelaProdutos td:nth-child(9) { text-align: center; } /* Cód. Fornecedor */
-    #tabelaProdutos td:nth-child(10) { text-align: center; } /* Status */
-    #tabelaProdutos td:nth-child(11) { text-align: center; } /* Ações */
+    #tabelaProdutos td:nth-child(6) { text-align: right; }  /* Preço Custo */
+    #tabelaProdutos td:nth-child(7) { text-align: right; }  /* Preço Venda */
+    #tabelaProdutos td:nth-child(8) { text-align: center; } /* Estoque */
+    #tabelaProdutos td:nth-child(9) { text-align: center; } /* Código */
+    #tabelaProdutos td:nth-child(10) { text-align: center; } /* Cód. Fornecedor */
+    #tabelaProdutos td:nth-child(11) { text-align: center; } /* Status */
+    #tabelaProdutos td:nth-child(12) { text-align: center; } /* Ações */
     
     /* Hover nas linhas */
     #tabelaProdutos tbody tr:hover {
         background-color: #f8f9fa;
     }
     
-    .btn-add-product {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        border: none;
-        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    /* Botões de ação melhorados */
+    .btn-group .btn {
+        border-radius: 6px !important;
+        margin: 0 2px;
+        padding: 6px 10px;
+        font-size: 0.85rem;
+        white-space: nowrap;
     }
     
-    .btn-add-product:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
-    }
-    
-    .product-photo {
-        width: 45px;
-        height: 45px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 2px solid #e9ecef;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .product-photo:hover {
-        transform: scale(1.05);
-        border-color: #121417;
+    .btn-group .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
     .modal-product-photo {
