@@ -2146,6 +2146,49 @@ def listar_tenants():
     finally:
         conn.close()
 
+def resolver_tenant_para_login(tenant_input):
+    """
+    Resolve tenant para autenticação aceitando:
+    - ID numérico
+    - slug (ex.: minha-empresa)
+    - nome do tenant (case-insensitive)
+    """
+    valor = (str(tenant_input).strip() if tenant_input is not None else '')
+    if not valor:
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        tenant_id = _normalizar_tenant_id(valor)
+        if tenant_id is not None:
+            cursor.execute("SELECT id FROM tenants WHERE id = %s LIMIT 1", (tenant_id,))
+            row = cursor.fetchone()
+            return _normalizar_tenant_id(row[0]) if row else None
+
+        slug = _slugify_tenant(valor)
+        if slug:
+            cursor.execute("SELECT id FROM tenants WHERE slug = %s LIMIT 1", (slug,))
+            row = cursor.fetchone()
+            if row:
+                return _normalizar_tenant_id(row[0])
+
+        cursor.execute(
+            '''
+            SELECT id
+            FROM tenants
+            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(%s))
+            ORDER BY id
+            LIMIT 1
+            ''',
+            (valor,)
+        )
+        row = cursor.fetchone()
+        return _normalizar_tenant_id(row[0]) if row else None
+    finally:
+        conn.close()
+
 def criar_tenant(slug, nome, status='active', config_inicial=None):
     """Cria um novo tenant e inicializa configuracoes_empresa para o tenant."""
     conn = get_db_connection()
