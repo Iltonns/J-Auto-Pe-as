@@ -113,6 +113,38 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 # Formato: {user_id: session_id}
 active_sessions = {}
 
+STATUS_TENANT_PTBR = {
+    'active': 'Ativo',
+    'inactive': 'Inativo'
+}
+
+STATUS_ASSINATURA_PTBR = {
+    'trial': 'Período de Teste',
+    'active': 'Ativa',
+    'overdue': 'Em Atraso',
+    'canceled': 'Cancelada'
+}
+
+PLANO_SLUG_PTBR = {
+    'start': 'Start',
+    'gestao': 'Gestão',
+    'pro': 'Pro'
+}
+
+
+def _traduzir_chave_ptbr(valor, mapa):
+    if valor is None:
+        return '-'
+    chave = str(valor).strip().lower()
+    return mapa.get(chave, str(valor))
+
+
+def _normalizar_filtro_status_tenant(valor):
+    filtro = (str(valor).strip().lower() if valor is not None else 'todos')
+    if filtro in ('active', 'inactive'):
+        return filtro
+    return 'todos'
+
 # Configuração para upload de arquivos
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'produtos')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
