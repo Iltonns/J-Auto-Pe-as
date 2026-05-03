@@ -710,3 +710,162 @@ h6, .h6 { font-size: 0.86rem; }
         padding: 0.72rem;
     }
 }
+
+/* =========================================================
+   AJUSTE DE CONFORTO VISUAL (referencia FG-Auto-pe-as)
+   Escopo: apenas tamanhos/espacamentos. Cores e identidade intactas.
+   ========================================================= */
+html {
+    font-size: 15px;
+}
+
+body {
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.top-navbar {
+    padding: 0.85rem 1rem;
+}
+
+.navbar-brand {
+    font-size: 1rem;
+}
+
+.top-navbar .navbar-text {
+    font-size: 0.9rem;
+}
+
+.sidebar .nav-link {
+    font-size: 0.93rem;
+    padding: 0.62rem 0.82rem;
+    margin: 0.2rem 0.3rem;
+    min-height: 44px;
+}
+
+.brand-subtitle {
+    font-size: 0.82rem;
+}
+
+.container-fluid.px-2.px-md-3.pb-4 {
+    padding-top: 0.75rem;
+    padding-bottom: 1.5rem !important;
+}
+
+.card:not(.login-card) {
+    min-height: 110px;
+}
+
+.card-header {
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+}
+
+.card-body {
+    padding: 1.45rem;
+}
+
+.btn {
+    font-size: 0.93rem;
+    padding: 0.67rem 1.07rem;
+    min-height: 40px;
+}
+
+.btn-sm {
+    min-height: 34px;
+    padding: 0.45rem 0.75rem;
+}
+
+.form-label {
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+}
+
+.form-control,
+.form-select {
+    font-size: 0.93rem;
+    padding: 0.67rem 0.8rem;
+    min-height: 42px;
+}
+
+.form-control-sm,
+.form-select-sm {
+    min-height: 36px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.87rem;
+}
+
+.table {
+    font-size: 0.93rem;
+}
+
+.table thead th {
+    font-size: 0.93rem;
+    padding: 0.8rem 0.93rem;
+}
+
+.table tbody td {
+    font-size: 0.93rem;
+    padding: 0.8rem 0.93rem;
+}
+
+.table tbody tr {
+    min-height: 48px;
+}
+
+.badge,
+.badge-status {
+    font-size: 0.8rem;
+    padding: 0.33rem 0.67rem;
+}
+
+h1, .h1 { font-size: 1.6rem; }
+h2, .h2 { font-size: 1.2rem; }
+h3, .h3 { font-size: 1.07rem; }
+h4, .h4 { font-size: 1rem; }
+h5, .h5 { font-size: 0.93rem; }
+h6, .h6 { font-size: 0.87rem; }
+
+.dashboard-hero {
+    padding: 1.45rem 1.6rem;
+    margin-bottom: 1.25rem;
+}
+
+.kpi-card {
+    padding: 1.6rem;
+    min-height: 120px;
+}
+
+.kpi-value {
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+.kpi-label,
+.kpi-detail,
+.quick-action-label {
+    font-size: 0.93rem;
+}
+
+.quick-action-btn {
+    min-height: 48px;
+}
+
+.row.g-3 {
+    --bs-gutter-x: 1.25rem;
+    --bs-gutter-y: 1.25rem;
+}
+
+@media (max-width: 1366px) {
+    html {
+        font-size: 14px;
+    }
+
+    .card-body {
+        padding: 1.2rem;
+    }
+
+    .kpi-card {
+        padding: 1.3rem;
+    }
+}
