@@ -1,4 +1,4 @@
-# SISTEMA DE AUTOPEÇAS - FAMÍLIA
+﻿# SISTEMA DE AUTOPEÇAS - FAMÍLIA
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
@@ -17,8 +17,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from dotenv import load_dotenv
 import pytz
 
-# Carregar variáveis de ambiente
-load_dotenv()
+# Carregar variáveis de ambiente (prioriza .env local sobre variáveis antigas do sistema)
+load_dotenv(override=True)
 
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
