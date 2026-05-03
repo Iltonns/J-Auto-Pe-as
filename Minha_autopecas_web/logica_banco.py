@@ -1,4 +1,4 @@
-# LOGICA DE BANCO DE DADOS - SISTEMA DE AUTOPEÇAS FAMÍLIA
+﻿# LOGICA DE BANCO DE DADOS - SISTEMA DE AUTOPEÇAS FAMÍLIA
 # POSTGRESQL COM NEON
 import psycopg2
 import psycopg2.extras
@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 from math import ceil
 import pytz
 
-# Carregar variáveis de ambiente do arquivo .env
-load_dotenv()
+# Carregar variáveis de ambiente do arquivo .env (sobrescreve valores herdados do sistema)
+load_dotenv(override=True)
 
 # URL de conexão do PostgreSQL Neon
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -5004,9 +5004,9 @@ def obter_vendas_do_dia(tenant_id=None):
             vendas.append(venda)
             total_valor += row[2]
             total_itens += row[5] or 0
-            print(f"  ✓ Venda #{row[0]}: R$ {row[2]}, Data: {data_venda_convertida}, Itens: {row[5]}, Funcionário: {row[6] or 'N/A'}")
+            print(f"  [OK] Venda #{row[0]}: R$ {row[2]}, Data: {data_venda_convertida}, Itens: {row[5]}, Funcionario: {row[6] or 'N/A'}")
         else:
-            print(f"  ✗ Venda #{row[0]} ignorada - Data: {data_venda} ≠ {hoje}")
+            print(f"  [IGNORADA] Venda #{row[0]} ignorada - Data: {data_venda} != {hoje}")
     
     resultado = {
         'vendas': vendas,
