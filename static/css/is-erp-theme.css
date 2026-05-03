@@ -11,6 +11,11 @@
     --is-danger: #EF4444;
     --is-radius: 14px;
     --is-shadow: 0 10px 28px rgba(11, 31, 51, 0.08);
+    /* Legacy aliases used in older page-specific templates */
+    --primary-dark: var(--is-primary);
+    --neutral-dark: #17395c;
+    --accent-orange: #c89b3c;
+    --accent-red: #8c6a2a;
 }
 
 * {
