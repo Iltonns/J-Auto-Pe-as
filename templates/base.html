@@ -49,6 +49,10 @@
                             <i class="fas fa-building"></i>
                             <span>Usuário: {{ current_user.username }}</span>
                         </div>
+                        <div class="tenant-badge mt-2">
+                            <i class="fas fa-city"></i>
+                            <span>Empresa: {{ tenant_nome_autenticado or 'Não identificada' }}</span>
+                        </div>
                         {% endif %}
                     </div>
 

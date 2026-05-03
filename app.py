@@ -4812,9 +4812,19 @@ def internal_error(error):
 # CONTEXTO GLOBAL DO TEMPLATE
 @app.context_processor
 def inject_globals():
+    tenant_nome = ''
+    if current_user.is_authenticated:
+        try:
+            tenant_id = get_current_tenant_id()
+            config_empresa = obter_configuracoes_empresa(tenant_id)
+            tenant_nome = (config_empresa or {}).get('nome_empresa', '') or ''
+        except Exception:
+            tenant_nome = ''
+
     return {
         'moment': datetime,
-        'today': hoje_br()
+        'today': hoje_br(),
+        'tenant_nome_autenticado': tenant_nome
     }
 
 if __name__ == '__main__':
