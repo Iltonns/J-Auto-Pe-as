@@ -1,18 +1,31 @@
 :root {
-    --erp-blue-900: #0f2742;
-    --erp-blue-700: #184b7a;
-    --erp-blue-600: #1d63c8;
-    --erp-blue-100: #dbeafe;
-    --erp-blue-050: #eff6ff;
+    --erp-blue-950: #04152a;
+    --erp-blue-900: #08203d;
+    --erp-blue-800: #0b2c52;
+    --erp-blue-700: #114071;
+    --erp-blue-600: #1a5593;
+    --erp-blue-100: #d8e7fb;
+    --erp-blue-050: #edf4ff;
     --erp-blue-gradient: linear-gradient(135deg, var(--erp-blue-700) 0%, var(--erp-blue-900) 100%);
+
+    /* Override global theme vars for full visual consistency */
+    --is-primary: var(--erp-blue-800);
+    --is-accent: var(--erp-blue-700);
+    --neutral-dark: var(--erp-blue-950);
+    --accent-orange: var(--erp-blue-700);
+    --accent-red: var(--erp-blue-800);
 }
 
 .top-navbar,
 .page-header,
+.dashboard-hero,
 .card-header,
 .modal-header,
+.info-card-header,
 .table thead,
 .table thead th,
+.table-dark,
+.table-dark th,
 .table-header-professional,
 .table-header-professional th,
 .vendas-shell .card-header-vendas,
@@ -28,7 +41,7 @@
 .modern-table thead th {
     background: var(--erp-blue-gradient) !important;
     color: #ffffff !important;
-    border-color: rgba(147, 197, 253, 0.45) !important;
+    border-color: rgba(216, 231, 251, 0.4) !important;
 }
 
 .page-header h1,
@@ -47,6 +60,10 @@
 .card-header h6,
 .card-header p,
 .card-header span,
+.dashboard-hero h1,
+.dashboard-hero h2,
+.dashboard-hero h3,
+.dashboard-hero p,
 .top-navbar .navbar-brand,
 .top-navbar .navbar-text,
 .top-navbar .navbar-text span,
@@ -68,8 +85,100 @@
 }
 
 .modal-content,
+.modal-dialog,
 .card,
 .page-header,
-.login-shell {
-    border-color: rgba(29, 99, 200, 0.25) !important;
+.login-shell,
+.offcanvas {
+    border-color: rgba(17, 64, 113, 0.28) !important;
+}
+
+/* Blue standardization for all action buttons */
+.btn:not(.btn-link),
+.btn-primary,
+.btn-success,
+.btn-secondary,
+.btn-info,
+.btn-warning,
+.btn-danger,
+.btn-dark,
+.btn-outline-primary,
+.btn-outline-success,
+.btn-outline-secondary,
+.btn-outline-info,
+.btn-outline-warning,
+.btn-outline-danger,
+.btn-outline-dark {
+    background: var(--erp-blue-gradient) !important;
+    border-color: var(--erp-blue-700) !important;
+    color: #ffffff !important;
+}
+
+.btn:not(.btn-link):hover,
+.btn-primary:hover,
+.btn-success:hover,
+.btn-secondary:hover,
+.btn-info:hover,
+.btn-warning:hover,
+.btn-danger:hover,
+.btn-dark:hover,
+.btn-outline-primary:hover,
+.btn-outline-success:hover,
+.btn-outline-secondary:hover,
+.btn-outline-info:hover,
+.btn-outline-warning:hover,
+.btn-outline-danger:hover,
+.btn-outline-dark:hover {
+    background: linear-gradient(135deg, var(--erp-blue-600) 0%, var(--erp-blue-800) 100%) !important;
+    border-color: var(--erp-blue-600) !important;
+    color: #ffffff !important;
+}
+
+.btn:disabled,
+.btn.disabled {
+    background: #8aa9ce !important;
+    border-color: #8aa9ce !important;
+    color: #f8fbff !important;
+}
+
+/* Inline legacy colors overridden to logo blue */
+[style*="background-color: #121417"],
+[style*="background-color:#121417"],
+[style*="background-color: #c89b3c"],
+[style*="background-color:#c89b3c"],
+[style*="background: #c89b3c"],
+[style*="background:#c89b3c"],
+[style*="background: linear-gradient(135deg, #c89b3c 0%, #8c6a2a 100%)"],
+[style*="background:linear-gradient(135deg,#c89b3c 0%,#8c6a2a 100%)"] {
+    background: var(--erp-blue-gradient) !important;
+    color: #ffffff !important;
+    border-color: var(--erp-blue-700) !important;
+}
+
+/* Sidebar/Dashboard branding visibility */
+.sidebar .brand-section {
+    padding: 1.2rem 1rem;
+}
+
+.brand-logo-wrap {
+    min-height: 68px;
+}
+
+.brand-logo {
+    max-width: min(100%, 230px);
+    max-height: 68px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+@media (max-width: 991.98px) {
+    .brand-logo-wrap {
+        min-height: 58px;
+    }
+
+    .brand-logo {
+        max-width: min(100%, 200px);
+        max-height: 58px;
+    }
 }
