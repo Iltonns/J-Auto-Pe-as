@@ -971,6 +971,12 @@
                         <i class="fas fa-building"></i> Configurações da Empresa
                     </a>
                     {% endif %}
+
+                    {% if is_superadmin() %}
+                    <a class="nav-link" href="{{ url_for('admin_tenants') }}">
+                        <i class="fas fa-city"></i> Tenants
+                    </a>
+                    {% endif %}
                     
                     {% if current_user.is_authenticated %}
                     <hr class="section-divider">
