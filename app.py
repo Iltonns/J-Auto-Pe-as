@@ -1,5 +1,5 @@
 # SISTEMA DE AUTOPEÇAS
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
 import json
@@ -94,13 +94,12 @@ from Minha_autopecas_web.logica_banco import (
     vincular_produto_nfe,
     # Funções para autocomplete de marcas e categorias
     obter_marcas_cadastradas, obter_categorias_cadastradas,
-<<<<<<< HEAD
     garantir_estrutura_fiscal, obter_nfe_por_venda,
     listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant,
-    obter_tenant_padrao_id, resolver_tenant_para_login, criar_tenant_com_admin
-=======
-    garantir_estrutura_fiscal, obter_nfe_por_venda
->>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
+    obter_tenant_padrao_id, resolver_tenant_para_login, criar_tenant_com_admin,
+    criar_planos_padrao, garantir_assinaturas_tenants_existentes, listar_planos_ativos,
+    criar_assinatura_tenant, obter_assinatura_tenant, obter_plano_tenant, alterar_assinatura_tenant,
+    validar_limite_usuarios, validar_limite_produtos, validar_limite_vendas_mes, validar_nfe_habilitada
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -167,7 +166,6 @@ class User(UserMixin):
         self.id = str(user_data['id'])
         self.username = user_data['username']
         self.email = user_data.get('email', '')
-<<<<<<< HEAD
         self.is_superadmin = bool(user_data.get('is_superadmin', False))
         tenant_id = user_data.get('tenant_id')
         try:
@@ -272,8 +270,6 @@ def has_permission_cached(permission):
         return verificar_permissao(current_user.id, permission, get_current_tenant_id())
 
     return permissions.get('superadmin', False) or permissions.get('admin', False) or permissions.get(permission, False)
-=======
->>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
 
 # Middleware para verificar sessão única
 @app.before_request
@@ -292,26 +288,6 @@ def check_session_validity():
                 session.clear()
                 flash('Sua sessão foi encerrada porque você fez login em outro dispositivo/navegador.', 'warning')
                 return redirect(url_for('login'))
-
-@login_manager.user_loader
-def load_user(user_id):
-    user_data = buscar_usuario_por_id(int(user_id))
-    if user_data and user_data.get('ativo', False):
-        return User(user_data)
-    return None
-
-# Decorator para verificar permissões
-def required_permission(permission):
-    def decorator(f):
-        @wraps(f)
-        @login_required
-        def decorated_function(*args, **kwargs):
-            if not verificar_permissao(current_user.id, permission):
-                flash(f'Acesso negado. Você não tem permissão para acessar esta área.', 'error')
-                return redirect(url_for('dashboard'))
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 # Filtros do Jinja2
 @app.template_filter('format_currency')
@@ -336,7 +312,7 @@ def format_date(value):
 def utility_processor():
     def has_permission(permission):
         if current_user.is_authenticated:
-            return verificar_permissao(current_user.id, permission)
+            return verificar_permissao(current_user.id, permission, get_current_tenant_id())
         return False
     return dict(has_permission=has_permission)
 
@@ -345,12 +321,22 @@ def utility_processor():
 def check_user_active():
     """Verifica se o usuário logado ainda está ativo antes de cada requisição"""
     # Lista de rotas que não precisam dessa verificação
-    excluded_routes = ['login', 'logout', 'static']
+    excluded_routes = {'login', 'logout', 'static', 'registro', 'recuperar_senha'}
     
     # Se não for uma rota excluída e o usuário estiver autenticado
-    if request.endpoint not in excluded_routes and current_user.is_authenticated:
+    if request.endpoint not in excluded_routes and not _is_public_endpoint(request.endpoint) and current_user.is_authenticated:
+        tenant_id = _normalize_tenant_id(session.get('tenant_id'))
+        if tenant_id is None:
+            tenant_id = _normalize_tenant_id(getattr(current_user, 'tenant_id', None))
+
+        if tenant_id is None:
+            logout_user()
+            session.clear()
+            flash('Sessão sem tenant válido. Faça login novamente.', 'error')
+            return redirect(url_for('login'))
+
         # Verificar se o usuário ainda existe e está ativo
-        user_data = buscar_usuario_por_id(int(current_user.id))
+        user_data = buscar_usuario_por_id(int(current_user.id), tenant_id=tenant_id)
         if not user_data or not user_data.get('ativo', False):
             # Usuário foi inativado, fazer logout automaticamente
             logout_user()
@@ -358,6 +344,89 @@ def check_user_active():
             return redirect(url_for('login'))
 
 # ROTAS DE AUTENTICAÇÃO
+# Compatibilidade de contexto multi-tenant (camada não invasiva)
+@app.before_request
+def ensure_tenant_context_runtime():
+    """Sincroniza tenant_id entre sessão e usuário autenticado em rotas privadas."""
+    if not hasattr(g, 'current_tenant_id'):
+        g.current_tenant_id = _default_tenant_id()
+
+    if _is_public_endpoint(request.endpoint):
+        return
+
+    if not current_user.is_authenticated:
+        return
+
+    tenant_user = _normalize_tenant_id(getattr(current_user, 'tenant_id', None))
+    tenant_sessao = _normalize_tenant_id(session.get('tenant_id'))
+    tenant_resolvido = tenant_user or tenant_sessao or _default_tenant_id(refresh=True)
+
+    if tenant_resolvido is None:
+        logout_user()
+        session.clear()
+        flash('Não foi possível resolver o tenant da sessão. Faça login novamente.', 'error')
+        return redirect(url_for('login'))
+
+    g.current_tenant_id = tenant_resolvido
+    session['tenant_id'] = tenant_resolvido
+    current_user.tenant_id = tenant_resolvido
+    session.setdefault('tenant_nome_autenticado', f"Tenant {tenant_resolvido}")
+
+    try:
+        user_data = buscar_usuario_por_id(int(current_user.id), tenant_id=tenant_resolvido)
+        g.user_permissions = _montar_mapa_permissoes(user_data)
+    except Exception:
+        g.user_permissions = {}
+
+@login_manager.user_loader
+def load_user_tenant_aware(user_id):
+    """Carrega usuário autenticado sempre no tenant da sessão."""
+    tenant_id = _normalize_tenant_id(session.get('tenant_id'))
+    if tenant_id is None:
+        return None
+
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        return None
+
+    user_data = buscar_usuario_por_id(user_id_int, tenant_id=tenant_id)
+    if user_data and user_data.get('ativo', False):
+        return User(user_data)
+    return None
+
+def required_permission(permission):
+    """Sobrescreve decorator para validar permissões por tenant atual."""
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if not verificar_permissao(current_user.id, permission, get_current_tenant_id()):
+                flash('Acesso negado. Você não tem permissão para acessar esta área.', 'error')
+                return redirect(url_for('dashboard'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+@app.context_processor
+def inject_auth_helpers():
+    """Disponibiliza helper de superadmin para templates."""
+    return {
+        'is_superadmin': lambda: is_superadmin_current_user(),
+        'tenant_nome_autenticado': session.get('tenant_nome_autenticado')
+    }
+
+def superadmin_required(f):
+    """Decorator para rotas exclusivas do superadmin global."""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not is_superadmin_current_user():
+            flash('Acesso restrito ao superadmin global.', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -437,11 +506,26 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        user_data = verificar_usuario(username, password)
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        tenant_input = request.form.get('tenant_id') or request.args.get('tenant_id')
+        tenant_login = resolver_tenant_para_login(tenant_input)
+
+        if not username or not password:
+            flash('Usuário e senha são obrigatórios.', 'error')
+            return render_template('login.html')
+
+        if tenant_login is None:
+            flash('Informe um tenant válido (ID, slug ou nome da empresa).', 'error')
+            return render_template('login.html')
+
+        user_data = verificar_usuario(username, password, tenant_id=tenant_login)
         if user_data:
+            tenant_usuario = _normalize_tenant_id(user_data.get('tenant_id'))
+            if tenant_usuario is None or tenant_usuario != tenant_login:
+                flash('Usuário não pertence ao tenant informado.', 'error')
+                return render_template('login.html')
+
             user = User(user_data)
             login_user(user)
             
@@ -449,6 +533,9 @@ def login():
             import uuid
             session_id = str(uuid.uuid4())
             session['session_id'] = session_id
+            session['tenant_id'] = tenant_usuario
+            tenant_identificador = (str(tenant_input).strip() if tenant_input is not None else '')
+            session['tenant_nome_autenticado'] = tenant_identificador or f"Tenant {tenant_usuario}"
             
             # Armazenar esta sessão como a sessão ativa do usuário
             # Isso automaticamente invalida qualquer sessão anterior
@@ -518,6 +605,12 @@ def recuperar_senha():
 @required_permission('admin')
 def criar_usuario_route():
     try:
+        tenant_id = get_current_tenant_id()
+        limite_usuarios = validar_limite_usuarios(tenant_id)
+        if not limite_usuarios.get('permitido', True):
+            flash(limite_usuarios.get('mensagem') or 'Limite de usuários do plano atingido.', 'error')
+            return redirect(url_for('usuarios'))
+
         username = request.form['username']
         password = request.form['password']
         nome_completo = request.form['nome_completo']
@@ -539,7 +632,10 @@ def criar_usuario_route():
         # Usar o ID do usuário atual como created_by
         created_by = current_user.id
         
-        success, message = criar_usuario(username, password, nome_completo, email, permissoes, created_by)
+        success, message = criar_usuario(
+            username, password, nome_completo, email, permissoes, created_by,
+            tenant_id=tenant_id
+        )
         
         if success:
             flash(message, 'success')
@@ -556,18 +652,19 @@ def criar_usuario_route():
 @login_required
 def usuarios():
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not has_permission_cached('admin'):
         flash('Acesso negado. Você não tem permissão para gerenciar usuários.', 'error')
         return redirect(url_for('dashboard'))
     
-    usuarios_lista = listar_usuarios()
+    usuarios_lista = listar_usuarios(get_current_tenant_id())
     return render_template('usuarios.html', usuarios=usuarios_lista)
 
 @app.route('/usuarios/editar/<int:user_id>', methods=['POST'])
 @login_required
 def editar_usuario_route(user_id):
+    tenant_id = get_current_tenant_id()
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not verificar_permissao(current_user.id, 'admin', tenant_id):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -588,7 +685,9 @@ def editar_usuario_route(user_id):
             'contas_receber': request.form.get('permissao_contas_receber') == 'on'
         }
         
-        success, message = editar_usuario(user_id, nome_completo, email, permissoes, ativo)
+        success, message = editar_usuario(
+            user_id, nome_completo, email, permissoes, ativo, tenant_id=tenant_id
+        )
         
         if success:
             flash(message, 'success')
@@ -603,18 +702,19 @@ def editar_usuario_route(user_id):
 @app.route('/usuarios/deletar/<int:user_id>', methods=['POST'])
 @login_required
 def deletar_usuario_route(user_id):
+    tenant_id = get_current_tenant_id()
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin'):
+    if not verificar_permissao(current_user.id, 'admin', tenant_id):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
     # Não permitir que o usuário delete a si mesmo
-    if user_id == current_user.id:
+    if user_id == int(current_user.id):
         flash('Você não pode desativar sua própria conta.', 'error')
         return redirect(url_for('usuarios'))
     
     try:
-        success, message = deletar_usuario(user_id)
+        success, message = deletar_usuario(user_id, tenant_id=tenant_id)
         
         if success:
             flash(message, 'success')
@@ -626,14 +726,123 @@ def deletar_usuario_route(user_id):
     
     return redirect(url_for('usuarios'))
 
+@app.route('/minha-assinatura')
+@login_required
+def minha_assinatura():
+    tenant_id = get_current_tenant_id()
+    assinatura = obter_assinatura_tenant(tenant_id)
+    plano = obter_plano_tenant(tenant_id)
+    limite_usuarios = validar_limite_usuarios(tenant_id)
+    limite_produtos = validar_limite_produtos(tenant_id)
+    limite_vendas = validar_limite_vendas_mes(tenant_id)
+
+    if not assinatura or not plano:
+        flash('Não foi possível carregar os dados da assinatura.', 'error')
+        return redirect(url_for('dashboard'))
+
+    return render_template(
+        'minha_assinatura.html',
+        assinatura=assinatura,
+        plano=plano,
+        limite_usuarios=limite_usuarios,
+        limite_produtos=limite_produtos,
+        limite_vendas=limite_vendas
+    )
+
+# PAINEL GLOBAL DE TENANTS (apenas superadmin)
+@app.route('/admin/tenants')
+@superadmin_required
+def admin_tenants():
+    criar_planos_padrao()
+    garantir_assinaturas_tenants_existentes(plan_slug='start', status='active')
+    tenants = listar_tenants()
+    planos = listar_planos_ativos()
+    return render_template('admin_tenants.html', tenants=tenants, planos=planos)
+
+@app.route('/admin/tenants/criar', methods=['POST'])
+@superadmin_required
+def admin_tenants_criar():
+    nome = request.form.get('nome', '').strip()
+    slug = request.form.get('slug', '').strip()
+    status = request.form.get('status', 'active')
+
+    sucesso, mensagem, tenant_id = criar_tenant(
+        slug=slug,
+        nome=nome,
+        status=status,
+        config_inicial={'nome_empresa': nome}
+    )
+    if sucesso:
+        criar_assinatura_tenant(tenant_id=tenant_id, plan_slug='start', status='active')
+        flash(f'{mensagem} ID do tenant: {tenant_id}.', 'success')
+    else:
+        flash(mensagem, 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/editar', methods=['POST'])
+@superadmin_required
+def admin_tenants_editar(tenant_id):
+    nome = request.form.get('nome', '').strip()
+    slug = request.form.get('slug', '').strip()
+
+    sucesso, mensagem = editar_tenant(tenant_id=tenant_id, slug=slug, nome=nome)
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/status', methods=['POST'])
+@superadmin_required
+def admin_tenants_status(tenant_id):
+    status = request.form.get('status', '').strip().lower()
+    if status not in ('active', 'inactive'):
+        flash('Status de tenant inválido.', 'error')
+        return redirect(url_for('admin_tenants'))
+
+    sucesso, mensagem = alterar_status_tenant(tenant_id=tenant_id, status=status)
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/criar-admin', methods=['POST'])
+@superadmin_required
+def admin_tenants_criar_admin(tenant_id):
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '')
+    nome_completo = request.form.get('nome_completo', '').strip()
+    email = request.form.get('email', '').strip().lower()
+
+    sucesso, mensagem, _ = criar_admin_tenant(
+        tenant_id=tenant_id,
+        username=username,
+        password=password,
+        nome_completo=nome_completo,
+        email=email,
+        created_by=int(current_user.id)
+    )
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/assinatura', methods=['POST'])
+@superadmin_required
+def admin_tenant_assinatura(tenant_id):
+    plan_id = request.form.get('plan_id')
+    status = request.form.get('status', 'active')
+
+    sucesso, mensagem = alterar_assinatura_tenant(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        status=status
+    )
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
 @app.route('/usuarios/trocar-senha/<int:user_id>', methods=['POST'])
 @login_required
 def trocar_senha_usuario_route(user_id):
     """Rota para trocar senha de um usuário"""
     try:
+        tenant_id = get_current_tenant_id()
         # Apenas admins podem trocar senha de outros usuários
         # Usuários podem trocar sua própria senha
-        if user_id != current_user.id and not verificar_permissao(current_user.id, 'admin'):
+        if user_id != int(current_user.id) and not verificar_permissao(current_user.id, 'admin', tenant_id):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         nova_senha = request.form.get('nova_senha')
@@ -649,13 +858,13 @@ def trocar_senha_usuario_route(user_id):
         
         # Se o usuário está trocando sua própria senha, exigir senha atual
         # Admins podem trocar senha de outros sem senha atual
-        if user_id == current_user.id:
+        if user_id == int(current_user.id):
             if not senha_atual:
                 return jsonify({'success': False, 'message': 'Senha atual é obrigatória'}), 400
-            success, message = atualizar_senha_usuario(user_id, nova_senha, senha_atual)
+            success, message = atualizar_senha_usuario(user_id, nova_senha, senha_atual, tenant_id=tenant_id)
         else:
             # Admin trocando senha de outro usuário
-            success, message = atualizar_senha_usuario(user_id, nova_senha)
+            success, message = atualizar_senha_usuario(user_id, nova_senha, tenant_id=tenant_id)
         
         if success:
             flash(message, 'success')
@@ -710,7 +919,6 @@ def atualizar_configuracoes_empresa_route():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-<<<<<<< HEAD
     tenant_id = get_current_tenant_id()
     pode_admin = has_permission_cached('admin')
     pode_estoque = pode_admin or has_permission_cached('estoque')
@@ -734,14 +942,6 @@ def dashboard():
         int((estatisticas or {}).get('total_clientes') or 0) == 0 and
         len(vendas_para_onboarding) == 0
     )
-=======
-    estatisticas = obter_estatisticas_dashboard()
-    produtos_baixo_estoque = produtos_estoque_baixo()
-    vendas_recentes = listar_vendas(limit=10)
-    contas_pagar_hoje = listar_contas_pagar_hoje()
-    contas_receber_hoje = listar_contas_receber_hoje()
-    contas_atrasadas = listar_contas_atrasadas()
->>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -749,14 +949,10 @@ def dashboard():
                          vendas_recentes=vendas_recentes,
                          contas_pagar_hoje=contas_pagar_hoje,
                          contas_receber_hoje=contas_receber_hoje,
-<<<<<<< HEAD
                          contas_atrasadas=contas_atrasadas,
                          usuario_nome=usuario_nome,
                          empresa_nome=empresa_nome,
                          mostrar_primeiros_passos=mostrar_primeiros_passos)
-=======
-                         contas_atrasadas=contas_atrasadas)
->>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
 
 # =====================================================
 # ROTAS DO CAIXA FINANCEIRO
@@ -1513,6 +1709,12 @@ def adicionar_produto_route():
     """Adiciona um novo produto"""
     try:
         # Função auxiliar para conversão segura
+        tenant_id = get_current_tenant_id()
+        limite_produtos = validar_limite_produtos(tenant_id)
+        if not limite_produtos.get('permitido', True):
+            flash(limite_produtos.get('mensagem') or 'Limite de produtos do plano atingido.', 'error')
+            return redirect(url_for('produtos'))
+
         def safe_float(value, default=0.0):
             try:
                 return float(value) if value and str(value).strip() else default
@@ -1577,7 +1779,8 @@ def adicionar_produto_route():
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id
+            fornecedor_id=fornecedor_id,
+            tenant_id=tenant_id
         )
         
         flash('Produto adicionado com sucesso!', 'success')
@@ -2528,15 +2731,28 @@ def api_venda(venda_id):
 @app.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
 @login_required
 def emitir_nfe_venda_route(venda_id):
-    if not verificar_permissao(current_user.id, 'vendas'):
+    tenant_id = get_current_tenant_id()
+    if not verificar_permissao(current_user.id, 'vendas', tenant_id):
         mensagem = 'Acesso negado. Voce nao tem permissao para emitir NF-e.'
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
             return jsonify({'sucesso': False, 'mensagem': mensagem}), 403
         flash(mensagem, 'error')
         return redirect(url_for('visualizar_venda', venda_id=venda_id))
 
+    nfe_habilitada = validar_nfe_habilitada(tenant_id)
+    if not nfe_habilitada.get('permitido', True):
+        mensagem_nfe = nfe_habilitada.get('mensagem') or 'Plano atual não permite emissão de NF-e.'
+        if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+            return jsonify({'sucesso': False, 'mensagem': mensagem_nfe}), 403
+        flash(mensagem_nfe, 'error')
+        return redirect(url_for('visualizar_venda', venda_id=venda_id))
+
     try:
-        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id))
+        resultado = emitir_nfe_para_venda(
+            venda_id=venda_id,
+            usuario_id=int(current_user.id),
+            tenant_id=tenant_id
+        )
     except Exception as e:
         print(f"Erro ao emitir NF-e da venda {venda_id}: {e}")
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -2564,11 +2780,12 @@ def emitir_nfe_venda_route(venda_id):
 @app.route('/api/vendas/<int:venda_id>/nfe')
 @login_required
 def api_nfe_por_venda(venda_id):
-    if not verificar_permissao(current_user.id, 'vendas'):
+    tenant_id = get_current_tenant_id()
+    if not verificar_permissao(current_user.id, 'vendas', tenant_id):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
 
     try:
-        resultado = consultar_nfe_por_venda(venda_id)
+        resultado = consultar_nfe_por_venda(venda_id, tenant_id=tenant_id)
     except Exception as e:
         print(f"Erro ao consultar NF-e da venda {venda_id}: {e}")
         return jsonify({'sucesso': False, 'mensagem': 'Falha interna ao consultar NF-e.'}), 500
@@ -2637,6 +2854,15 @@ def api_configuracoes_empresa():
 @login_required
 def registrar_venda_route():
     try:
+        tenant_id = get_current_tenant_id()
+        limite_vendas = validar_limite_vendas_mes(tenant_id)
+        if not limite_vendas.get('permitido', True):
+            mensagem_limite = limite_vendas.get('mensagem') or 'Limite mensal de vendas do plano atingido.'
+            if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
+                return jsonify({'success': False, 'error': mensagem_limite}), 400
+            flash(mensagem_limite, 'error')
+            return redirect(url_for('vendas'))
+
         cliente_id = request.form.get('cliente_id')
         if cliente_id:
             cliente_id = int(cliente_id)
@@ -2648,7 +2874,7 @@ def registrar_venda_route():
         observacoes = request.form.get('observacoes')
         
         # Validação: Se não é venda a prazo, o caixa DEVE estar aberto
-        if forma_pagamento != 'prazo' and not caixa_esta_aberto():
+        if forma_pagamento != 'prazo' and not caixa_esta_aberto(tenant_id=tenant_id):
             # Se a requisição é AJAX, retorna JSON
             if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
                 return jsonify({
@@ -2685,7 +2911,10 @@ def registrar_venda_route():
                 flash(f'Item {i+1}: preco_unitario ausente', 'error')
                 return redirect(url_for('vendas'))
         
-        venda_id = registrar_venda(cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id)
+        venda_id = registrar_venda(
+            cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id,
+            tenant_id=tenant_id
+        )
         
         # Se a requisição é AJAX, retorna JSON com o ID da venda
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -2724,15 +2953,16 @@ def deletar_venda_route(venda_id):
     Rota para deletar uma venda específica
     """
     try:
+        tenant_id = get_current_tenant_id()
         # Verificar se o usuário tem permissão para vendas ou é admin
-        if not verificar_permissao(current_user.id, 'vendas') and not current_user.is_admin:
+        if not verificar_permissao(current_user.id, 'vendas', tenant_id) and not has_permission_cached('admin'):
             return jsonify({
                 'success': False,
                 'error': 'Você não tem permissão para deletar vendas.'
             }), 403
         
         # Verificar se a venda existe antes de tentar deletar
-        venda = obter_venda_por_id(venda_id)
+        venda = obter_venda_por_id(venda_id, tenant_id=tenant_id)
         if not venda:
             return jsonify({
                 'success': False,
@@ -2740,7 +2970,7 @@ def deletar_venda_route(venda_id):
             }), 404
         
         # Executar a deleção
-        resultado = deletar_venda(venda_id, restaurar_estoque=True)
+        resultado = deletar_venda(venda_id, restaurar_estoque=True, tenant_id=tenant_id)
         
         if resultado['success']:
             # Log da operação

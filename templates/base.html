@@ -100,6 +100,9 @@
                         <a class="nav-link" href="{{ url_for('vendas') }}">
                             <i class="fas fa-cart-shopping"></i> Vendas
                         </a>
+                        <a class="nav-link" href="{{ url_for('minha_assinatura') }}">
+                            <i class="fas fa-id-card"></i> Minha Assinatura
+                        </a>
 
                         <div class="nav-section-title">Financeiro</div>
                         {% if has_permission('caixa') %}

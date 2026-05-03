@@ -51,6 +51,9 @@
                                 <th>ID</th>
                                 <th>Nome / Slug</th>
                                 <th>Status</th>
+                                <th>Plano</th>
+                                <th>Assinatura</th>
+                                <th>Trial / Fim</th>
                                 <th>Usuários</th>
                                 <th>Admins</th>
                                 <th>Ações</th>
@@ -82,10 +85,59 @@
                                     <span class="badge bg-secondary">Inativo</span>
                                     {% endif %}
                                 </td>
+                                <td>
+                                    {% if tenant.plan_name %}
+                                    <span class="fw-semibold">{{ tenant.plan_name }}</span><br>
+                                    <small class="text-muted">{{ tenant.plan_slug }}{% if tenant.plan_price_monthly is not none %} • R$ {{ '%.2f'|format(tenant.plan_price_monthly or 0) }}{% endif %}</small>
+                                    {% else %}
+                                    <span class="text-muted">Sem plano</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if tenant.subscription_status %}
+                                    <span class="badge bg-info text-dark">{{ tenant.subscription_status }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">sem assinatura</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if tenant.trial_ends_at %}
+                                    <div><small class="text-muted">Trial:</small> {{ tenant.trial_ends_at.strftime('%d/%m/%Y') }}</div>
+                                    {% endif %}
+                                    {% if tenant.current_period_end %}
+                                    <div><small class="text-muted">Fim:</small> {{ tenant.current_period_end.strftime('%d/%m/%Y') }}</div>
+                                    {% endif %}
+                                    {% if not tenant.trial_ends_at and not tenant.current_period_end %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ tenant.total_usuarios }}</td>
                                 <td>{{ tenant.total_admins }}</td>
                                 <td>
                                     <div class="d-flex flex-column gap-2">
+                                        <form method="POST" action="{{ url_for('admin_tenant_assinatura', tenant_id=tenant.id) }}" class="row g-1">
+                                            <div class="col-7">
+                                                <select class="form-select form-select-sm" name="plan_id" required>
+                                                    {% for plano in planos %}
+                                                    <option value="{{ plano.id }}" {% if tenant.plan_slug == plano.slug %}selected{% endif %}>
+                                                        {{ plano.name }} ({{ plano.slug }})
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-5">
+                                                <select class="form-select form-select-sm" name="status" required>
+                                                    <option value="trial" {% if tenant.subscription_status == 'trial' %}selected{% endif %}>trial</option>
+                                                    <option value="active" {% if tenant.subscription_status == 'active' %}selected{% endif %}>active</option>
+                                                    <option value="overdue" {% if tenant.subscription_status == 'overdue' %}selected{% endif %}>overdue</option>
+                                                    <option value="canceled" {% if tenant.subscription_status == 'canceled' %}selected{% endif %}>canceled</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-12">
+                                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Salvar assinatura</button>
+                                            </div>
+                                        </form>
+
                                         <form method="POST" action="{{ url_for('admin_tenants_status', tenant_id=tenant.id) }}" class="d-flex gap-2">
                                             {% if tenant.status == 'active' %}
                                             <input type="hidden" name="status" value="inactive">
