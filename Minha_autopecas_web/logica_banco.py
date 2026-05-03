@@ -115,6 +115,13 @@ def _normalizar_status_tenant(status):
         return 'inactive'
     raise ValueError("Status de tenant inválido. Use 'active' ou 'inactive'.")
 
+def _normalizar_status_assinatura(status):
+    """Normaliza status de assinatura para valores permitidos."""
+    valor = (str(status).strip().lower() if status is not None else 'active')
+    if valor in ('trial', 'active', 'overdue', 'canceled'):
+        return valor
+    raise ValueError("Status de assinatura inválido. Use: trial, active, overdue, canceled.")
+
 def _usuarios_tem_coluna_is_superadmin(cursor):
     """Verifica se a coluna usuarios.is_superadmin existe (compatibilidade de schema)."""
     cursor.execute(
@@ -2101,6 +2108,9 @@ def listar_tenants():
     cursor = conn.cursor()
 
     try:
+        criar_planos_padrao()
+        garantir_assinaturas_tenants_existentes(plan_slug='start', status='active')
+
         cursor.execute(
             '''
             SELECT
@@ -2111,7 +2121,14 @@ def listar_tenants():
                 t.created_at,
                 t.updated_at,
                 COALESCE(u.total_usuarios, 0) AS total_usuarios,
-                COALESCE(a.total_admins, 0) AS total_admins
+                COALESCE(a.total_admins, 0) AS total_admins,
+                p.name AS plan_name,
+                p.slug AS plan_slug,
+                p.price_monthly AS plan_price_monthly,
+                s.status AS subscription_status,
+                s.current_period_start,
+                s.current_period_end,
+                s.trial_ends_at
             FROM tenants t
             LEFT JOIN (
                 SELECT tenant_id, COUNT(*) AS total_usuarios
@@ -2124,6 +2141,8 @@ def listar_tenants():
                 WHERE permissao_admin = TRUE AND ativo = TRUE
                 GROUP BY tenant_id
             ) a ON a.tenant_id = t.id
+            LEFT JOIN subscriptions s ON s.tenant_id = t.id
+            LEFT JOIN plans p ON p.id = s.plan_id
             ORDER BY t.nome
             '''
         )
@@ -2137,7 +2156,14 @@ def listar_tenants():
                 'created_at': row[4],
                 'updated_at': row[5],
                 'total_usuarios': row[6],
-                'total_admins': row[7]
+                'total_admins': row[7],
+                'plan_name': row[8],
+                'plan_slug': row[9],
+                'plan_price_monthly': row[10],
+                'subscription_status': row[11],
+                'current_period_start': row[12],
+                'current_period_end': row[13],
+                'trial_ends_at': row[14]
             })
         return tenants
     except Exception as e:
@@ -2145,6 +2171,578 @@ def listar_tenants():
         return []
     finally:
         conn.close()
+
+def garantir_estrutura_planos_assinaturas():
+    """Garante a existência das tabelas plans/subscriptions."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS plans (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                price_monthly NUMERIC(10,2) NOT NULL DEFAULT 0,
+                max_users INTEGER,
+                max_products INTEGER,
+                max_sales_month INTEGER,
+                nfe_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                support_level TEXT NOT NULL DEFAULT 'standard',
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            '''
+        )
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_plans_slug ON plans (slug)")
+
+        cursor.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+                status TEXT NOT NULL DEFAULT 'active',
+                current_period_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                current_period_end TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
+                trial_ends_at TIMESTAMP,
+                canceled_at TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            '''
+        )
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_subscriptions_tenant_id ON subscriptions (tenant_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_plan_id ON subscriptions (plan_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)")
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao garantir estrutura de planos/assinaturas: {e}")
+        return False
+    finally:
+        conn.close()
+
+def criar_planos_padrao():
+    """Cria/atualiza planos padrão START, GESTAO e PRO."""
+    if not garantir_estrutura_planos_assinaturas():
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        planos = [
+            ('START', 'start', 39.90, 2, 300, 300, False, 'email', True),
+            ('GESTAO', 'gestao', 69.90, 5, 1500, 1500, True, 'prioritario', True),
+            ('PRO', 'pro', 99.90, None, None, None, True, 'dedicado', True),
+        ]
+
+        for plano in planos:
+            cursor.execute(
+                '''
+                INSERT INTO plans (
+                    name, slug, price_monthly, max_users, max_products, max_sales_month,
+                    nfe_enabled, support_level, active, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (slug) DO UPDATE
+                SET
+                    name = EXCLUDED.name,
+                    price_monthly = EXCLUDED.price_monthly,
+                    max_users = EXCLUDED.max_users,
+                    max_products = EXCLUDED.max_products,
+                    max_sales_month = EXCLUDED.max_sales_month,
+                    nfe_enabled = EXCLUDED.nfe_enabled,
+                    support_level = EXCLUDED.support_level,
+                    active = EXCLUDED.active,
+                    updated_at = CURRENT_TIMESTAMP
+                ''',
+                plano
+            )
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao criar planos padrão: {e}")
+        return False
+    finally:
+        conn.close()
+
+def listar_planos_ativos():
+    """Lista planos ativos para seleção em telas administrativas."""
+    if not criar_planos_padrao():
+        return []
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            SELECT id, name, slug, price_monthly, max_users, max_products, max_sales_month,
+                   nfe_enabled, support_level, active
+            FROM plans
+            WHERE active = TRUE
+            ORDER BY price_monthly, id
+            '''
+        )
+        planos = []
+        for row in cursor.fetchall():
+            planos.append({
+                'id': row[0],
+                'name': row[1],
+                'slug': row[2],
+                'price_monthly': row[3],
+                'max_users': row[4],
+                'max_products': row[5],
+                'max_sales_month': row[6],
+                'nfe_enabled': bool(row[7]),
+                'support_level': row[8],
+                'active': bool(row[9]),
+            })
+        return planos
+    except Exception as e:
+        print(f"Erro ao listar planos ativos: {e}")
+        return []
+    finally:
+        conn.close()
+
+def garantir_assinaturas_tenants_existentes(plan_slug='start', status='active'):
+    """Cria assinatura padrão para tenants sem assinatura."""
+    if not criar_planos_padrao():
+        return 0
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        status_normalizado = _normalizar_status_assinatura(status)
+        slug_normalizado = _slugify_tenant(plan_slug) or 'start'
+
+        cursor.execute("SELECT id FROM plans WHERE slug = %s LIMIT 1", (slug_normalizado,))
+        row_plan = cursor.fetchone()
+        if not row_plan:
+            cursor.execute("SELECT id FROM plans WHERE slug = 'start' LIMIT 1")
+            row_plan = cursor.fetchone()
+        if not row_plan:
+            raise ValueError("Plano padrão não encontrado para backfill de assinaturas.")
+
+        plan_id = int(row_plan[0])
+        cursor.execute(
+            '''
+            INSERT INTO subscriptions (
+                tenant_id, plan_id, status, current_period_start, current_period_end,
+                trial_ends_at, canceled_at, created_at, updated_at
+            )
+            SELECT
+                t.id, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days',
+                NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            FROM tenants t
+            LEFT JOIN subscriptions s ON s.tenant_id = t.id
+            WHERE s.id IS NULL
+            ''',
+            (plan_id, status_normalizado)
+        )
+        inseridos = cursor.rowcount if cursor.rowcount is not None else 0
+        conn.commit()
+        return inseridos
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao garantir assinaturas para tenants existentes: {e}")
+        return 0
+    finally:
+        conn.close()
+
+def criar_assinatura_tenant(tenant_id, plan_slug='start', status='active', trial_dias=0):
+    """Cria assinatura para um tenant específico."""
+    if not criar_planos_padrao():
+        return False, "Não foi possível preparar os planos.", None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        if tenant_resolvido is None:
+            return False, "Tenant inválido para criação de assinatura.", None
+
+        status_normalizado = _normalizar_status_assinatura(status)
+        slug_normalizado = _slugify_tenant(plan_slug) or 'start'
+        trial_dias_resolvido = max(int(trial_dias or 0), 0)
+
+        cursor.execute("SELECT id FROM tenants WHERE id = %s LIMIT 1", (tenant_resolvido,))
+        if not cursor.fetchone():
+            return False, "Tenant não encontrado para criação de assinatura.", None
+
+        cursor.execute("SELECT id FROM subscriptions WHERE tenant_id = %s LIMIT 1", (tenant_resolvido,))
+        assinatura_existente = cursor.fetchone()
+        if assinatura_existente:
+            return False, "Tenant já possui assinatura cadastrada.", int(assinatura_existente[0])
+
+        cursor.execute("SELECT id FROM plans WHERE slug = %s LIMIT 1", (slug_normalizado,))
+        plan_row = cursor.fetchone()
+        if not plan_row:
+            cursor.execute("SELECT id FROM plans WHERE slug = 'start' LIMIT 1")
+            plan_row = cursor.fetchone()
+        if not plan_row:
+            return False, "Plano informado não encontrado.", None
+        plan_id = int(plan_row[0])
+
+        trial_ends_at = None
+        if status_normalizado == 'trial':
+            trial_ends_at = datetime.now() + timedelta(days=(trial_dias_resolvido or 7))
+
+        cursor.execute(
+            '''
+            INSERT INTO subscriptions (
+                tenant_id, plan_id, status, current_period_start, current_period_end,
+                trial_ends_at, canceled_at, created_at, updated_at
+            )
+            VALUES (
+                %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days',
+                %s, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id
+            ''',
+            (tenant_resolvido, plan_id, status_normalizado, trial_ends_at)
+        )
+        assinatura_id = int(cursor.fetchone()[0])
+        conn.commit()
+        return True, "Assinatura criada com sucesso.", assinatura_id
+    except ValueError as e:
+        conn.rollback()
+        return False, str(e), None
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao criar assinatura: {str(e)}", None
+    finally:
+        conn.close()
+
+def obter_assinatura_tenant(tenant_id):
+    """Retorna assinatura + plano do tenant informado."""
+    if not criar_planos_padrao():
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        if tenant_resolvido is None:
+            return None
+
+        cursor.execute(
+            '''
+            SELECT
+                s.id,
+                s.tenant_id,
+                s.plan_id,
+                s.status,
+                s.current_period_start,
+                s.current_period_end,
+                s.trial_ends_at,
+                s.canceled_at,
+                s.created_at,
+                s.updated_at,
+                p.name,
+                p.slug,
+                p.price_monthly,
+                p.max_users,
+                p.max_products,
+                p.max_sales_month,
+                p.nfe_enabled,
+                p.support_level,
+                p.active
+            FROM subscriptions s
+            JOIN plans p ON p.id = s.plan_id
+            WHERE s.tenant_id = %s
+            ORDER BY s.id DESC
+            LIMIT 1
+            ''',
+            (tenant_resolvido,)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            ok, _, _ = criar_assinatura_tenant(tenant_resolvido, plan_slug='start', status='active')
+            if not ok:
+                return None
+            cursor.execute(
+                '''
+                SELECT
+                    s.id,
+                    s.tenant_id,
+                    s.plan_id,
+                    s.status,
+                    s.current_period_start,
+                    s.current_period_end,
+                    s.trial_ends_at,
+                    s.canceled_at,
+                    s.created_at,
+                    s.updated_at,
+                    p.name,
+                    p.slug,
+                    p.price_monthly,
+                    p.max_users,
+                    p.max_products,
+                    p.max_sales_month,
+                    p.nfe_enabled,
+                    p.support_level,
+                    p.active
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.tenant_id = %s
+                ORDER BY s.id DESC
+                LIMIT 1
+                ''',
+                (tenant_resolvido,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+        return {
+            'id': row[0],
+            'tenant_id': row[1],
+            'plan_id': row[2],
+            'status': row[3],
+            'current_period_start': row[4],
+            'current_period_end': row[5],
+            'trial_ends_at': row[6],
+            'canceled_at': row[7],
+            'created_at': row[8],
+            'updated_at': row[9],
+            'plan_name': row[10],
+            'plan_slug': row[11],
+            'plan_price_monthly': row[12],
+            'max_users': row[13],
+            'max_products': row[14],
+            'max_sales_month': row[15],
+            'nfe_enabled': bool(row[16]),
+            'support_level': row[17],
+            'plan_active': bool(row[18]),
+        }
+    except Exception as e:
+        print(f"Erro ao obter assinatura do tenant: {e}")
+        return None
+    finally:
+        conn.close()
+
+def obter_plano_tenant(tenant_id):
+    """Retorna somente os dados do plano associado ao tenant."""
+    assinatura = obter_assinatura_tenant(tenant_id)
+    if not assinatura:
+        return None
+    return {
+        'id': assinatura.get('plan_id'),
+        'name': assinatura.get('plan_name'),
+        'slug': assinatura.get('plan_slug'),
+        'price_monthly': assinatura.get('plan_price_monthly'),
+        'max_users': assinatura.get('max_users'),
+        'max_products': assinatura.get('max_products'),
+        'max_sales_month': assinatura.get('max_sales_month'),
+        'nfe_enabled': assinatura.get('nfe_enabled'),
+        'support_level': assinatura.get('support_level'),
+        'active': assinatura.get('plan_active'),
+    }
+
+def alterar_assinatura_tenant(tenant_id, plan_id, status):
+    """Altera plano/status da assinatura de um tenant."""
+    if not criar_planos_padrao():
+        return False, "Não foi possível preparar os planos."
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        plan_resolvido = _normalizar_tenant_id(plan_id)
+        status_normalizado = _normalizar_status_assinatura(status)
+
+        if tenant_resolvido is None:
+            return False, "Tenant inválido."
+        if plan_resolvido is None:
+            return False, "Plano inválido."
+
+        cursor.execute("SELECT id FROM tenants WHERE id = %s LIMIT 1", (tenant_resolvido,))
+        if not cursor.fetchone():
+            return False, "Tenant não encontrado."
+
+        cursor.execute("SELECT id, active FROM plans WHERE id = %s LIMIT 1", (plan_resolvido,))
+        row_plan = cursor.fetchone()
+        if not row_plan:
+            return False, "Plano não encontrado."
+        if not bool(row_plan[1]):
+            return False, "Plano selecionado está inativo."
+
+        cursor.execute("SELECT id FROM subscriptions WHERE tenant_id = %s LIMIT 1", (tenant_resolvido,))
+        row_sub = cursor.fetchone()
+        if not row_sub:
+            ok, msg, _ = criar_assinatura_tenant(tenant_resolvido, plan_slug='start', status='active')
+            if not ok:
+                return False, msg
+            cursor.execute("SELECT id FROM subscriptions WHERE tenant_id = %s LIMIT 1", (tenant_resolvido,))
+            row_sub = cursor.fetchone()
+            if not row_sub:
+                return False, "Não foi possível localizar assinatura do tenant."
+
+        canceled_at = datetime.now() if status_normalizado == 'canceled' else None
+        trial_ends_at = datetime.now() + timedelta(days=7) if status_normalizado == 'trial' else None
+
+        cursor.execute(
+            '''
+            UPDATE subscriptions
+            SET
+                plan_id = %s,
+                status = %s,
+                trial_ends_at = %s,
+                canceled_at = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE tenant_id = %s
+            ''',
+            (plan_resolvido, status_normalizado, trial_ends_at, canceled_at, tenant_resolvido)
+        )
+        conn.commit()
+        return True, "Assinatura alterada com sucesso."
+    except ValueError as e:
+        conn.rollback()
+        return False, str(e)
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao alterar assinatura: {str(e)}"
+    finally:
+        conn.close()
+
+def _contar_usuarios_ativos_tenant(cursor, tenant_id):
+    cursor.execute(
+        "SELECT COUNT(*) FROM usuarios WHERE tenant_id = %s AND ativo = TRUE",
+        (tenant_id,)
+    )
+    return int(cursor.fetchone()[0] or 0)
+
+def _contar_produtos_ativos_tenant(cursor, tenant_id):
+    cursor.execute(
+        "SELECT COUNT(*) FROM produtos WHERE tenant_id = %s AND ativo = TRUE",
+        (tenant_id,)
+    )
+    return int(cursor.fetchone()[0] or 0)
+
+def _contar_vendas_mes_tenant(cursor, tenant_id):
+    cursor.execute(
+        '''
+        SELECT COUNT(*)
+        FROM vendas
+        WHERE tenant_id = %s
+          AND date_trunc('month', data_venda) = date_trunc('month', CURRENT_DATE)
+        ''',
+        (tenant_id,)
+    )
+    return int(cursor.fetchone()[0] or 0)
+
+def validar_limite_usuarios(tenant_id):
+    """Valida limite de usuários ativos do plano do tenant."""
+    assinatura = obter_assinatura_tenant(tenant_id)
+    if not assinatura:
+        return {
+            'permitido': True,
+            'limite': None,
+            'uso_atual': 0,
+            'mensagem': 'Assinatura não encontrada; validação não bloqueante.'
+        }
+
+    limite = assinatura.get('max_users')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        if tenant_resolvido is None:
+            return {'permitido': False, 'limite': limite, 'uso_atual': 0, 'mensagem': 'Tenant inválido.'}
+
+        uso_atual = _contar_usuarios_ativos_tenant(cursor, tenant_resolvido)
+        permitido = True if limite is None else uso_atual < int(limite)
+        mensagem = (
+            f"Limite de usuários do plano {assinatura.get('plan_name')} atingido ({uso_atual}/{limite})."
+            if (limite is not None and not permitido)
+            else "Limite de usuários dentro do plano."
+        )
+        return {'permitido': permitido, 'limite': limite, 'uso_atual': uso_atual, 'mensagem': mensagem}
+    finally:
+        conn.close()
+
+def validar_limite_produtos(tenant_id):
+    """Valida limite de produtos ativos do plano do tenant."""
+    assinatura = obter_assinatura_tenant(tenant_id)
+    if not assinatura:
+        return {
+            'permitido': True,
+            'limite': None,
+            'uso_atual': 0,
+            'mensagem': 'Assinatura não encontrada; validação não bloqueante.'
+        }
+
+    limite = assinatura.get('max_products')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        if tenant_resolvido is None:
+            return {'permitido': False, 'limite': limite, 'uso_atual': 0, 'mensagem': 'Tenant inválido.'}
+
+        uso_atual = _contar_produtos_ativos_tenant(cursor, tenant_resolvido)
+        permitido = True if limite is None else uso_atual < int(limite)
+        mensagem = (
+            f"Limite de produtos do plano {assinatura.get('plan_name')} atingido ({uso_atual}/{limite})."
+            if (limite is not None and not permitido)
+            else "Limite de produtos dentro do plano."
+        )
+        return {'permitido': permitido, 'limite': limite, 'uso_atual': uso_atual, 'mensagem': mensagem}
+    finally:
+        conn.close()
+
+def validar_limite_vendas_mes(tenant_id):
+    """Valida limite mensal de vendas do plano do tenant."""
+    assinatura = obter_assinatura_tenant(tenant_id)
+    if not assinatura:
+        return {
+            'permitido': True,
+            'limite': None,
+            'uso_atual': 0,
+            'mensagem': 'Assinatura não encontrada; validação não bloqueante.'
+        }
+
+    limite = assinatura.get('max_sales_month')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tenant_resolvido = _normalizar_tenant_id(tenant_id)
+        if tenant_resolvido is None:
+            return {'permitido': False, 'limite': limite, 'uso_atual': 0, 'mensagem': 'Tenant inválido.'}
+
+        uso_atual = _contar_vendas_mes_tenant(cursor, tenant_resolvido)
+        permitido = True if limite is None else uso_atual < int(limite)
+        mensagem = (
+            f"Limite mensal de vendas do plano {assinatura.get('plan_name')} atingido ({uso_atual}/{limite})."
+            if (limite is not None and not permitido)
+            else "Limite mensal de vendas dentro do plano."
+        )
+        return {'permitido': permitido, 'limite': limite, 'uso_atual': uso_atual, 'mensagem': mensagem}
+    finally:
+        conn.close()
+
+def validar_nfe_habilitada(tenant_id):
+    """Valida se o plano do tenant permite emissão de NF-e."""
+    assinatura = obter_assinatura_tenant(tenant_id)
+    if not assinatura:
+        return {
+            'permitido': True,
+            'mensagem': 'Assinatura não encontrada; validação não bloqueante.'
+        }
+
+    permitido = bool(assinatura.get('nfe_enabled'))
+    if permitido:
+        return {'permitido': True, 'mensagem': 'NF-e habilitada para o plano atual.'}
+
+    return {
+        'permitido': False,
+        'mensagem': f"O plano {assinatura.get('plan_name')} não permite emissão de NF-e."
+    }
 
 def resolver_tenant_para_login(tenant_input):
     """
@@ -2343,6 +2941,180 @@ def criar_tenant(slug, nome, status='active', config_inicial=None):
     except Exception as e:
         conn.rollback()
         return False, f"Erro ao criar tenant: {str(e)}", None
+    finally:
+        conn.close()
+
+def criar_tenant_com_admin(dados):
+    """
+    Onboarding SaaS: cria tenant + configuracoes_empresa + usuario admin em uma transacao.
+    Regras:
+    - tenant sempre ativo na criacao;
+    - tenant_id sempre obrigatorio internamente;
+    - usuario criado como admin do proprio tenant (nunca superadmin).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if not criar_planos_padrao():
+            return False, "Nao foi possivel inicializar os planos padrao.", None
+
+        if not isinstance(dados, dict):
+            return False, "Dados de cadastro invalidos.", None
+
+        nome_empresa = (str(dados.get('nome_empresa') or '').strip())
+        slug_input = (str(dados.get('slug') or '').strip())
+        cnpj = (str(dados.get('cnpj') or '').strip())
+        telefone = (str(dados.get('telefone') or '').strip())
+
+        nome_admin = (str(dados.get('nome') or '').strip())
+        email_admin = (str(dados.get('email') or '').strip().lower())
+        senha = (dados.get('senha') or '')
+        confirmar_senha = (dados.get('confirmar_senha') or '')
+
+        if not nome_empresa:
+            return False, "Nome da empresa e obrigatorio.", None
+        if not nome_admin:
+            return False, "Nome do usuario administrador e obrigatorio.", None
+        if not email_admin:
+            return False, "Email e obrigatorio.", None
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_admin):
+            return False, "Informe um email valido.", None
+        if not senha or not confirmar_senha:
+            return False, "Senha e confirmacao de senha sao obrigatorias.", None
+        if senha != confirmar_senha:
+            return False, "As senhas nao coincidem.", None
+
+        valida_senha, mensagem_senha = validar_senha_segura(senha)
+        if not valida_senha:
+            return False, mensagem_senha, None
+
+        slug_normalizado = _slugify_tenant(slug_input or nome_empresa)
+        if not slug_normalizado:
+            return False, "Slug invalido para a empresa.", None
+
+        cursor.execute(
+            '''
+            SELECT id
+            FROM tenants
+            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(%s))
+            LIMIT 1
+            ''',
+            (nome_empresa,)
+        )
+        if cursor.fetchone():
+            return False, "Ja existe empresa cadastrada com este nome.", None
+
+        cursor.execute("SELECT id FROM tenants WHERE slug = %s LIMIT 1", (slug_normalizado,))
+        if cursor.fetchone():
+            return False, "Slug ja esta em uso. Escolha outro slug.", None
+
+        cursor.execute(
+            '''
+            INSERT INTO tenants (slug, nome, status, created_at, updated_at)
+            VALUES (%s, %s, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+            ''',
+            (slug_normalizado, nome_empresa)
+        )
+        tenant_id = _normalizar_tenant_id(cursor.fetchone()[0])
+        if tenant_id is None:
+            raise ValueError("Falha ao resolver tenant_id apos criacao do tenant.")
+
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'configuracoes_empresa'
+              AND column_name = 'tenant_id'
+            LIMIT 1
+            '''
+        )
+        if cursor.fetchone() is None:
+            raise ValueError("Tabela configuracoes_empresa sem coluna tenant_id. Onboarding cancelado por seguranca.")
+
+        cursor.execute(
+            '''
+            INSERT INTO configuracoes_empresa (
+                nome_empresa, cnpj, telefone, email, tenant_id, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ''',
+            (nome_empresa, cnpj, telefone, email_admin, tenant_id)
+        )
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE tenant_id = %s AND (username = %s OR email = %s)",
+            (tenant_id, email_admin, email_admin)
+        )
+        if cursor.fetchone()[0] > 0:
+            return False, "Ja existe usuario com este email neste tenant.", None
+
+        password_hash = generate_password_hash(senha)
+        possui_is_superadmin = _usuarios_tem_coluna_is_superadmin(cursor)
+
+        if possui_is_superadmin:
+            cursor.execute(
+                '''
+                INSERT INTO usuarios (
+                    username, password_hash, nome_completo, email,
+                    permissao_vendas, permissao_estoque, permissao_clientes,
+                    permissao_financeiro, permissao_caixa, permissao_relatorios,
+                    permissao_admin, permissao_contas_pagar, permissao_contas_receber,
+                    is_superadmin, created_by, tenant_id, ativo
+                )
+                VALUES (%s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, NULL, %s, TRUE)
+                ''',
+                (email_admin, password_hash, nome_admin, email_admin, tenant_id)
+            )
+        else:
+            cursor.execute(
+                '''
+                INSERT INTO usuarios (
+                    username, password_hash, nome_completo, email,
+                    permissao_vendas, permissao_estoque, permissao_clientes,
+                    permissao_financeiro, permissao_caixa, permissao_relatorios,
+                    permissao_admin, permissao_contas_pagar, permissao_contas_receber,
+                    created_by, tenant_id, ativo
+                )
+                VALUES (%s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, NULL, %s, TRUE)
+                ''',
+                (email_admin, password_hash, nome_admin, email_admin, tenant_id)
+            )
+
+        cursor.execute("SELECT id FROM plans WHERE slug = 'start' LIMIT 1")
+        plan_row = cursor.fetchone()
+        if not plan_row:
+            raise ValueError("Plano START nao encontrado para assinatura inicial.")
+        plan_id_start = int(plan_row[0])
+
+        trial_ends_at = datetime.now() + timedelta(days=7)
+        cursor.execute(
+            '''
+            INSERT INTO subscriptions (
+                tenant_id, plan_id, status, current_period_start, current_period_end,
+                trial_ends_at, canceled_at, created_at, updated_at
+            )
+            VALUES (
+                %s, %s, 'trial', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days',
+                %s, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            ''',
+            (tenant_id, plan_id_start, trial_ends_at)
+        )
+
+        conn.commit()
+        return True, "Empresa criada com sucesso.", tenant_id
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return False, "Conflito de unicidade detectado (nome, slug ou email ja existente).", None
+    except ValueError as e:
+        conn.rollback()
+        return False, str(e), None
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao criar empresa: {str(e)}", None
     finally:
         conn.close()
 

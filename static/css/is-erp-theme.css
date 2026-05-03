@@ -1,21 +1,21 @@
 :root {
-    --is-primary: #0B1F33;
-    --is-accent: #10B981;
-    --is-bg: #F8FAFC;
+    --is-primary: #184B7A;
+    --is-accent: #1D63C8;
+    --is-bg: #F4F8FD;
     --is-surface: #FFFFFF;
     --is-text: #1F2937;
     --is-muted: #6B7280;
-    --is-border: #E5E7EB;
+    --is-border: #D3E1F1;
     --is-success: #10B981;
     --is-warning: #F59E0B;
     --is-danger: #EF4444;
     --is-radius: 14px;
-    --is-shadow: 0 10px 28px rgba(11, 31, 51, 0.08);
+    --is-shadow: 0 10px 28px rgba(15, 39, 66, 0.1);
     /* Legacy aliases used in older page-specific templates */
     --primary-dark: var(--is-primary);
-    --neutral-dark: #17395c;
-    --accent-orange: #c89b3c;
-    --accent-red: #8c6a2a;
+    --neutral-dark: #0f2742;
+    --accent-orange: #1D63C8;
+    --accent-red: #123e76;
 }
 
 * {
@@ -95,9 +95,9 @@ a {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #d1fae5;
-    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(147, 197, 253, 0.5);
+    color: #dbeafe;
+    background: rgba(29, 99, 200, 0.24);
     border-radius: 999px;
     font-size: 0.74rem;
     padding: 0.25rem 0.65rem;
@@ -137,8 +137,8 @@ a {
 
 .sidebar .nav-link.active {
     color: #fff;
-    background: rgba(16, 185, 129, 0.2);
-    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(147, 197, 253, 0.5);
 }
 
 .sidebar .nav-link.logout-link {
@@ -156,35 +156,36 @@ a {
 }
 
 .top-navbar {
-    background: var(--is-surface);
-    border-bottom: 1px solid var(--is-border);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
+    border-bottom: 1px solid rgba(147, 197, 253, 0.35);
+    box-shadow: 0 8px 20px rgba(15, 39, 66, 0.18);
     padding: 0.82rem 1rem;
 }
 
 .navbar-brand {
     font-weight: 700;
-    color: var(--is-text);
+    color: #fff;
     font-size: 1.05rem;
 }
 
 .top-navbar .navbar-text {
-    color: var(--is-muted);
+    color: #dbeafe;
     font-size: 0.9rem;
 }
 
 .layout-toggle {
-    border: 1px solid var(--is-border);
-    background: var(--is-surface);
-    color: var(--is-muted);
+    border: 1px solid rgba(191, 219, 254, 0.65);
+    background: rgba(255, 255, 255, 0.12);
+    color: #eff6ff;
     border-radius: 999px;
     padding: 0.36rem 0.72rem;
     font-size: 0.82rem;
 }
 
 .layout-toggle:hover {
-    border-color: #cbd5e1;
-    color: var(--is-text);
+    border-color: #dbeafe;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
 }
 
 .navbar-toggler-mobile {
@@ -198,18 +199,19 @@ a {
 }
 
 .page-header {
-    background: var(--is-surface);
-    border: 1px solid var(--is-border);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
+    border: 1px solid rgba(147, 197, 253, 0.4);
     border-radius: var(--is-radius);
     padding: 1rem 1.1rem;
     margin-bottom: 1rem;
     box-shadow: var(--is-shadow);
+    color: #fff;
 }
 
 .section-title {
     font-size: 0.95rem;
     font-weight: 700;
-    color: #0f172a;
+    color: #fff;
     margin-bottom: 0.8rem;
 }
 
@@ -221,11 +223,11 @@ a {
 }
 
 .card-header {
-    background: #f9fafb;
-    border-bottom: 1px solid var(--is-border);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
+    border-bottom: 1px solid rgba(147, 197, 253, 0.4);
     border-top-left-radius: var(--is-radius) !important;
     border-top-right-radius: var(--is-radius) !important;
-    color: #111827;
+    color: #fff;
     font-weight: 600;
 }
 
@@ -244,8 +246,8 @@ a {
 
 .btn-primary:hover,
 .btn-success:hover {
-    background: #0f9f71;
-    border-color: #0f9f71;
+    background: #164f9f;
+    border-color: #164f9f;
 }
 
 .btn-secondary {
@@ -285,7 +287,7 @@ a {
 .form-control:focus,
 .form-select:focus {
     border-color: var(--is-accent);
-    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.18);
+    box-shadow: 0 0 0 0.2rem rgba(29, 99, 200, 0.2);
 }
 
 .table {
@@ -296,9 +298,9 @@ a {
 }
 
 .table thead th {
-    background: #f3f4f6;
-    color: #111827;
-    border-bottom: 1px solid var(--is-border);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
+    color: #fff;
+    border-bottom: 1px solid rgba(147, 197, 253, 0.4);
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -338,8 +340,8 @@ a {
 
 .badge-info,
 .bg-info {
-    background: rgba(11, 31, 51, 0.14) !important;
-    color: #0b1f33 !important;
+    background: rgba(29, 99, 200, 0.18) !important;
+    color: #123e76 !important;
 }
 
 .alert {
@@ -362,11 +364,13 @@ a {
 
 .modal-content {
     border-radius: 14px;
-    border: 1px solid var(--is-border);
+    border: 1px solid rgba(147, 197, 253, 0.6);
 }
 
 .modal-header {
-    border-bottom: 1px solid var(--is-border);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
+    border-bottom: 1px solid rgba(147, 197, 253, 0.4);
+    color: #fff;
 }
 
 .empty-state {
@@ -379,7 +383,7 @@ a {
 }
 
 .dashboard-hero {
-    background: linear-gradient(135deg, #0b1f33 0%, #17395c 100%);
+    background: linear-gradient(135deg, var(--is-primary) 0%, var(--neutral-dark) 100%);
     color: #fff;
     border-radius: var(--is-radius);
     padding: 1.2rem 1.35rem;
@@ -467,7 +471,7 @@ a {
 
 .login-page {
     min-height: 100vh;
-    background: linear-gradient(130deg, #eef3f8 0%, #f8fafc 45%, #e9f7f1 100%);
+    background: linear-gradient(130deg, #e7f0fb 0%, #f4f8fd 45%, #dbeafe 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -485,14 +489,14 @@ a {
 }
 
 .login-branding {
-    background: radial-gradient(circle at 20% 20%, #17395c 0%, var(--is-primary) 52%, #071523 100%);
+    background: radial-gradient(circle at 20% 20%, #2a65a0 0%, var(--is-primary) 52%, #0f2742 100%);
     color: #fff;
     padding: 2.5rem 2.2rem;
     height: 100%;
 }
 
 .login-branding .eyebrow {
-    color: #86efac;
+    color: #bfdbfe;
     font-weight: 600;
     font-size: 0.8rem;
     letter-spacing: 0.08em;
@@ -543,8 +547,8 @@ a {
     width: 26px;
     height: 26px;
     border-radius: 8px;
-    background: rgba(16, 185, 129, 0.22);
-    color: #10b981;
+    background: rgba(147, 197, 253, 0.25);
+    color: #dbeafe;
     display: inline-flex;
     align-items: center;
     justify-content: center;

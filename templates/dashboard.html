@@ -27,6 +27,25 @@
     </div>
 </section>
 
+{% if mostrar_primeiros_passos %}
+<section class="mb-4">
+    <div class="card border-primary shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-rocket me-2"></i>Primeiros passos
+        </div>
+        <div class="card-body">
+            <p class="mb-3 text-muted">Seu tenant ainda nao possui dados operacionais. Siga este checklist inicial:</p>
+            <div class="d-flex flex-column gap-2">
+                <div><i class="fas fa-circle-check text-success me-2"></i>Configurar empresa</div>
+                <div><i class="fas fa-circle-check text-success me-2"></i>Cadastrar produto</div>
+                <div><i class="fas fa-circle-check text-success me-2"></i>Cadastrar cliente</div>
+                <div><i class="fas fa-circle-check text-success me-2"></i>Fazer primeira venda</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
 <section class="mb-4">
     <h2 class="section-title">Indicadores principais</h2>
     <div class="row g-3">

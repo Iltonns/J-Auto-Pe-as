@@ -4,8 +4,8 @@
   "description": "Sistema completo para gestão de autopeças",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#121417",
-  "theme_color": "#121417",
+  "background_color": "#F4F8FD",
+  "theme_color": "#184B7A",
   "orientation": "portrait-primary",
   "icons": [
     {

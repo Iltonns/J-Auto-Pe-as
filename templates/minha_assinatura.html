@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Minha Assinatura - IS Gestão ERP{% endblock %}
+{% block page_title %}Minha Assinatura{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <div class="col-12 col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="fas fa-id-card me-2"></i>Plano atual
+            </div>
+            <div class="card-body">
+                <h4 class="mb-1">{{ plano.name }}</h4>
+                <div class="text-muted mb-3">{{ plano.slug }}</div>
+                <div class="display-6 fw-bold">R$ {{ '%.2f'|format(plano.price_monthly or 0) }}</div>
+                <div class="text-muted">mensal</div>
+                <hr>
+                <div class="mb-2"><strong>Status:</strong> {{ assinatura.status }}</div>
+                {% if assinatura.trial_ends_at %}
+                <div class="mb-2"><strong>Trial até:</strong> {{ assinatura.trial_ends_at.strftime('%d/%m/%Y') }}</div>
+                {% endif %}
+                {% if assinatura.current_period_end %}
+                <div class="mb-2"><strong>Fim do período:</strong> {{ assinatura.current_period_end.strftime('%d/%m/%Y') }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="fas fa-chart-column me-2"></i>Limites e uso
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Usuários</span>
+                        <strong>
+                            {{ limite_usuarios.uso_atual }}
+                            {% if limite_usuarios.limite is not none %}/{{ limite_usuarios.limite }}{% else %}/ilimitado{% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Produtos</span>
+                        <strong>
+                            {{ limite_produtos.uso_atual }}
+                            {% if limite_produtos.limite is not none %}/{{ limite_produtos.limite }}{% else %}/ilimitado{% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Vendas no mês</span>
+                        <strong>
+                            {{ limite_vendas.uso_atual }}
+                            {% if limite_vendas.limite is not none %}/{{ limite_vendas.limite }}{% else %}/ilimitado{% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="mb-0">
+                    <div class="d-flex justify-content-between">
+                        <span>NF-e</span>
+                        <strong>{{ 'Habilitada' if plano.nfe_enabled else 'Bloqueada no plano' }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
