@@ -1,611 +1,229 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Sistema de Autopeças{% endblock %}
-{% block page_title %}Dashboard - J-AUTO PEÇAS{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/dashboard-improved.css') }}">
-{% endblock %}
+{% block title %}Dashboard - IS Gestão ERP{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<!-- Header do Dashboard -->
-<div class="dashboard-header">
-    <div class="container-fluid">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h1 class="dashboard-welcome">
-                    <i class="fas fa-chart-line"></i> Bem-vindo ao Dashboard
-                </h1>
-                <p class="dashboard-subtitle">Visão geral e controle do seu negócio</p>
-            </div>
-            <div class="col-md-4">
-                <div class="dashboard-time">
-                    <div id="current-time"></div>
-                    <div id="current-date"></div>
-                </div>
-            </div>
+<section class="dashboard-hero">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h1 class="h4 mb-1 fw-bold">Visão geral do seu negócio</h1>
+            <p class="subtitle mb-0">Acompanhe indicadores de vendas, estoque e financeiro em tempo real.</p>
+        </div>
+        <div class="text-md-end">
+            <div class="small text-white-50">IS Gestão ERP</div>
+            <div class="fw-semibold">by IS Soluções</div>
         </div>
     </div>
-</div>
-<!-- KPIs Principais -->
-<main class="dashboard-main-content">
-<div class="container-lg mt-5 mb-4">
-    <div class="row">
-        <div class="col-12">
-            <h5 class="mb-4 section-title">
-                <i class="fas fa-chart-bar"></i> Indicadores Principais
-            </h5>
-        </div>
-    </div>
+</section>
+
+<section class="mb-4">
+    <h2 class="section-title">Indicadores principais</h2>
     <div class="row g-3">
-        <!-- KPI 1: Vendas do Dia -->
         {% if has_permission('vendas') %}
-        <div class="col-md-6 col-lg-3">
-            <div class="kpi-card kpi-primary">
-                <div class="kpi-icon">
-                    <i class="fas fa-shopping-cart"></i>
-                </div>
-                <div class="kpi-content">
-                    <h6 class="kpi-label">Vendas de Hoje</h6>
-                    <h3 class="kpi-value">{{ estatisticas.vendas_dia_quantidade or 0 }}</h3>
-                    <p class="kpi-detail">transações em {{ estatisticas.vendas_dia_quantidade or 0 }} venda(s)</p>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-positive">
+                <div class="kpi-icon"><i class="fas fa-cart-shopping"></i></div>
+                <div class="kpi-label">Vendas hoje</div>
+                <div class="kpi-value">{{ estatisticas.vendas_dia_quantidade or 0 }}</div>
+                <p class="kpi-detail">R$ {{ '%.2f'|format(estatisticas.vendas_dia_valor or 0) }}</p>
+            </article>
         </div>
         {% endif %}
 
-        <!-- KPI 2: Contas Vencendo -->
         {% if has_permission('financeiro') %}
-        <div class="col-md-6 col-lg-3">
-            <div class="kpi-card kpi-warning">
-                <div class="kpi-icon">
-                    <i class="fas fa-calendar-times"></i>
-                </div>
-                <div class="kpi-content">
-                    <h6 class="kpi-label">Contas em Atraso</h6>
-                    <h3 class="kpi-value">{{ contas_atrasadas|length or 0 }}</h3>
-                    <p class="kpi-detail">ação necessária</p>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-warning">
+                <div class="kpi-icon"><i class="fas fa-circle-exclamation"></i></div>
+                <div class="kpi-label">Contas em atraso</div>
+                <div class="kpi-value">{{ contas_atrasadas|length or 0 }}</div>
+                <p class="kpi-detail">Ação prioritária</p>
+            </article>
         </div>
         {% endif %}
 
-        <!-- KPI 3: Estoque Crítico -->
         {% if has_permission('estoque') %}
-        <div class="col-md-6 col-lg-3">
-            <div class="kpi-card kpi-danger">
-                <div class="kpi-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <div class="kpi-content">
-                    <h6 class="kpi-label">Estoque Crítico</h6>
-                    <h3 class="kpi-value">{{ estatisticas.produtos_sem_estoque or 0 }}</h3>
-                    <p class="kpi-detail">requerem reposição</p>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-danger">
+                <div class="kpi-icon"><i class="fas fa-box-open"></i></div>
+                <div class="kpi-label">Estoque crítico</div>
+                <div class="kpi-value">{{ estatisticas.produtos_sem_estoque or 0 }}</div>
+                <p class="kpi-detail">{{ estatisticas.produtos_estoque_baixo or 0 }} com estoque baixo</p>
+            </article>
         </div>
         {% endif %}
 
-        <!-- KPI 4: Clientes Ativos -->
         {% if has_permission('clientes') %}
-        <div class="col-md-6 col-lg-3">
-            <div class="kpi-card kpi-success">
-                <div class="kpi-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="kpi-content">
-                    <h6 class="kpi-label">Clientes Ativos</h6>
-                    <h3 class="kpi-value">{{ estatisticas.total_clientes or 0 }}</h3>
-                    <p class="kpi-detail">base de clientes</p>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-neutral">
+                <div class="kpi-icon"><i class="fas fa-users"></i></div>
+                <div class="kpi-label">Clientes ativos</div>
+                <div class="kpi-value">{{ estatisticas.total_clientes or 0 }}</div>
+                <p class="kpi-detail">Base de relacionamento</p>
+            </article>
         </div>
         {% endif %}
     </div>
-</div>
+</section>
 
-<!-- Estatísticas Complementares -->
-<div class="container-lg mt-5 mb-4">
-    <div class="row">
-        <div class="col-12">
-            <h5 class="mb-4 section-title">
-                <i class="fas fa-info-circle"></i> Mais Informações
-            </h5>
-        </div>
-    </div>
+<section class="mb-4">
+    <h2 class="section-title">Resumo operacional</h2>
     <div class="row g-3">
-        <!-- Card: Peças -->
-        {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">Peças Cadastradas</p>
-                        <h4 class="stat-number">{{ estatisticas.total_produtos or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-car-battery text-info"></i>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-neutral">
+                <div class="kpi-label">Produtos cadastrados</div>
+                <div class="kpi-value">{{ estatisticas.total_produtos or 0 }}</div>
+            </article>
         </div>
-        {% endif %}
 
-        <!-- Card: Estoque Baixo -->
-        {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">Estoque Baixo</p>
-                        <h4 class="stat-number">{{ estatisticas.produtos_estoque_baixo or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-bell text-warning"></i>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-neutral">
+                <div class="kpi-label">Fornecedores ativos</div>
+                <div class="kpi-value">{{ estatisticas.total_fornecedores or 0 }}</div>
+            </article>
         </div>
-        {% endif %}
 
-        <!-- Card: Vendas Mês -->
-        {% if has_permission('vendas') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">Vendas do Mês</p>
-                        <h4 class="stat-number">{{ estatisticas.vendas_mes_quantidade or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-chart-line text-success"></i>
-                </div>
-            </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-positive">
+                <div class="kpi-label">Contas a receber hoje</div>
+                <div class="kpi-value">{{ estatisticas.contas_receber_hoje or 0 }}</div>
+            </article>
         </div>
-        {% endif %}
 
-        <!-- Card: Fornecedores -->
-        {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">Fornecedores</p>
-                        <h4 class="stat-number">{{ estatisticas.total_fornecedores or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-truck text-primary"></i>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Card: Contas a Pagar Hoje -->
-        {% if has_permission('financeiro') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">A Pagar Hoje</p>
-                        <h4 class="stat-number">{{ estatisticas.contas_pagar_hoje or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-credit-card text-danger"></i>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Card: Contas a Receber Hoje -->
-        {% if has_permission('financeiro') %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">A Receber Hoje</p>
-                        <h4 class="stat-number">{{ estatisticas.contas_receber_hoje or 0 }}</h4>
-                    </div>
-                    <i class="fas fa-coins text-success"></i>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Card: Movimentações Pendentes -->
-        {% if has_permission('estoque') and estatisticas.movimentacoes_pendentes > 0 %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="stat-card-light">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="stat-label">Movimentações</p>
-                        <h4 class="stat-number">{{ estatisticas.movimentacoes_pendentes }}</h4>
-                    </div>
-                    <i class="fas fa-exchange-alt text-warning"></i>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Centro de Ações Rápidas -->
-<div class="container-lg mt-5 mb-4">
-    <div class="row">
-        <div class="col-12">
-            <h5 class="mb-4 section-title">
-                <i class="fas fa-bolt"></i> Ações Rápidas
-            </h5>
+        <div class="col-12 col-md-6 col-xl-3">
+            <article class="kpi-card kpi-warning">
+                <div class="kpi-label">Contas a pagar hoje</div>
+                <div class="kpi-value">{{ estatisticas.contas_pagar_hoje or 0 }}</div>
+            </article>
         </div>
     </div>
+</section>
+
+<section class="mb-4">
+    <h2 class="section-title">Ações rápidas</h2>
     <div class="row g-2">
-        <!-- Linha 1: Operações Principais -->
         {% if has_permission('vendas') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('orcamentos') }}" class="quick-action-btn btn-primary">
-                <i class="fas fa-file-invoice-dollar fa-lg"></i>
-                <span class="quick-action-label">Orçamentos</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-primary quick-action-btn" href="{{ url_for('vendas') }}"><i class="fas fa-cash-register"></i><span class="quick-action-label">Vendas</span></a></div>
         {% endif %}
-
         {% if has_permission('vendas') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('vendas') }}" class="quick-action-btn btn-success">
-                <i class="fas fa-cash-register fa-lg"></i>
-                <span class="quick-action-label">Vendas</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-secondary quick-action-btn" href="{{ url_for('orcamentos') }}"><i class="fas fa-file-invoice-dollar"></i><span class="quick-action-label">Orçamentos</span></a></div>
         {% endif %}
-
         {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('produtos') }}" class="quick-action-btn btn-info">
-                <i class="fas fa-car-battery fa-lg"></i>
-                <span class="quick-action-label">Produtos</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('produtos') }}"><i class="fas fa-boxes-stacked"></i><span class="quick-action-label">Produtos</span></a></div>
         {% endif %}
-
         {% if has_permission('clientes') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('clientes') }}" class="quick-action-btn btn-warning">
-                <i class="fas fa-user-plus fa-lg"></i>
-                <span class="quick-action-label">Clientes</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('clientes') }}"><i class="fas fa-user-plus"></i><span class="quick-action-label">Clientes</span></a></div>
         {% endif %}
-
-        {% if has_permission('relatorios') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('relatorios') }}" class="quick-action-btn btn-secondary">
-                <i class="fas fa-chart-line fa-lg"></i>
-                <span class="quick-action-label">Relatórios</span>
-            </a>
-        </div>
-        {% endif %}
-
-        {% if has_permission('caixa') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('caixa') }}" class="quick-action-btn btn-dark">
-                <i class="fas fa-wallet fa-lg"></i>
-                <span class="quick-action-label">Caixa</span>
-            </a>
-        </div>
-        {% endif %}
-
-        <!-- Linha 2: Operações Adicionais (collapse em mobile) -->
-        {% if has_permission('contas_pagar') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('contas_a_pagar_hoje') }}" class="quick-action-btn btn-outline-danger">
-                <i class="fas fa-credit-card fa-lg"></i>
-                <span class="quick-action-label">Contas a Pagar</span>
-            </a>
-        </div>
-        {% endif %}
-
-        {% if has_permission('contas_receber') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('contas_a_receber_hoje') }}" class="quick-action-btn btn-outline-success">
-                <i class="fas fa-coins fa-lg"></i>
-                <span class="quick-action-label">Contas a Receber</span>
-            </a>
-        </div>
-        {% endif %}
-
         {% if has_permission('financeiro') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('financeiro') }}" class="quick-action-btn btn-outline-primary">
-                <i class="fas fa-chart-pie fa-lg"></i>
-                <span class="quick-action-label">Financeiro</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('financeiro') }}"><i class="fas fa-chart-line"></i><span class="quick-action-label">Financeiro</span></a></div>
         {% endif %}
-
+        {% if has_permission('caixa') %}
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('caixa') }}"><i class="fas fa-wallet"></i><span class="quick-action-label">Caixa</span></a></div>
+        {% endif %}
         {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('fornecedores') }}" class="quick-action-btn btn-outline-info">
-                <i class="fas fa-truck fa-lg"></i>
-                <span class="quick-action-label">Fornecedores</span>
-            </a>
-        </div>
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('movimentacoes') }}"><i class="fas fa-arrows-rotate"></i><span class="quick-action-label">Movimentações</span></a></div>
         {% endif %}
-
-        {% if has_permission('estoque') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('movimentacoes') }}" class="quick-action-btn btn-outline-warning">
-                <i class="fas fa-exchange-alt fa-lg"></i>
-                <span class="quick-action-label">Movimentações</span>
-                {% if estatisticas.movimentacoes_pendentes > 0 %}
-                <span class="badge bg-danger position-absolute" style="top: 5px; right: 5px; font-size: 0.65rem;">{{ estatisticas.movimentacoes_pendentes }}</span>
-                {% endif %}
-            </a>
-        </div>
-        {% endif %}
-
-        {% if has_permission('admin') %}
-        <div class="col-sm-6 col-lg-2">
-            <a href="{{ url_for('usuarios') }}" class="quick-action-btn btn-outline-secondary">
-                <i class="fas fa-users-cog fa-lg"></i>
-                <span class="quick-action-label">Usuários</span>
-            </a>
-        </div>
+        {% if has_permission('relatorios') %}
+        <div class="col-12 col-sm-6 col-lg-3"><a class="btn btn-outline-primary quick-action-btn" href="{{ url_for('relatorios') }}"><i class="fas fa-chart-pie"></i><span class="quick-action-label">Relatórios</span></a></div>
         {% endif %}
     </div>
-</div>
+</section>
 
-<!-- Conteúdo Principal em Dois Painéis -->
-<div class="container-lg mt-5 mb-5 pb-5">
-    <div class="row g-4">
-        <!-- Painel Esquerdo: Produtos Recentes -->
-        <div class="col-lg-8">
-            <div class="content-card">
-                <div class="card-header-custom">
-                    <h5>
-                        <i class="fas fa-box"></i> Produtos Adicionados Recentemente
-                    </h5>
-                </div>
-                
-                {% if produtos_recentes %}
-                <div class="table-responsive">
-                    <table class="table table-hover modern-table">
-                        <thead>
+<section class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-bag-shopping me-2"></i>Vendas recentes</span>
+                {% if has_permission('vendas') %}
+                <a href="{{ url_for('vendas') }}" class="btn btn-sm btn-outline-primary">Ver todas</a>
+                {% endif %}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Cliente</th>
+                            <th>Pagamento</th>
+                            <th>Data</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if vendas_recentes %}
+                            {% for venda in vendas_recentes %}
                             <tr>
-                                <th><i class="fas fa-tag"></i> Peça</th>
-                                <th><i class="fas fa-dollar-sign"></i> Preço</th>
-                                <th><i class="fas fa-boxes"></i> Estoque</th>
-                                <th><i class="fas fa-traffic-light"></i> Status</th>
-                                <th style="text-align: center;"><i class="fas fa-cog"></i></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for produto in produtos_recentes %}
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-car-battery me-3" style="color: var(--accent-primary); font-size: 1.1rem;"></i>
-                                        <div>
-                                            <strong style="display: block;">{{ produto.nome }}</strong>
-                                            {% if produto.codigo %}
-                                            <small class="text-muted">Cód: {{ produto.codigo }}</small>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <strong class="text-success">R$ {{ "%.2f"|format(produto.preco) }}</strong>
-                                </td>
-                                <td>
-                                    <span class="fw-bold">{{ produto.quantidade }}</span> un.
-                                </td>
-                                <td>
-                                    {% if produto.quantidade <= 0 %}
-                                        <span class="badge bg-danger">
-                                            <i class="fas fa-times"></i> Sem Estoque
-                                        </span>
-                                    {% elif produto.quantidade <= 5 %}
-                                        <span class="badge bg-warning">
-                                            <i class="fas fa-exclamation-triangle"></i> Baixo
-                                        </span>
-                                    {% else %}
-                                        <span class="badge bg-success">
-                                            <i class="fas fa-check"></i> Disponível
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td style="text-align: center;">
-                                    <a href="{{ url_for('produtos') }}" class="btn btn-sm btn-outline-primary" title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                </td>
+                                <td>#{{ venda.id }}</td>
+                                <td>{{ venda.cliente }}</td>
+                                <td>{{ venda.forma_pagamento or '-' }}</td>
+                                <td>{{ venda.data_venda.strftime('%d/%m/%Y %H:%M') if venda.data_venda else '-' }}</td>
+                                <td class="text-end fw-semibold">R$ {{ '%.2f'|format(venda.total or 0) }}</td>
                             </tr>
                             {% endfor %}
-                        </tbody>
-                    </table>
+                        {% else %}
+                            <tr>
+                                <td colspan="5">
+                                    <div class="empty-state py-4">Nenhuma venda recente registrada.</div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="fas fa-triangle-exclamation me-2"></i>Contas em atraso
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% if contas_atrasadas %}
+                        {% for conta in contas_atrasadas[:6] %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div class="fw-semibold">{{ conta.descricao }}</div>
+                                    <small class="text-muted">{{ conta.tipo_label }} • {{ conta.entidade }}</small>
+                                </div>
+                                <span class="badge bg-danger">{{ conta.dias_atraso }} dia(s)</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="list-group-item">
+                            <div class="empty-state py-3">Sem contas em atraso.</div>
+                        </div>
+                    {% endif %}
                 </div>
-                
-                <div class="text-center mt-4 pb-3">
-                    <a href="{{ url_for('produtos') }}" class="btn btn-primary">
-                        <i class="fas fa-eye"></i> Ver Todos os Produtos
-                    </a>
-                </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                    <h6 class="text-muted mb-2">Nenhum produto cadastrado</h6>
-                    <p class="text-muted mb-4">Comece cadastrando suas primeiras peças automotivas.</p>
-                    <a href="{{ url_for('produtos') }}" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Cadastrar Primeira Peça
-                    </a>
-                </div>
-                {% endif %}
             </div>
         </div>
 
-        <!-- Painel Direito: Alertas e Avisos -->
-        <div class="col-lg-4">
-            <div class="alerts-panel">
-                <div class="card-header-custom">
-                    <h5>
-                        <i class="fas fa-bell"></i> Alertas e Avisos
-                    </h5>
-                </div>
-
-                <!-- Alerta: Contas em Atraso -->
-                {% if has_permission('financeiro') and contas_atrasadas %}
-                <div class="alert-item alert-danger">
-                    <div class="alert-icon">
-                        <i class="fas fa-exclamation-circle"></i>
-                    </div>
-                    <div class="alert-content">
-                        <strong>Contas em Atraso!</strong>
-                        <p class="mb-2">{{ contas_atrasadas|length }} conta(s) vencida(s)</p>
-                        {% if contas_atrasadas[0] %}
-                        <small class="text-muted">Maior atraso: <strong>{{ contas_atrasadas[0].dias_atraso }} dia(s)</strong></small>
-                        {% endif %}
-                    </div>
-                    <a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-sm btn-danger ms-auto">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- Alerta: Produtos Sem Estoque -->
-                {% if estatisticas.produtos_sem_estoque > 0 %}
-                <div class="alert-item alert-danger">
-                    <div class="alert-icon">
-                        <i class="fas fa-times-circle"></i>
-                    </div>
-                    <div class="alert-content">
-                        <strong>Estoque Zerado!</strong>
-                        <p class="mb-0">{{ estatisticas.produtos_sem_estoque }} produto(s) sem estoque</p>
-                    </div>
-                    <a href="{{ url_for('produtos') }}" class="btn btn-sm btn-danger ms-auto">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- Alerta: Estoque Baixo -->
-                {% if estatisticas.produtos_estoque_baixo > 0 %}
-                <div class="alert-item alert-warning">
-                    <div class="alert-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div class="alert-content">
-                        <strong>Atenção ao Estoque!</strong>
-                        <p class="mb-0">{{ estatisticas.produtos_estoque_baixo }} produto(s) com estoque baixo</p>
-                    </div>
-                    <a href="{{ url_for('produtos') }}" class="btn btn-sm btn-warning ms-auto">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- Informativo: Contas do Dia -->
-                <div class="alert-item alert-info">
-                    <div class="alert-icon">
-                        <i class="fas fa-calendar-check"></i>
-                    </div>
-                    <div class="alert-content">
-                        <strong>Contas Vencendo Hoje</strong>
-                        <p class="mb-0">Verifique contas a pagar e receber</p>
-                    </div>
-                    <a href="{{ url_for('contas_a_pagar_hoje') }}" class="btn btn-sm btn-outline-info ms-auto">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                </div>
-
-                <!-- Dica do Sistema -->
-                <div class="alert-item alert-success">
-                    <div class="alert-icon">
-                        <i class="fas fa-lightbulb"></i>
-                    </div>
-                    <div class="alert-content">
-                        <strong>💡 Dica</strong>
-                        <p class="mb-0">Consulte relatórios para acompanhar o crescimento do seu negócio</p>
-                    </div>
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-boxes-stacked me-2"></i>Estoque baixo
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% if produtos_baixo_estoque %}
+                        {% for produto in produtos_baixo_estoque[:6] %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div class="fw-semibold">{{ produto.nome }}</div>
+                                <span class="badge bg-warning">{{ produto.estoque }}/{{ produto.estoque_minimo }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="list-group-item">
+                            <div class="empty-state py-3">Nenhum item com estoque baixo.</div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
-</div>
-</main>
-
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Função para atualizar data e hora
-function atualizarDataHora() {
-    const agora = new Date();
-    
-    // Formatação da hora
-    const hora = agora.toLocaleString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
-    
-    // Formatação da data
-    const data = agora.toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-    
-    document.getElementById('current-time').innerHTML = `<strong>${hora}</strong>`;
-    document.getElementById('current-date').innerHTML = data;
-}
-
-// Atualizar a cada segundo
-setInterval(atualizarDataHora, 1000);
-atualizarDataHora(); // Executar imediatamente
-
-// Animação de entrada para os cards
-document.addEventListener('DOMContentLoaded', function() {
-    // Animate stat cards
-    const statCards = document.querySelectorAll('.stat-card');
-    statCards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            card.style.transition = 'all 0.6s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
-    });
-    
-    // Animate action buttons
-    const actionBtns = document.querySelectorAll('.action-btn');
-    actionBtns.forEach((btn, index) => {
-        btn.style.opacity = '0';
-        btn.style.transform = 'scale(0.8)';
-        
-        setTimeout(() => {
-            btn.style.transition = 'all 0.5s ease';
-            btn.style.opacity = '1';
-            btn.style.transform = 'scale(1)';
-        }, 800 + (index * 80));
-    });
-});
-
-// Auto-refresh dos dados a cada 5 minutos (apenas se não houver interação)
-let lastActivity = Date.now();
-document.addEventListener('mousemove', () => lastActivity = Date.now());
-document.addEventListener('keypress', () => lastActivity = Date.now());
-
-setInterval(() => {
-    const timeSinceLastActivity = Date.now() - lastActivity;
-    if (timeSinceLastActivity > 300000) { // 5 minutos sem atividade
-        location.reload();
-    }
-}, 300000); // Verifica a cada 5 minutos
-
-// Notificações de estoque baixo
-{% if estatisticas.produtos_estoque_baixo > 0 %}
-setTimeout(() => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('J-AUTO PEÇAS - Alerta de Estoque', {
-            body: `${estatisticas.produtos_estoque_baixo} produto(s) com estoque baixo necessitam de atenção.`,
-            icon: '/static/images/logo.png'
-        });
-    }
-}, 3000);
-{% endif %}
-</script>
+</section>
 {% endblock %}

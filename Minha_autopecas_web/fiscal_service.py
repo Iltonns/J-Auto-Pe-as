@@ -296,6 +296,17 @@ def _emitir_nfe_provider_http(payload):
 
 
 def emitir_nfe_para_venda(venda_id, usuario_id, tenant_id=None):
+    try:
+        tenant_contexto = int(tenant_id)
+        if tenant_contexto <= 0:
+            raise ValueError()
+    except (TypeError, ValueError):
+        return {
+            'sucesso': False,
+            'status': 'erro_validacao',
+            'mensagem': 'tenant_id é obrigatório para emissão fiscal.',
+        }
+
     ambiente = os.getenv('NFE_AMBIENTE', 'homologacao').strip().lower() or 'homologacao'
     provider = os.getenv('NFE_PROVIDER', 'mock').strip().lower() or 'mock'
 
@@ -310,7 +321,7 @@ def emitir_nfe_para_venda(venda_id, usuario_id, tenant_id=None):
         usuario_id=usuario_id,
         ambiente=ambiente,
         serie=serie,
-        tenant_id=tenant_id,
+        tenant_id=tenant_contexto,
     )
 
     if not rascunho.get('sucesso'):
@@ -321,7 +332,6 @@ def emitir_nfe_para_venda(venda_id, usuario_id, tenant_id=None):
         }
 
     nfe = rascunho['nfe']
-    tenant_contexto = tenant_id if tenant_id is not None else nfe.get('tenant_id')
     dados = obter_dados_venda_para_nfe(venda_id, tenant_id=tenant_contexto)
 
     if not dados.get('sucesso'):
@@ -419,7 +429,14 @@ def emitir_nfe_para_venda(venda_id, usuario_id, tenant_id=None):
 
 
 def consultar_nfe_por_venda(venda_id, tenant_id=None):
-    nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_id)
+    try:
+        tenant_contexto = int(tenant_id)
+        if tenant_contexto <= 0:
+            raise ValueError()
+    except (TypeError, ValueError):
+        return {'sucesso': False, 'mensagem': 'tenant_id é obrigatório para consulta de NF-e.'}
+
+    nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_contexto)
     if not nfe:
         return {'sucesso': False, 'mensagem': 'NF-e ainda não gerada para esta venda.'}
 
@@ -431,11 +448,32 @@ def consultar_nfe_por_venda(venda_id, tenant_id=None):
 
 def processar_webhook_nfe(payload, token=None, tenant_id=None):
     token_esperado = os.getenv('NFE_WEBHOOK_TOKEN', '').strip()
-    if token_esperado and token != token_esperado:
+    if not token_esperado:
+        return {'sucesso': False, 'erro': 'Token de webhook não configurado no servidor.', 'status_code': 500}
+
+    if not token or token != token_esperado:
         return {'sucesso': False, 'erro': 'Token de webhook inválido.', 'status_code': 401}
 
     if not isinstance(payload, dict):
         return {'sucesso': False, 'erro': 'Payload inválido.', 'status_code': 400}
+
+    tenant_payload = payload.get('tenant_id')
+    try:
+        tenant_payload = int(tenant_payload)
+        if tenant_payload <= 0:
+            raise ValueError()
+    except (TypeError, ValueError):
+        return {'sucesso': False, 'erro': 'tenant_id obrigatório no payload do webhook.', 'status_code': 400}
+
+    if tenant_id is not None:
+        try:
+            tenant_id = int(tenant_id)
+        except (TypeError, ValueError):
+            return {'sucesso': False, 'erro': 'tenant_id inválido no contexto do webhook.', 'status_code': 400}
+        if tenant_id != tenant_payload:
+            return {'sucesso': False, 'erro': 'tenant_id do payload diverge do contexto da requisição.', 'status_code': 400}
+    else:
+        tenant_id = tenant_payload
 
     nfe_id = payload.get('nfe_id')
     venda_id = payload.get('venda_id')
@@ -448,7 +486,7 @@ def processar_webhook_nfe(payload, token=None, tenant_id=None):
             status=status,
             payload=payload,
             tenant_id=tenant_id,
-            permitir_global=tenant_id is None,
+            permitir_global=False,
         )
     except Exception as e:
         print(f"Erro ao atualizar NF-e por webhook: {e}")
