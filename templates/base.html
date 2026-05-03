@@ -24,6 +24,25 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/is-erp-theme.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/layout-toggle.css') }}" rel="stylesheet">
+    
+    <!-- Script de inicialização do layout (executar antes do conteúdo) -->
+    <script>
+        // Garantir que o layout normal seja o padrão antes de qualquer outra coisa
+        (function() {
+            // Remover classe compacta se estiver presente
+            document.documentElement.classList.remove('layout-compacto');
+            if (document.body) {
+                document.body.classList.remove('layout-compacto');
+            }
+            
+            // Forçar preferência normal se nenhuma tiver sido salva
+            if (!localStorage.getItem('layout-mode')) {
+                localStorage.setItem('layout-mode', 'normal');
+            }
+        })();
+    </script>
+    
     {% block extra_css %}{% endblock %}
     <link href="{{ url_for('static', filename='css/blue-standardization.css') }}" rel="stylesheet">
 </head>
@@ -149,6 +168,9 @@
                             <div class="navbar-text d-none d-md-inline">
                                 {{ today.strftime('%d/%m/%Y') if today else '' }}
                             </div>
+                            <button id="layout-toggle-btn" class="btn layout-toggle" type="button" title="Alternar para layout compacto">
+                                <i class="fas fa-compress"></i> Compacto
+                            </button>
                             {% if current_user.is_authenticated %}
                             <div class="navbar-text">
                                 <i class="fas fa-user-circle me-1 text-success"></i>

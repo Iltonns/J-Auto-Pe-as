@@ -1,5 +1,5 @@
-﻿# SISTEMA DE AUTOPEÇAS - FAMÍLIA
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g, has_request_context
+# SISTEMA DE AUTOPEÇAS
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
 import json
@@ -19,8 +19,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from dotenv import load_dotenv
 import pytz
 
-# Carregar variáveis de ambiente (prioriza .env local sobre variáveis antigas do sistema)
-load_dotenv(override=True)
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # Configuração do fuso horário brasileiro
 TIMEZONE_BR = pytz.timezone('America/Sao_Paulo')
@@ -53,7 +53,6 @@ def email_valido(email):
 from Minha_autopecas_web.logica_banco import (
     init_db, criar_usuario_admin, verificar_usuario, buscar_usuario_por_id,
     buscar_usuario_por_email, atualizar_senha_usuario, validar_senha_segura,
-    criar_token_reset_senha, validar_token_reset_senha, consumir_token_reset_senha,
     criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
     listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
@@ -95,9 +94,13 @@ from Minha_autopecas_web.logica_banco import (
     vincular_produto_nfe,
     # Funções para autocomplete de marcas e categorias
     obter_marcas_cadastradas, obter_categorias_cadastradas,
+<<<<<<< HEAD
     garantir_estrutura_fiscal, obter_nfe_por_venda,
     listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant,
     obter_tenant_padrao_id, resolver_tenant_para_login, criar_tenant_com_admin
+=======
+    garantir_estrutura_fiscal, obter_nfe_por_venda
+>>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -140,21 +143,6 @@ def salvar_foto_produto(file):
         return f'/static/images/produtos/{unique_filename}'
     return None
 
-def salvar_logo_empresa(file, tenant_id):
-    """Salva a logo da empresa e retorna o caminho relativo em static."""
-    if not file or not allowed_file(file.filename):
-        return None
-
-    extensao = file.filename.rsplit('.', 1)[1].lower()
-    nome_arquivo = f"tenant_{tenant_id}_{uuid.uuid4().hex}.{extensao}"
-    pasta_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'empresa')
-    os.makedirs(pasta_logo, exist_ok=True)
-
-    caminho_absoluto = os.path.join(pasta_logo, secure_filename(nome_arquivo))
-    file.save(caminho_absoluto)
-
-    return f"images/empresa/{os.path.basename(caminho_absoluto)}"
-
 # Função para remover foto do produto
 def remover_foto_produto(foto_url):
     if foto_url:
@@ -179,6 +167,7 @@ class User(UserMixin):
         self.id = str(user_data['id'])
         self.username = user_data['username']
         self.email = user_data.get('email', '')
+<<<<<<< HEAD
         self.is_superadmin = bool(user_data.get('is_superadmin', False))
         tenant_id = user_data.get('tenant_id')
         try:
@@ -283,14 +272,13 @@ def has_permission_cached(permission):
         return verificar_permissao(current_user.id, permission, get_current_tenant_id())
 
     return permissions.get('superadmin', False) or permissions.get('admin', False) or permissions.get(permission, False)
+=======
+>>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
 
 # Middleware para verificar sessão única
 @app.before_request
 def check_session_validity():
     """Verifica se a sessão do usuário ainda é válida (não foi substituída por outro login)"""
-    if _is_public_endpoint(request.endpoint):
-        return
-
     if current_user.is_authenticated:
         user_id = current_user.id
         current_session_id = session.get('session_id')
@@ -307,110 +295,10 @@ def check_session_validity():
 
 @login_manager.user_loader
 def load_user(user_id):
-    user_data = buscar_usuario_por_id(
-        int(user_id),
-        tenant_id=session.get('tenant_id')
-    )
+    user_data = buscar_usuario_por_id(int(user_id))
     if user_data and user_data.get('ativo', False):
         return User(user_data)
     return None
-
-@app.before_request
-def ensure_tenant_context():
-    """
-    Camada central de contexto multi-tenant para requests autenticadas.
-    Garante tenant_id coerente em session/current_user e disponível em g.
-    """
-    g.current_tenant_id = _default_tenant_id()
-
-    if _is_public_endpoint(request.endpoint) or not current_user.is_authenticated:
-        return
-
-    user_tenant_id = _normalize_tenant_id(getattr(current_user, 'tenant_id', None))
-    session_tenant_id = _normalize_tenant_id(session.get('tenant_id'))
-
-    if user_tenant_id is None and session_tenant_id is None:
-        resolved_tenant_id = _default_tenant_id(refresh=True)
-        app.logger.warning(
-            "tenant_id ausente para usuario autenticado id=%s em %s; aplicando fallback temporario tenant_id=%s.",
-            current_user.id,
-            request.endpoint,
-            resolved_tenant_id
-        )
-    elif user_tenant_id is None:
-        resolved_tenant_id = session_tenant_id
-        app.logger.warning(
-            "tenant_id ausente no current_user id=%s em %s; sincronizando com sessao tenant_id=%s.",
-            current_user.id,
-            request.endpoint,
-            resolved_tenant_id
-        )
-    else:
-        resolved_tenant_id = user_tenant_id
-        if session_tenant_id is None:
-            app.logger.warning(
-                "tenant_id ausente na sessao do usuario id=%s em %s; sincronizando para tenant_id=%s.",
-                current_user.id,
-                request.endpoint,
-                resolved_tenant_id
-            )
-        elif session_tenant_id != user_tenant_id:
-            app.logger.warning(
-                "tenant_id inconsistente (sessao=%s, usuario=%s) para usuario id=%s em %s; priorizando tenant do usuario.",
-                session_tenant_id,
-                user_tenant_id,
-                current_user.id,
-                request.endpoint
-            )
-
-    if resolved_tenant_id is None:
-        app.logger.warning(
-            "Não foi possível resolver tenant_id para usuario id=%s em %s; encerrando sessão.",
-            current_user.id,
-            request.endpoint
-        )
-        logout_user()
-        session.clear()
-        flash('Não foi possível resolver o tenant da sessão. Faça login novamente.', 'error')
-        return redirect(url_for('login'))
-
-    session['tenant_id'] = resolved_tenant_id
-    g.current_tenant_id = resolved_tenant_id
-
-    if getattr(current_user, 'tenant_id', None) != resolved_tenant_id:
-        current_user.tenant_id = resolved_tenant_id
-
-@app.before_request
-def load_user_access_context():
-    """
-    Carrega status e permissoes do usuario uma unica vez por request.
-    Reduz consultas repetidas durante a renderizacao.
-    """
-    g.user_permissions = {}
-    g.user_is_active = True
-    g.user_is_superadmin = False
-    if not hasattr(g, 'current_tenant_id'):
-        g.current_tenant_id = get_current_tenant_id()
-
-    if _is_public_endpoint(request.endpoint) or not current_user.is_authenticated:
-        return
-
-    try:
-        user_id = int(current_user.id)
-    except (TypeError, ValueError):
-        g.user_is_active = False
-        return
-
-    user_data = buscar_usuario_por_id(user_id, tenant_id=get_current_tenant_id())
-    if not user_data:
-        g.user_is_active = False
-        return
-
-    g.user_is_active = bool(user_data.get('ativo', False))
-    if g.user_is_active:
-        g.user_is_superadmin = bool(user_data.get('is_superadmin', False))
-        current_user.is_superadmin = g.user_is_superadmin
-        g.user_permissions = _montar_mapa_permissoes(user_data)
 
 # Decorator para verificar permissões
 def required_permission(permission):
@@ -418,23 +306,12 @@ def required_permission(permission):
         @wraps(f)
         @login_required
         def decorated_function(*args, **kwargs):
-            if not has_permission_cached(permission):
+            if not verificar_permissao(current_user.id, permission):
                 flash(f'Acesso negado. Você não tem permissão para acessar esta área.', 'error')
                 return redirect(url_for('dashboard'))
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-
-def superadmin_required(f):
-    """Decorator para rotas exclusivas do superadmin global."""
-    @wraps(f)
-    @login_required
-    def decorated_function(*args, **kwargs):
-        if not is_superadmin_current_user():
-            flash('Acesso negado. Área restrita ao superadmin.', 'error')
-            return redirect(url_for('dashboard'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 # Filtros do Jinja2
 @app.template_filter('format_currency')
@@ -458,29 +335,29 @@ def format_date(value):
 @app.context_processor
 def utility_processor():
     def has_permission(permission):
-        return has_permission_cached(permission)
-    def is_superadmin():
-        return is_superadmin_current_user()
-    return dict(has_permission=has_permission, is_superadmin=is_superadmin)
+        if current_user.is_authenticated:
+            return verificar_permissao(current_user.id, permission)
+        return False
+    return dict(has_permission=has_permission)
 
 # Verificação de usuário ativo antes de cada requisição
 @app.before_request
 def check_user_active():
     """Verifica se o usuário logado ainda está ativo antes de cada requisição"""
-    # Se não for rota pública e o usuário estiver autenticado
-    if not _is_public_endpoint(request.endpoint) and current_user.is_authenticated:
-        if not getattr(g, 'user_is_active', True):
+    # Lista de rotas que não precisam dessa verificação
+    excluded_routes = ['login', 'logout', 'static']
+    
+    # Se não for uma rota excluída e o usuário estiver autenticado
+    if request.endpoint not in excluded_routes and current_user.is_authenticated:
+        # Verificar se o usuário ainda existe e está ativo
+        user_data = buscar_usuario_por_id(int(current_user.id))
+        if not user_data or not user_data.get('ativo', False):
             # Usuário foi inativado, fazer logout automaticamente
             logout_user()
             flash('Sua conta foi inativada. Entre em contato com o administrador.', 'error')
             return redirect(url_for('login'))
 
 # ROTAS DE AUTENTICAÇÃO
-@app.route('/favicon.ico')
-def favicon():
-    """Serve o favicon no caminho padrão esperado pelos navegadores."""
-    return app.send_static_file('favicon.ico', max_age=0)
-
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -560,30 +437,11 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-        tenant_input = request.form.get('tenant_id') or request.args.get('tenant_id')
-        tenant_login = resolver_tenant_para_login(tenant_input)
-
-        if not username or not password:
-            flash('Usuário e senha são obrigatórios.', 'error')
-            return render_template('login.html')
-
-        if tenant_login is None:
-            flash('Informe um tenant válido (ID, slug ou nome da empresa).', 'error')
-            return render_template('login.html')
-
-        user_data = verificar_usuario(
-            username,
-            password,
-            tenant_id=tenant_login
-        )
+        username = request.form['username']
+        password = request.form['password']
+        
+        user_data = verificar_usuario(username, password)
         if user_data:
-            tenant_usuario = _normalize_tenant_id(user_data.get('tenant_id'))
-            if tenant_usuario is None or tenant_usuario != tenant_login:
-                flash('Usuário não pertence ao tenant informado.', 'error')
-                return render_template('login.html')
-
             user = User(user_data)
             login_user(user)
             
@@ -591,7 +449,6 @@ def login():
             import uuid
             session_id = str(uuid.uuid4())
             session['session_id'] = session_id
-            session['tenant_id'] = tenant_usuario
             
             # Armazenar esta sessão como a sessão ativa do usuário
             # Isso automaticamente invalida qualquer sessão anterior
@@ -623,71 +480,37 @@ def logout():
 
 @app.route('/recuperar-senha', methods=['GET', 'POST'])
 def recuperar_senha():
-    token_prefill = (request.args.get('token') or '').strip()
-    tenant_prefill = resolver_tenant_para_login(request.args.get('tenant_id'))
-
     if request.method == 'POST':
-        email = (request.form.get('email') or '').strip()
-        token = (request.form.get('token') or request.args.get('token') or '').strip()
+        email = request.form.get('email')
         nova_senha = request.form.get('nova_senha')
         confirmar_senha = request.form.get('confirmar_senha')
-        acao = (request.form.get('acao') or '').strip().lower()
-        tenant_reset = resolver_tenant_para_login(
-            request.form.get('tenant_id') or request.args.get('tenant_id')
-        )
-
-        if tenant_reset is None:
-            flash('Informe um tenant válido (ID, slug ou nome da empresa).', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_prefill)
-
-        solicitacao_token = acao in {'solicitar-token', 'solicitar_token', 'request_token'}
-        if solicitacao_token or (email and not token and not nova_senha and not confirmar_senha):
-            if not email:
-                flash('Informe o email para solicitar o token de recuperação.', 'error')
-                return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
-            sucesso, mensagem, token_gerado = criar_token_reset_senha(
-                email=email,
-                tenant_id=tenant_reset,
-                requested_ip=request.remote_addr,
-                user_agent=request.headers.get('User-Agent')
-            )
-            if sucesso:
-                flash(mensagem or 'Se o email existir para este tenant, um token foi gerado.', 'info')
-                if token_gerado and (app.debug or os.getenv('EXPOSE_RESET_TOKEN', '').strip().lower() in {'1', 'true', 'yes'}):
-                    flash(f'Token de recuperação (ambiente de desenvolvimento): {token_gerado}', 'warning')
-            else:
-                flash(mensagem or 'Falha ao gerar token de recuperação.', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
-        if not token:
-            flash('Token de recuperação é obrigatório para redefinir a senha.', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
-        if not nova_senha or not confirmar_senha:
-            flash('Informe a nova senha e a confirmação.', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
+        
+        if not email or not nova_senha or not confirmar_senha:
+            flash('Todos os campos são obrigatórios!', 'error')
+            return render_template('recuperar_senha.html')
+        
         if nova_senha != confirmar_senha:
             flash('As senhas não coincidem!', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
-        if not validar_token_reset_senha(token, tenant_id=tenant_reset):
-            flash('Token inválido ou expirado.', 'error')
-            return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_reset)
-
-        success, mensagem = consumir_token_reset_senha(
-            token=token,
-            nova_senha=nova_senha,
-            tenant_id=tenant_reset
-        )
-        if success:
-            flash(mensagem or 'Senha atualizada com sucesso! Você já pode fazer login.', 'success')
+            return render_template('recuperar_senha.html')
+        
+        if len(nova_senha) < 6:
+            flash('A senha deve ter pelo menos 6 caracteres!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        # Buscar usuário por email
+        usuario = buscar_usuario_por_email(email)
+        if not usuario:
+            flash('Email não encontrado em nosso sistema!', 'error')
+            return render_template('recuperar_senha.html')
+        
+        # Atualizar senha
+        if atualizar_senha_usuario(usuario['id'], nova_senha):
+            flash('Senha atualizada com sucesso! Você já pode fazer login.', 'success')
             return redirect(url_for('login'))
-
-        flash(mensagem or 'Erro ao atualizar senha. Tente novamente.', 'error')
-
-    return render_template('recuperar_senha.html', token_reset=token_prefill, tenant_id_reset=tenant_prefill)
+        else:
+            flash('Erro ao atualizar senha. Tente novamente.', 'error')
+    
+    return render_template('recuperar_senha.html')
 
 # ROTAS DE CRIAÇÃO DE USUÁRIO (apenas para admins logados)
 @app.route('/criar-usuario', methods=['POST'])
@@ -716,15 +539,7 @@ def criar_usuario_route():
         # Usar o ID do usuário atual como created_by
         created_by = current_user.id
         
-        success, message = criar_usuario(
-            username,
-            password,
-            nome_completo,
-            email,
-            permissoes,
-            created_by=created_by,
-            tenant_id=get_current_tenant_id()
-        )
+        success, message = criar_usuario(username, password, nome_completo, email, permissoes, created_by)
         
         if success:
             flash(message, 'success')
@@ -741,18 +556,18 @@ def criar_usuario_route():
 @login_required
 def usuarios():
     # Verificar se o usuário tem permissão de admin
-    if not has_permission_cached('admin'):
+    if not verificar_permissao(current_user.id, 'admin'):
         flash('Acesso negado. Você não tem permissão para gerenciar usuários.', 'error')
         return redirect(url_for('dashboard'))
     
-    usuarios_lista = listar_usuarios(get_current_tenant_id())
+    usuarios_lista = listar_usuarios()
     return render_template('usuarios.html', usuarios=usuarios_lista)
 
 @app.route('/usuarios/editar/<int:user_id>', methods=['POST'])
 @login_required
 def editar_usuario_route(user_id):
     # Verificar se o usuário tem permissão de admin
-    if not has_permission_cached('admin'):
+    if not verificar_permissao(current_user.id, 'admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -773,14 +588,7 @@ def editar_usuario_route(user_id):
             'contas_receber': request.form.get('permissao_contas_receber') == 'on'
         }
         
-        success, message = editar_usuario(
-            user_id,
-            nome_completo,
-            email,
-            permissoes,
-            ativo,
-            tenant_id=get_current_tenant_id()
-        )
+        success, message = editar_usuario(user_id, nome_completo, email, permissoes, ativo)
         
         if success:
             flash(message, 'success')
@@ -796,17 +604,17 @@ def editar_usuario_route(user_id):
 @login_required
 def deletar_usuario_route(user_id):
     # Verificar se o usuário tem permissão de admin
-    if not has_permission_cached('admin'):
+    if not verificar_permissao(current_user.id, 'admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
     # Não permitir que o usuário delete a si mesmo
-    if user_id == int(current_user.id):
+    if user_id == current_user.id:
         flash('Você não pode desativar sua própria conta.', 'error')
         return redirect(url_for('usuarios'))
     
     try:
-        success, message = deletar_usuario(user_id, tenant_id=get_current_tenant_id())
+        success, message = deletar_usuario(user_id)
         
         if success:
             flash(message, 'success')
@@ -818,73 +626,6 @@ def deletar_usuario_route(user_id):
     
     return redirect(url_for('usuarios'))
 
-# PAINEL GLOBAL DE TENANTS (apenas superadmin)
-@app.route('/admin/tenants')
-@superadmin_required
-def admin_tenants():
-    tenants = listar_tenants()
-    return render_template('admin_tenants.html', tenants=tenants)
-
-@app.route('/admin/tenants/criar', methods=['POST'])
-@superadmin_required
-def admin_tenants_criar():
-    nome = request.form.get('nome', '').strip()
-    slug = request.form.get('slug', '').strip()
-    status = request.form.get('status', 'active')
-
-    sucesso, mensagem, tenant_id = criar_tenant(
-        slug=slug,
-        nome=nome,
-        status=status,
-        config_inicial={'nome_empresa': nome}
-    )
-    if sucesso:
-        flash(f'{mensagem} ID do tenant: {tenant_id}.', 'success')
-    else:
-        flash(mensagem, 'error')
-    return redirect(url_for('admin_tenants'))
-
-@app.route('/admin/tenants/<int:tenant_id>/editar', methods=['POST'])
-@superadmin_required
-def admin_tenants_editar(tenant_id):
-    nome = request.form.get('nome', '').strip()
-    slug = request.form.get('slug', '').strip()
-
-    sucesso, mensagem = editar_tenant(tenant_id=tenant_id, slug=slug, nome=nome)
-    flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
-
-@app.route('/admin/tenants/<int:tenant_id>/status', methods=['POST'])
-@superadmin_required
-def admin_tenants_status(tenant_id):
-    status = request.form.get('status', '').strip().lower()
-    if status not in ('active', 'inactive'):
-        flash("Status inválido. Use 'active' ou 'inactive'.", 'error')
-        return redirect(url_for('admin_tenants'))
-
-    sucesso, mensagem = alterar_status_tenant(tenant_id=tenant_id, status=status)
-    flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
-
-@app.route('/admin/tenants/<int:tenant_id>/criar-admin', methods=['POST'])
-@superadmin_required
-def admin_tenants_criar_admin(tenant_id):
-    username = request.form.get('username', '').strip()
-    password = request.form.get('password', '')
-    nome_completo = request.form.get('nome_completo', '').strip()
-    email = request.form.get('email', '').strip()
-
-    sucesso, mensagem, _ = criar_admin_tenant(
-        tenant_id=tenant_id,
-        username=username,
-        password=password,
-        nome_completo=nome_completo,
-        email=email,
-        created_by=current_user.id
-    )
-    flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
-
 @app.route('/usuarios/trocar-senha/<int:user_id>', methods=['POST'])
 @login_required
 def trocar_senha_usuario_route(user_id):
@@ -892,7 +633,7 @@ def trocar_senha_usuario_route(user_id):
     try:
         # Apenas admins podem trocar senha de outros usuários
         # Usuários podem trocar sua própria senha
-        if user_id != int(current_user.id) and not has_permission_cached('admin'):
+        if user_id != current_user.id and not verificar_permissao(current_user.id, 'admin'):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         nova_senha = request.form.get('nova_senha')
@@ -908,22 +649,13 @@ def trocar_senha_usuario_route(user_id):
         
         # Se o usuário está trocando sua própria senha, exigir senha atual
         # Admins podem trocar senha de outros sem senha atual
-        if user_id == int(current_user.id):
+        if user_id == current_user.id:
             if not senha_atual:
                 return jsonify({'success': False, 'message': 'Senha atual é obrigatória'}), 400
-            success, message = atualizar_senha_usuario(
-                user_id,
-                nova_senha,
-                senha_atual,
-                tenant_id=get_current_tenant_id()
-            )
+            success, message = atualizar_senha_usuario(user_id, nova_senha, senha_atual)
         else:
             # Admin trocando senha de outro usuário
-            success, message = atualizar_senha_usuario(
-                user_id,
-                nova_senha,
-                tenant_id=get_current_tenant_id()
-            )
+            success, message = atualizar_senha_usuario(user_id, nova_senha)
         
         if success:
             flash(message, 'success')
@@ -938,36 +670,13 @@ def trocar_senha_usuario_route(user_id):
 @app.route('/configuracoes-empresa')
 @required_permission('admin')
 def configuracoes_empresa():
-    config = obter_configuracoes_empresa(get_current_tenant_id())
+    config = obter_configuracoes_empresa()
     return render_template('configuracoes_empresa.html', config=config)
 
 @app.route('/configuracoes-empresa/atualizar', methods=['POST'])
 @required_permission('admin')
 def atualizar_configuracoes_empresa_route():
     try:
-        tenant_id = get_current_tenant_id()
-        config_atual = obter_configuracoes_empresa(tenant_id)
-        logo_path = (config_atual or {}).get('logo_path', 'logo.jpg')
-        arquivo_logo = request.files.get('logo_empresa')
-
-        if arquivo_logo and arquivo_logo.filename:
-            nova_logo_path = salvar_logo_empresa(arquivo_logo, tenant_id)
-            if not nova_logo_path:
-                flash('Formato de logo inválido. Use PNG, JPG, JPEG ou GIF.', 'error')
-                return redirect(url_for('configuracoes_empresa'))
-
-            logo_anterior = (config_atual or {}).get('logo_path')
-            if logo_anterior and logo_anterior.startswith('images/empresa/'):
-                caminho_logo_anterior = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)),
-                    'static',
-                    logo_anterior
-                )
-                if os.path.exists(caminho_logo_anterior):
-                    os.remove(caminho_logo_anterior)
-
-            logo_path = nova_logo_path
-
         dados = {
             'nome_empresa': request.form['nome_empresa'],
             'cnpj': request.form['cnpj'],
@@ -984,11 +693,10 @@ def atualizar_configuracoes_empresa_route():
             'telefone': request.form['telefone'],
             'email': request.form['email'],
             'website': request.form['website'],
-            'observacoes': request.form['observacoes'],
-            'logo_path': logo_path
+            'observacoes': request.form['observacoes']
         }
         
-        if atualizar_configuracoes_empresa(dados, tenant_id):
+        if atualizar_configuracoes_empresa(dados):
             flash('Configurações da empresa atualizadas com sucesso!', 'success')
         else:
             flash('Erro ao atualizar configurações da empresa!', 'error')
@@ -1002,6 +710,7 @@ def atualizar_configuracoes_empresa_route():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+<<<<<<< HEAD
     tenant_id = get_current_tenant_id()
     pode_admin = has_permission_cached('admin')
     pode_estoque = pode_admin or has_permission_cached('estoque')
@@ -1025,6 +734,14 @@ def dashboard():
         int((estatisticas or {}).get('total_clientes') or 0) == 0 and
         len(vendas_para_onboarding) == 0
     )
+=======
+    estatisticas = obter_estatisticas_dashboard()
+    produtos_baixo_estoque = produtos_estoque_baixo()
+    vendas_recentes = listar_vendas(limit=10)
+    contas_pagar_hoje = listar_contas_pagar_hoje()
+    contas_receber_hoje = listar_contas_receber_hoje()
+    contas_atrasadas = listar_contas_atrasadas()
+>>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -1032,10 +749,14 @@ def dashboard():
                          vendas_recentes=vendas_recentes,
                          contas_pagar_hoje=contas_pagar_hoje,
                          contas_receber_hoje=contas_receber_hoje,
+<<<<<<< HEAD
                          contas_atrasadas=contas_atrasadas,
                          usuario_nome=usuario_nome,
                          empresa_nome=empresa_nome,
                          mostrar_primeiros_passos=mostrar_primeiros_passos)
+=======
+                         contas_atrasadas=contas_atrasadas)
+>>>>>>> 2f4805f14fb80bc15a3a0ce031e731214ae21db7
 
 # =====================================================
 # ROTAS DO CAIXA FINANCEIRO
@@ -1046,12 +767,11 @@ def dashboard():
 @required_permission('caixa')
 def caixa():
     """Página principal do caixa"""
-    tenant_id = get_current_tenant_id()
-    status_caixa = obter_status_caixa(tenant_id=tenant_id)
-    movimentacoes = listar_movimentacoes_caixa(20, tenant_id=tenant_id)
+    status_caixa = obter_status_caixa()
+    movimentacoes = listar_movimentacoes_caixa(20)
     
     # Usar a função específica para buscar vendas do dia
-    dados_vendas = obter_vendas_do_dia(tenant_id=tenant_id)
+    dados_vendas = obter_vendas_do_dia()
     
     # Debug: Imprimir dados das vendas
     print(f"DEBUG CAIXA: dados_vendas = {dados_vendas}")
@@ -1074,11 +794,10 @@ def caixa():
 @required_permission('caixa')
 def abrir_caixa_route():
     """Abrir nova sessão de caixa"""
-    tenant_id = get_current_tenant_id()
     saldo_inicial = float(request.form.get('saldo_inicial', 0))
     observacoes = request.form.get('observacoes', '')
     
-    sucesso, mensagem = abrir_caixa(current_user.id, saldo_inicial, observacoes, tenant_id=tenant_id)
+    sucesso, mensagem = abrir_caixa(current_user.id, saldo_inicial, observacoes)
     
     if sucesso:
         flash(mensagem, 'success')
@@ -1092,10 +811,9 @@ def abrir_caixa_route():
 @required_permission('caixa')
 def fechar_caixa_route():
     """Fechar sessão de caixa atual"""
-    tenant_id = get_current_tenant_id()
     observacoes = request.form.get('observacoes', '')
     
-    sucesso, mensagem = fechar_caixa(current_user.id, observacoes, tenant_id=tenant_id)
+    sucesso, mensagem = fechar_caixa(current_user.id, observacoes)
     
     if sucesso:
         flash(mensagem, 'success')
@@ -1109,7 +827,6 @@ def fechar_caixa_route():
 @required_permission('caixa')
 def nova_movimentacao_caixa():
     """Registrar nova movimentação no caixa"""
-    tenant_id = get_current_tenant_id()
     tipo = request.form.get('tipo')
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
@@ -1117,7 +834,7 @@ def nova_movimentacao_caixa():
     observacoes = request.form.get('observacoes', '')
     
     sucesso, mensagem = registrar_movimentacao_caixa(
-        tipo, categoria, descricao, valor, current_user.id, observacoes=observacoes, tenant_id=tenant_id
+        tipo, categoria, descricao, valor, current_user.id, observacoes=observacoes
     )
     
     if sucesso:
@@ -1132,9 +849,8 @@ def nova_movimentacao_caixa():
 @required_permission('caixa')
 def financeiro():
     """Página do módulo financeiro"""
-    tenant_id = get_current_tenant_id()
-    receitas_pendentes = listar_lancamentos_financeiros('receita', 'pendente', tenant_id=tenant_id)
-    despesas_pendentes = listar_lancamentos_financeiros('despesa', 'pendente', tenant_id=tenant_id)
+    receitas_pendentes = listar_lancamentos_financeiros('receita', 'pendente')
+    despesas_pendentes = listar_lancamentos_financeiros('despesa', 'pendente')
     return render_template('financeiro.html', receitas=receitas_pendentes, despesas=despesas_pendentes)
 
 @app.route('/financeiro/lancamento', methods=['POST'])
@@ -1142,7 +858,6 @@ def financeiro():
 @required_permission('caixa')
 def novo_lancamento_financeiro():
     """Criar novo lançamento financeiro"""
-    tenant_id = get_current_tenant_id()
     tipo = request.form.get('tipo')
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
@@ -1155,7 +870,7 @@ def novo_lancamento_financeiro():
     
     sucesso, mensagem = criar_lancamento_financeiro(
         tipo, categoria, descricao, valor, data_lancamento, current_user.id,
-        data_vencimento, fornecedor_cliente, numero_documento, observacoes, tenant_id=tenant_id
+        data_vencimento, fornecedor_cliente, numero_documento, observacoes
     )
     
     if sucesso:
@@ -1170,7 +885,6 @@ def novo_lancamento_financeiro():
 @required_permission('caixa')
 def editar_lancamento_financeiro(lancamento_id):
     """Editar um lançamento financeiro existente"""
-    tenant_id = get_current_tenant_id()
     categoria = request.form.get('categoria')
     descricao = request.form.get('descricao')
     valor = float(request.form.get('valor'))
@@ -1181,7 +895,7 @@ def editar_lancamento_financeiro(lancamento_id):
     
     sucesso, mensagem = editar_lancamento_financeiro_db(
         lancamento_id, categoria, descricao, valor, data_vencimento,
-        fornecedor_cliente, numero_documento, observacoes, tenant_id=tenant_id
+        fornecedor_cliente, numero_documento, observacoes
     )
     
     if sucesso:
@@ -1196,13 +910,12 @@ def editar_lancamento_financeiro(lancamento_id):
 @required_permission('caixa')
 def alterar_status_lancamento(lancamento_id):
     """Marcar lançamento como pago/recebido ou cancelado"""
-    tenant_id = get_current_tenant_id()
     novo_status = request.form.get('status')
     forma_pagamento = request.form.get('forma_pagamento', '')
     data_pagamento = request.form.get('data_pagamento')
     
     sucesso, mensagem = alterar_status_lancamento_financeiro(
-        lancamento_id, novo_status, forma_pagamento, data_pagamento, tenant_id=tenant_id
+        lancamento_id, novo_status, forma_pagamento, data_pagamento
     )
     
     if sucesso:
@@ -1217,7 +930,7 @@ def alterar_status_lancamento(lancamento_id):
 @required_permission('caixa')
 def deletar_lancamento_financeiro(lancamento_id):
     """Deletar um lançamento financeiro"""
-    sucesso, mensagem = deletar_lancamento_financeiro_db(lancamento_id, tenant_id=get_current_tenant_id())
+    sucesso, mensagem = deletar_lancamento_financeiro_db(lancamento_id)
     
     if sucesso:
         flash(mensagem, 'success')
@@ -1232,10 +945,7 @@ def deletar_lancamento_financeiro(lancamento_id):
 def sincronizar_lancamentos_com_contas_route():
     """Sincroniza lançamentos financeiros criando as contas correspondentes"""
     try:
-        sucesso, resultado = sincronizar_lancamentos_com_contas(
-            current_user.id,
-            tenant_id=get_current_tenant_id()
-        )
+        sucesso, resultado = sincronizar_lancamentos_com_contas(current_user.id)
         
         if sucesso:
             flash(f'Sincronização concluída! {resultado["despesas"]} contas a pagar e {resultado["receitas"]} contas a receber criadas a partir dos lançamentos.', 'success')
@@ -1254,7 +964,7 @@ def sincronizar_lancamentos_com_contas_route():
 @required_permission('caixa')
 def sincronizar_vendas_caixa():
     """Sincronizar vendas do dia com o caixa"""
-    sucesso, mensagem = sincronizar_vendas_com_caixa(tenant_id=get_current_tenant_id())
+    sucesso, mensagem = sincronizar_vendas_com_caixa()
     
     if sucesso:
         flash(mensagem, 'success')
@@ -1268,7 +978,7 @@ def sincronizar_vendas_caixa():
 @required_permission('admin')
 def limpar_sincronizacoes_caixa():
     """Limpar sincronizações incorretas do caixa (apenas admin)"""
-    sucesso, mensagem = limpar_sincronizacoes_incorretas(tenant_id=get_current_tenant_id())
+    sucesso, mensagem = limpar_sincronizacoes_incorretas()
     
     if sucesso:
         flash(f"✅ {mensagem}", 'success')
@@ -1282,9 +992,8 @@ def limpar_sincronizacoes_caixa():
 def api_status_caixa():
     """Retorna o status atual do caixa para o frontend"""
     try:
-        tenant_id = get_current_tenant_id()
-        caixa_aberto = caixa_esta_aberto(tenant_id=tenant_id)
-        status_caixa = obter_status_caixa(tenant_id=tenant_id)
+        caixa_aberto = caixa_esta_aberto()
+        status_caixa = obter_status_caixa()
         
         return jsonify({
             'aberto': caixa_aberto,
@@ -1301,15 +1010,14 @@ def api_status_caixa():
 def exportar_caixa_pdf():
     """Exportar relatório do caixa em PDF"""
     try:
-        tenant_id = get_current_tenant_id()
         data = request.args.get('data')
         if not data:
             data = hoje_br().strftime('%Y-%m-%d')
         
         # Obter dados do caixa
-        status_caixa = obter_status_caixa(tenant_id=tenant_id)
-        movimentacoes = obter_movimentacoes_caixa(data, tenant_id=tenant_id)
-        resumo_vendas = obter_vendas_do_dia(tenant_id=tenant_id)
+        status_caixa = obter_status_caixa()
+        movimentacoes = obter_movimentacoes_caixa(data)
+        resumo_vendas = obter_vendas_do_dia()
         
         # Criar PDF
         pdf_buffer = criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data)
@@ -1360,7 +1068,7 @@ def debug_vendas():
 @app.route('/clientes')
 @login_required
 def clientes():
-    clientes_lista = listar_clientes(get_current_tenant_id())
+    clientes_lista = listar_clientes()
     return render_template('clientes.html', clientes=clientes_lista)
 
 @app.route('/clientes/adicionar', methods=['POST'], endpoint='adicionar_cliente')
@@ -1383,24 +1091,9 @@ def adicionar_cliente_route():
     cep = request.form.get('cep')
     
     try:
-        adicionar_cliente(
-            nome,
-            telefone,
-            email,
-            cpf_cnpj,
-            endereco,
-            tipo_pessoa,
-            razao_social,
-            inscricao_estadual,
-            rua,
-            numero,
-            complemento,
-            bairro,
-            cidade,
-            estado,
-            cep,
-            tenant_id=get_current_tenant_id()
-        )
+        adicionar_cliente(nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                         razao_social, inscricao_estadual, rua, numero, complemento, 
+                         bairro, cidade, estado, cep)
         flash('Cliente adicionado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar cliente: {str(e)}', 'error')
@@ -1427,29 +1120,10 @@ def editar_cliente_route(id):
     cep = request.form.get('cep')
     
     try:
-        atualizado = editar_cliente(
-            id,
-            nome,
-            telefone,
-            email,
-            cpf_cnpj,
-            endereco,
-            tipo_pessoa,
-            razao_social,
-            inscricao_estadual,
-            rua,
-            numero,
-            complemento,
-            bairro,
-            cidade,
-            estado,
-            cep,
-            tenant_id=get_current_tenant_id()
-        )
-        if atualizado:
-            flash('Cliente editado com sucesso!', 'success')
-        else:
-            flash('Cliente não encontrado para o tenant atual.', 'warning')
+        editar_cliente(id, nome, telefone, email, cpf_cnpj, endereco, tipo_pessoa, 
+                      razao_social, inscricao_estadual, rua, numero, complemento, 
+                      bairro, cidade, estado, cep)
+        flash('Cliente editado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao editar cliente: {str(e)}', 'error')
     
@@ -1459,11 +1133,8 @@ def editar_cliente_route(id):
 @login_required
 def deletar_cliente_route(id):
     try:
-        removido = deletar_cliente(id, tenant_id=get_current_tenant_id())
-        if removido:
-            flash('Cliente excluído com sucesso!', 'success')
-        else:
-            flash('Cliente não encontrado para o tenant atual.', 'warning')
+        deletar_cliente(id)
+        flash('Cliente excluído com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao excluir cliente: {str(e)}', 'error')
     
@@ -1473,7 +1144,7 @@ def deletar_cliente_route(id):
 @app.route('/fornecedores')
 @login_required
 def fornecedores():
-    fornecedores_lista = listar_fornecedores(get_current_tenant_id())
+    fornecedores_lista = listar_fornecedores()
     return render_template('fornecedores.html', fornecedores=fornecedores_lista)
 
 @app.route('/fornecedores/adicionar', methods=['POST'], endpoint='adicionar_fornecedor')
@@ -1491,14 +1162,8 @@ def adicionar_fornecedor_route():
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        fornecedor_id = adicionar_fornecedor(
-            nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
-            tenant_id=get_current_tenant_id()
-        )
-        if fornecedor_id:
-            flash('Fornecedor adicionado com sucesso!', 'success')
-        else:
-            flash('Não foi possível adicionar fornecedor para o tenant atual.', 'warning')
+        adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        flash('Fornecedor adicionado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao adicionar fornecedor: {str(e)}', 'error')
     
@@ -1520,10 +1185,7 @@ def adicionar_fornecedor_ajax():
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        fornecedor_id = adicionar_fornecedor(
-            nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
-            tenant_id=get_current_tenant_id()
-        )
+        fornecedor_id = adicionar_fornecedor(nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
         
         if fornecedor_id:
             return jsonify({
@@ -1557,14 +1219,8 @@ def editar_fornecedor_route(id):
         contato_pessoa = request.form.get('contato_pessoa', '').strip() or None
         observacoes = request.form.get('observacoes', '').strip() or None
         
-        atualizado = editar_fornecedor(
-            id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes,
-            tenant_id=get_current_tenant_id()
-        )
-        if atualizado:
-            flash('Fornecedor atualizado com sucesso!', 'success')
-        else:
-            flash('Fornecedor não encontrado para o tenant atual.', 'warning')
+        editar_fornecedor(id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, contato_pessoa, observacoes)
+        flash('Fornecedor atualizado com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao atualizar fornecedor: {str(e)}', 'error')
     
@@ -1574,11 +1230,8 @@ def editar_fornecedor_route(id):
 @login_required
 def deletar_fornecedor_route(id):
     try:
-        removido = deletar_fornecedor(id, tenant_id=get_current_tenant_id())
-        if removido:
-            flash('Fornecedor excluído com sucesso!', 'success')
-        else:
-            flash('Fornecedor não encontrado para o tenant atual.', 'warning')
+        deletar_fornecedor(id)
+        flash('Fornecedor excluído com sucesso!', 'success')
     except Exception as e:
         flash(f'Erro ao excluir fornecedor: {str(e)}', 'error')
     
@@ -1611,8 +1264,7 @@ def validar_duplicacao_fornecedor():
             cnpj=cnpj,
             email=email,
             telefone=telefone,
-            fornecedor_id_excluir=fornecedor_id_excluir,
-            tenant_id=get_current_tenant_id()
+            fornecedor_id_excluir=fornecedor_id_excluir
         )
         
         return jsonify({
@@ -1651,15 +1303,15 @@ def buscar_fornecedor_ajax():
             })
         
         # Tentar buscar por CNPJ primeiro
-        fornecedor = buscar_fornecedor_melhorado(cnpj=query, tenant_id=get_current_tenant_id())
+        fornecedor = buscar_fornecedor_melhorado(cnpj=query)
         
         # Se não encontrar, tentar por email
         if not fornecedor:
-            fornecedor = buscar_fornecedor_melhorado(email=query, tenant_id=get_current_tenant_id())
+            fornecedor = buscar_fornecedor_melhorado(email=query)
         
         # Se não encontrar, tentar por nome
         if not fornecedor:
-            fornecedor = buscar_fornecedor_melhorado(nome=query, tenant_id=get_current_tenant_id())
+            fornecedor = buscar_fornecedor_melhorado(nome=query)
         
         if fornecedor:
             return jsonify({
@@ -1682,12 +1334,12 @@ def buscar_fornecedor_ajax():
 @app.route('/fornecedores/<int:id>/produtos')
 @login_required
 def produtos_fornecedor(id):
-    fornecedor = buscar_fornecedor(id, tenant_id=get_current_tenant_id())
+    fornecedor = buscar_fornecedor(id)
     if not fornecedor:
         flash('Fornecedor não encontrado!', 'error')
         return redirect(url_for('fornecedores'))
     
-    produtos_lista = listar_produtos_por_fornecedor(id, tenant_id=get_current_tenant_id())
+    produtos_lista = listar_produtos_por_fornecedor(id)
     return render_template('produtos_fornecedor.html', fornecedor=fornecedor, produtos=produtos_lista)
 
 # PRODUTOS
@@ -1701,20 +1353,12 @@ def produtos_fornecedor(id):
 def produtos():
     """Exibe a página de gerenciamento de produtos"""
     try:
-        tenant_id = get_current_tenant_id()
         # Carregar TODOS os produtos para paginação JavaScript
         # Remover paginação server-side para usar paginação client-side
-        produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)  # Carregar todos
+        produtos_data = listar_produtos(page=1, per_page=999999)  # Carregar todos
         
-        fornecedores_lista = obter_fornecedores_para_select(tenant_id=tenant_id)
-        produtos_lista = produtos_data.get('produtos', [])
-        estatisticas = {
-            'produtos_estoque_baixo': len([
-                p for p in produtos_lista
-                if (p.get('estoque') or 0) > 0 and (p.get('estoque') or 0) <= (p.get('estoque_minimo') or 0)
-            ]),
-            'produtos_sem_estoque': len([p for p in produtos_lista if (p.get('estoque') or 0) <= 0])
-        }
+        fornecedores_lista = obter_fornecedores_para_select()
+        estatisticas = obter_estatisticas_dashboard()
         
         return render_template('produtos.html', 
                              produtos=produtos_data['produtos'], 
@@ -1738,7 +1382,7 @@ def buscar_produto_route():
             return jsonify([])
         
         # Usar a função buscar_produto que é mais flexível
-        produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
+        produtos = buscar_produto(termo)
         
         # Renomear 'preco' para 'preco_venda' e converter tipos
         for produto in produtos:
@@ -1765,13 +1409,8 @@ def vincular_movimentacao_route(movimentacao_id, produto_id):
     try:
         # Importar a função aqui para evitar dependência circular
         from Minha_autopecas_web.logica_banco import vincular_produto_nfe
-
-        sucesso, mensagem = vincular_produto_nfe(
-            movimentacao_id,
-            produto_id,
-            current_user.id,
-            tenant_id=get_current_tenant_id()
-        )
+        
+        sucesso, mensagem = vincular_produto_nfe(movimentacao_id, produto_id, current_user.id)
         
         if sucesso:
             return jsonify({'success': True, 'message': mensagem})
@@ -1796,11 +1435,11 @@ def api_buscar_produtos():
         
         # Se não houver termo, retornar lista completa
         if not termo:
-            produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=get_current_tenant_id())
+            produtos_data = listar_produtos(page=1, per_page=999999)
             produtos = produtos_data['produtos']
         else:
             # Usar a função buscar_produto que já tem a lógica inteligente
-            produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
+            produtos = buscar_produto(termo)
         
         # Filtrar por categoria se especificada
         if categoria and categoria != 'todas':
@@ -1825,7 +1464,7 @@ def api_buscar_produto_unico(termo):
     """Busca um produto específico pelo termo"""
     try:
         # Carregar todos os produtos
-        produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=get_current_tenant_id())
+        produtos_data = listar_produtos(page=1, per_page=999999)
         produtos = produtos_data['produtos']
         
         def converter_decimals(produto):
@@ -1938,14 +1577,10 @@ def adicionar_produto_route():
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id,
-            tenant_id=get_current_tenant_id()
+            fornecedor_id=fornecedor_id
         )
-
-        if produto_id:
-            flash('Produto adicionado com sucesso!', 'success')
-        else:
-            flash('Nao foi possivel adicionar produto para o tenant atual.', 'warning')
+        
+        flash('Produto adicionado com sucesso!', 'success')
         return redirect(url_for('produtos'))
         
     except Exception as e:
@@ -1960,7 +1595,6 @@ def adicionar_produto_route():
 def editar_produto_route(id):
     """Edita um produto existente"""
     try:
-        tenant_id = get_current_tenant_id()
         # Função auxiliar para conversão segura
         def safe_float(value, default=0.0):
             try:
@@ -1975,7 +1609,7 @@ def editar_produto_route(id):
                 return default
 
         # Verificar se produto existe
-        produto_atual = obter_produto_por_id(id, tenant_id=tenant_id)
+        produto_atual = obter_produto_por_id(id)
         if not produto_atual:
             flash('Produto não encontrado!', 'error')
             return redirect(url_for('produtos'))
@@ -2032,7 +1666,7 @@ def editar_produto_route(id):
                     flash('Erro ao fazer upload da foto. Verifique se o formato é válido (PNG, JPG, JPEG, GIF) e o tamanho é menor que 5MB.', 'warning')
 
         # Atualizar produto no banco
-        atualizado = editar_produto(
+        editar_produto(
             id=id,
             nome=nome,
             preco=preco,
@@ -2046,14 +1680,10 @@ def editar_produto_route(id):
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id,
-            tenant_id=tenant_id
+            fornecedor_id=fornecedor_id
         )
         
-        if atualizado:
-            flash('Produto editado com sucesso!', 'success')
-        else:
-            flash('Produto nao encontrado para o tenant atual.', 'warning')
+        flash('Produto editado com sucesso!', 'success')
         return redirect(url_for('produtos'))
         
     except Exception as e:
@@ -2065,17 +1695,13 @@ def editar_produto_route(id):
 def deletar_produto_route(id):
     """Deleta um produto (marca como inativo)"""
     try:
-        tenant_id = get_current_tenant_id()
-        produto = obter_produto_por_id(id, tenant_id=tenant_id)
+        produto = obter_produto_por_id(id)
         if not produto:
             flash('Produto não encontrado!', 'error')
             return redirect(url_for('produtos'))
         
-        removido = deletar_produto(id, tenant_id=tenant_id)
-        if removido:
-            flash('Produto excluido com sucesso!', 'success')
-        else:
-            flash('Produto nao encontrado para o tenant atual.', 'warning')
+        deletar_produto(id)
+        flash('Produto excluído com sucesso!', 'success')
         
     except Exception as e:
         flash(f'Erro ao excluir produto: {str(e)}', 'error')
@@ -2084,16 +1710,10 @@ def deletar_produto_route(id):
 
 @app.route('/produtos/deletar-todos', methods=['POST'])
 @login_required
-@superadmin_required
 def deletar_todos_produtos_route():
     """Deleta todos os produtos (função de teste)"""
-    confirmacao = (request.form.get('confirmacao') or request.form.get('confirmar') or '').strip().upper()
-    if confirmacao not in {'CONFIRMAR', 'SIM'}:
-        flash('Confirmação obrigatória. Informe CONFIRMAR para deletar todos os produtos.', 'error')
-        return redirect(url_for('produtos'))
-
     try:
-        total_deletados = deletar_todos_os_produtos(tenant_id=get_current_tenant_id())
+        total_deletados = deletar_todos_os_produtos()
         flash(f'Todos os produtos foram removidos com sucesso! ({total_deletados} produtos)', 'success')
     except Exception as e:
         flash(f'Erro ao deletar todos os produtos: {str(e)}', 'error')
@@ -2102,18 +1722,11 @@ def deletar_todos_produtos_route():
 
 @app.route('/produtos/limpar-completamente', methods=['POST'])
 @login_required
-@superadmin_required
 def limpar_produtos_completamente_route():
-    """Remove completamente produtos do tenant atual (ação destrutiva)."""
-    confirmacao = (request.form.get('confirmacao') or request.form.get('confirmar') or '').strip().upper()
-    if confirmacao not in {'CONFIRMAR', 'SIM'}:
-        flash('Confirmação obrigatória. Informe CONFIRMAR para executar a limpeza completa.', 'error')
-        return redirect(url_for('produtos'))
-
+    """Remove completamente todos os produtos do banco (cuidado!)"""
     try:
-        tenant_id = get_current_tenant_id()
-        limpar_completamente_produtos(tenant_id=tenant_id)
-        flash(f'Todos os produtos do tenant {tenant_id} foram removidos completamente do banco de dados!', 'success')
+        limpar_completamente_produtos()
+        flash('Todos os produtos foram removidos completamente do banco de dados!', 'success')
     except Exception as e:
         flash(f'Erro ao limpar produtos: {str(e)}', 'error')
     
@@ -2207,8 +1820,7 @@ def importar_produtos_xml_route():
                     margem_padrao=margem_padrao,
                     estoque_minimo=estoque_minimo_padrao,
                     usar_preco_nfe=usar_preco_nfe,
-                    acao_existente=acao_existente,
-                    tenant_id=get_current_tenant_id()
+                    acao_existente=acao_existente
                 )
                 
                 if resultado['sucesso']:
@@ -2261,15 +1873,14 @@ def importar_produtos_xml_route():
 @required_permission('estoque')
 def movimentacoes():
     """Tela de gerenciamento de movimentações de produtos - Agrupadas por NFe"""
-    tenant_id = get_current_tenant_id()
     # Listar NFes agrupadas
-    todas_nfes = listar_nfes_agrupadas(tenant_id=tenant_id)
+    todas_nfes = listar_nfes_agrupadas()
     pendentes = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'pendente']
     aprovadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] == 'aprovada']
     rejeitadas = [nfe for nfe in todas_nfes if nfe['status_nfe'] in ['cancelada', 'rejeitada']]  # Compatibilidade
     
     # Listar fornecedores para o formulário
-    fornecedores_lista = listar_fornecedores(tenant_id=tenant_id)
+    fornecedores_lista = listar_fornecedores()
     
     return render_template('movimentacoes.html',
                          nfes=todas_nfes,
@@ -2283,9 +1894,8 @@ def movimentacoes():
 @required_permission('estoque')
 def visualizar_nfe(nfe_numero):
     """Visualiza os produtos de uma NFe específica"""
-    tenant_id = get_current_tenant_id()
-    produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero, tenant_id=tenant_id)
-    fornecedores_lista = listar_fornecedores(tenant_id=tenant_id)
+    produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero)
+    fornecedores_lista = listar_fornecedores()
     
     # Pegar informações da primeira movimentação para exibir dados da NFe
     nfe_info = produtos[0] if produtos else None
@@ -2306,7 +1916,7 @@ def visualizar_nfe(nfe_numero):
 def aprovar_nfe_route(nfe_numero):
     """Aprova todos os produtos de uma NFe"""
     try:
-        resultado = aprovar_nfe_completa(nfe_numero, current_user.id, tenant_id=get_current_tenant_id())
+        resultado = aprovar_nfe_completa(nfe_numero, current_user.id)
         if resultado['sucesso']:
             flash(f"NFe aprovada com sucesso! {resultado['total_aprovados']} produtos adicionados ao estoque.", 'success')
         else:
@@ -2323,12 +1933,7 @@ def cancelar_nfe_route(nfe_numero):
     """Cancela todos os produtos de uma NFe (permite deletar depois)"""
     try:
         motivo = request.form.get('motivo_cancelamento', 'Não especificado')
-        resultado = cancelar_nfe_completa(
-            nfe_numero,
-            current_user.id,
-            motivo,
-            tenant_id=get_current_tenant_id()
-        )
+        resultado = cancelar_nfe_completa(nfe_numero, current_user.id, motivo)
         if resultado['sucesso']:
             flash(f"NFe cancelada com sucesso! {resultado['total_cancelados']} produtos cancelados. Você pode deletá-los agora.", 'warning')
         else:
@@ -2347,12 +1952,8 @@ def deletar_nfe_route(nfe_numero):
         from Minha_autopecas_web.logica_banco import listar_produtos_por_nfe, deletar_movimentacao
         
         # Buscar produtos da NFe
-        tenant_id = get_current_tenant_id()
-        produtos = listar_produtos_por_nfe(
-            nfe_numero=nfe_numero if not nfe_numero.startswith('MANUAL-') else None,
-            nfe_identificador=nfe_numero if nfe_numero.startswith('MANUAL-') else None,
-            tenant_id=tenant_id
-        )
+        produtos = listar_produtos_por_nfe(nfe_numero=nfe_numero if not nfe_numero.startswith('MANUAL-') else None,
+                                          nfe_identificador=nfe_numero if nfe_numero.startswith('MANUAL-') else None)
         
         total_deletados = 0
         erros = 0
@@ -2360,7 +1961,7 @@ def deletar_nfe_route(nfe_numero):
         for produto in produtos:
             if produto['status'] == 'cancelada':
                 try:
-                    deletar_movimentacao(produto['id'], tenant_id=tenant_id)
+                    deletar_movimentacao(produto['id'])
                     total_deletados += 1
                 except Exception as e:
                     print(f"[ERRO] Falha ao deletar movimentação {produto['id']}: {str(e)}")
@@ -2462,8 +2063,7 @@ def adicionar_movimentacao_route():
             marca=marca if marca else None,
             fornecedor_id=fornecedor_id,
             usuario_id=current_user.id,
-            observacoes=request.form.get('observacoes', ''),
-            tenant_id=get_current_tenant_id()
+            observacoes=request.form.get('observacoes', '')
         )
         
         flash('Movimentação criada com sucesso! Aguardando aprovação.', 'success')
@@ -2482,7 +2082,7 @@ def obter_dados_movimentacao(id):
     """Retorna os dados de uma movimentação em formato JSON para edição via AJAX"""
     try:
         print(f"[DEBUG] Buscando movimentação ID: {id}")  # Log de debug
-        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+        movimentacao = obter_movimentacao_por_id(id)
         
         if not movimentacao:
             print(f"[DEBUG] Movimentação {id} não encontrada")
@@ -2533,7 +2133,7 @@ def editar_movimentacao_route(id):
                 return default
 
         # Verificar se movimentação existe
-        movimentacao_atual = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+        movimentacao_atual = obter_movimentacao_por_id(id)
         if not movimentacao_atual:
             flash('Movimentação não encontrada!', 'error')
             return redirect(url_for('movimentacoes'))
@@ -2595,8 +2195,7 @@ def editar_movimentacao_route(id):
             margem_lucro=margem_lucro,
             foto_url=foto_url,
             marca=marca if marca else None,
-            fornecedor_id=fornecedor_id,
-            tenant_id=get_current_tenant_id()
+            fornecedor_id=fornecedor_id
         )
         
         if sucesso:
@@ -2614,7 +2213,7 @@ def editar_movimentacao_route(id):
         
         # Tentar redirecionar de volta para a NFe mesmo em caso de erro
         try:
-            movimentacao_atual = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+            movimentacao_atual = obter_movimentacao_por_id(id)
             if movimentacao_atual:
                 nfe_numero = movimentacao_atual.get('xml_nfe_numero') or f"MANUAL-{movimentacao_atual.get('id')}"
                 return redirect(url_for('visualizar_nfe', nfe_numero=nfe_numero))
@@ -2630,10 +2229,10 @@ def aprovar_movimentacao_route(id):
     """Aprova uma movimentação e adiciona ao estoque"""
     try:
         # Obter dados da movimentação antes de aprovar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+        movimentacao = obter_movimentacao_por_id(id)
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
-        produto_id = aprovar_movimentacao(id, current_user.id, tenant_id=get_current_tenant_id())
+        produto_id = aprovar_movimentacao(id, current_user.id)
         flash(f'Produto aprovado com sucesso! Adicionado ao estoque (ID: #{produto_id}).', 'success')
         
         # Redirecionar de volta para a página da NFe
@@ -2652,11 +2251,11 @@ def cancelar_movimentacao_route(id):
     """Cancela uma movimentação (permite deletar depois)"""
     try:
         # Obter dados da movimentação antes de cancelar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+        movimentacao = obter_movimentacao_por_id(id)
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
         motivo = request.form.get('motivo_cancelamento', 'Não especificado')
-        cancelar_movimentacao(id, current_user.id, motivo, tenant_id=get_current_tenant_id())
+        cancelar_movimentacao(id, current_user.id, motivo)
         flash('Produto cancelado com sucesso! Você pode deletá-lo agora se desejar.', 'warning')
         
         # Redirecionar de volta para a página da NFe
@@ -2683,10 +2282,10 @@ def deletar_movimentacao_route(id):
     """Deleta uma movimentação pendente"""
     try:
         # Obter dados da movimentação antes de deletar (para pegar o número da NFe)
-        movimentacao = obter_movimentacao_por_id(id, tenant_id=get_current_tenant_id())
+        movimentacao = obter_movimentacao_por_id(id)
         nfe_numero = movimentacao.get('xml_nfe_numero') or f"MANUAL-{movimentacao.get('id')}" if movimentacao else None
         
-        deletar_movimentacao(id, tenant_id=get_current_tenant_id())
+        deletar_movimentacao(id)
         flash('Produto deletado com sucesso!', 'success')
         
         # Redirecionar de volta para a página da NFe
@@ -2729,45 +2328,26 @@ def importar_xml_movimentacoes_route():
                     conteudo_xml=conteudo_xml,
                     margem_padrao=margem_padrao,
                     estoque_minimo=estoque_minimo_padrao,
-                    usuario_id=current_user.id,
-                    tenant_id=get_current_tenant_id()
+                    usuario_id=current_user.id
                 )
-
+                
                 if resultado['sucesso']:
                     if resultado['movimentacoes_criadas'] > 0:
                         flash(f"Importação concluída! {resultado['movimentacoes_criadas']} movimentação(ões) criada(s) da NFe {resultado.get('nfe_numero', '')}.", 'success')
                         flash('As movimentações estão pendentes de aprovação. Revise e aprove cada uma.', 'info')
-
-                        contas_criadas = resultado.get('contas_pagar_criadas', 0)
-                        contas_existentes = resultado.get('contas_pagar_existentes', 0)
-                        parcelas_detectadas = resultado.get('parcelas_detectadas', 0)
-                        tipo_financeiro = resultado.get('tipo_geracao_financeiro', 'padrao')
-
-                        if contas_criadas > 0:
-                            flash(
-                                f"Financeiro automático: {contas_criadas} conta(s) a pagar criada(s) ({parcelas_detectadas} parcela(s), regra: {tipo_financeiro}).",
-                                'success'
-                            )
-                        elif contas_existentes > 0:
-                            flash(
-                                f"Financeiro já existente para esta NF-e: {contas_existentes} parcela(s) detectada(s) e mantida(s).",
-                                'info'
-                            )
                     else:
                         flash('Nenhuma movimentação foi criada.', 'warning')
-
+                    
                     # Mostrar erros se houver
                     if resultado['erros']:
                         for erro in resultado['erros'][:5]:
                             flash(f"Aviso: {erro}", 'warning')
-
+                        
                         if len(resultado['erros']) > 5:
                             flash(f"... e mais {len(resultado['erros']) - 5} erro(s)", 'warning')
                 else:
-                    if resultado.get('duplicada'):
-                        flash(resultado.get('erro', 'NF-e já importada anteriormente.'), 'warning')
-                    else:
-                        flash(f"Erro ao processar XML: {resultado.get('erro', 'Erro desconhecido')}", 'error')
+                    flash(f"Erro ao processar XML: {resultado.get('erro', 'Erro desconhecido')}", 'error')
+                    
             except UnicodeDecodeError:
                 flash('Erro: Arquivo XML com codificação inválida.', 'error')
             except Exception as e:
@@ -2784,14 +2364,13 @@ def importar_xml_movimentacoes_route():
 @app.route('/vendas')
 @login_required
 def vendas():
-    tenant_id = get_current_tenant_id()
-    clientes_lista = listar_clientes(tenant_id=tenant_id)
+    clientes_lista = listar_clientes()
     # Buscar vendas do dia para exibir na lista
-    vendas_dados = obter_vendas_do_dia(tenant_id=tenant_id)
+    vendas_dados = obter_vendas_do_dia()
     vendas_hoje = vendas_dados.get('vendas', [])
-    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
+    produtos_data = listar_produtos(page=1, per_page=999999)
     produtos_lista = produtos_data['produtos']
-    usuarios_lista = listar_usuarios(tenant_id=tenant_id)
+    usuarios_lista = listar_usuarios()
     
     # Calcular estatísticas
     total_vendas_hoje = sum(venda.get('total', 0) for venda in vendas_hoje)
@@ -2824,7 +2403,7 @@ def api_vendas_periodo():
             return jsonify({'error': 'Parâmetros de data são obrigatórios'}), 400
         
         # Buscar vendas do período usando a nova função
-        vendas = listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=get_current_tenant_id())
+        vendas = listar_vendas_por_periodo(data_inicio, data_fim)
         
         # Calcular estatísticas
         total_vendas = len(vendas)
@@ -2855,7 +2434,7 @@ def api_venda_detalhes(venda_id):
     """API para obter detalhes completos de uma venda"""
     try:
         garantir_estrutura_fiscal()
-        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
+        venda = obter_venda_por_id(venda_id)
         if not venda:
             return jsonify({'error': 'Venda não encontrada'}), 404
             
@@ -2880,12 +2459,10 @@ def api_exportar_vendas(formato):
         if formato not in ['excel', 'pdf']:
             return jsonify({'error': 'Formato não suportado'}), 400
         
-        vendas = listar_vendas_por_periodo(data_inicio, data_fim, tenant_id=get_current_tenant_id())
-        # Por enquanto, retornar um placeholder - exportacao real fica para etapa especifica
+        # Por enquanto, retornar um placeholder - implementar exportação real posteriormente
         return jsonify({
             'message': f'Exportação em {formato} será implementada em breve',
-            'periodo': f'{data_inicio} a {data_fim}',
-            'total_vendas_filtradas': len(vendas)
+            'periodo': f'{data_inicio} a {data_fim}'
         })
         
     except Exception as e:
@@ -2896,13 +2473,12 @@ def api_exportar_vendas(formato):
 @login_required
 def visualizar_venda(venda_id):
     try:
-        tenant_id = get_current_tenant_id()
-        venda = obter_venda_por_id(venda_id, tenant_id=tenant_id)
+        venda = obter_venda_por_id(venda_id)
         if not venda:
             flash('Venda não encontrada!', 'error')
             return redirect(url_for('vendas'))
-        config_empresa = obter_configuracoes_empresa(tenant_id)
-        nfe = obter_nfe_por_venda(venda_id, tenant_id=tenant_id)
+        config_empresa = obter_configuracoes_empresa()
+        nfe = obter_nfe_por_venda(venda_id)
         return render_template('visualizar_venda.html', venda=venda, config_empresa=config_empresa, nfe=nfe)
     except Exception as e:
         flash(f'Erro ao carregar venda: {str(e)}', 'error')
@@ -2913,7 +2489,7 @@ def visualizar_venda(venda_id):
 def api_venda(venda_id):
     try:
         print(f"API: Buscando venda {venda_id}")
-        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
+        venda = obter_venda_por_id(venda_id)
         if not venda:
             print(f"API: Venda {venda_id} não encontrada")
             return jsonify({'error': 'Venda não encontrada'}), 404
@@ -2952,7 +2528,7 @@ def api_venda(venda_id):
 @app.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
 @login_required
 def emitir_nfe_venda_route(venda_id):
-    if not has_permission_cached('vendas'):
+    if not verificar_permissao(current_user.id, 'vendas'):
         mensagem = 'Acesso negado. Voce nao tem permissao para emitir NF-e.'
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
             return jsonify({'sucesso': False, 'mensagem': mensagem}), 403
@@ -2960,8 +2536,7 @@ def emitir_nfe_venda_route(venda_id):
         return redirect(url_for('visualizar_venda', venda_id=venda_id))
 
     try:
-        tenant_id = get_current_tenant_id()
-        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id), tenant_id=tenant_id)
+        resultado = emitir_nfe_para_venda(venda_id=venda_id, usuario_id=int(current_user.id))
     except Exception as e:
         print(f"Erro ao emitir NF-e da venda {venda_id}: {e}")
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -2989,11 +2564,11 @@ def emitir_nfe_venda_route(venda_id):
 @app.route('/api/vendas/<int:venda_id>/nfe')
 @login_required
 def api_nfe_por_venda(venda_id):
-    if not has_permission_cached('vendas'):
+    if not verificar_permissao(current_user.id, 'vendas'):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
 
     try:
-        resultado = consultar_nfe_por_venda(venda_id, tenant_id=get_current_tenant_id())
+        resultado = consultar_nfe_por_venda(venda_id)
     except Exception as e:
         print(f"Erro ao consultar NF-e da venda {venda_id}: {e}")
         return jsonify({'sucesso': False, 'mensagem': 'Falha interna ao consultar NF-e.'}), 500
@@ -3012,18 +2587,8 @@ def webhook_fiscal_nfe_route():
         if auth.lower().startswith('bearer '):
             token = auth[7:].strip()
 
-    if not token:
-        return jsonify({'sucesso': False, 'mensagem': 'Token de webhook obrigatório.'}), 401
-
     try:
-        if not isinstance(payload, dict):
-            return jsonify({'sucesso': False, 'mensagem': 'Payload inválido.'}), 400
-
-        tenant_id = _normalize_tenant_id(payload.get('tenant_id'))
-        if tenant_id is None:
-            return jsonify({'sucesso': False, 'mensagem': 'tenant_id obrigatório no payload do webhook.'}), 400
-
-        resultado = processar_webhook_nfe(payload, token=token, tenant_id=tenant_id)
+        resultado = processar_webhook_nfe(payload, token=token)
     except Exception as e:
         print(f"Erro inesperado no webhook fiscal NF-e: {e}")
         resultado = {'sucesso': False, 'erro': 'Falha interna ao processar webhook fiscal.', 'status_code': 500}
@@ -3035,19 +2600,18 @@ def webhook_fiscal_nfe_route():
 
 
 @app.route('/vendas/<int:venda_id>/recibo')
-@login_required
 def recibo_venda(venda_id):
     """Gera recibo para impressão com informações completas da empresa"""
     try:
         from Minha_autopecas_web.logica_banco import obter_venda_por_id, obter_configuracoes_empresa
         
-        venda = obter_venda_por_id(venda_id, tenant_id=get_current_tenant_id())
+        venda = obter_venda_por_id(venda_id)
         if not venda:
             flash('Venda não encontrada', 'error')
             return redirect(url_for('vendas'))
         
         # Buscar configurações da empresa
-        empresa = obter_configuracoes_empresa(get_current_tenant_id())
+        empresa = obter_configuracoes_empresa()
         
         return render_template('recibo_venda.html', venda=venda, empresa=empresa)
     
@@ -3060,7 +2624,7 @@ def recibo_venda(venda_id):
 def api_configuracoes_empresa():
     try:
         print("API: Buscando configurações da empresa")
-        config = obter_configuracoes_empresa(get_current_tenant_id())
+        config = obter_configuracoes_empresa()
         print(f"API: Configurações carregadas: {config.get('nome_empresa', 'N/A')}")
         return jsonify(config)
     except Exception as e:
@@ -3121,15 +2685,7 @@ def registrar_venda_route():
                 flash(f'Item {i+1}: preco_unitario ausente', 'error')
                 return redirect(url_for('vendas'))
         
-        venda_id = registrar_venda(
-            cliente_id,
-            itens,
-            forma_pagamento,
-            desconto,
-            observacoes,
-            current_user.id,
-            tenant_id=get_current_tenant_id()
-        )
+        venda_id = registrar_venda(cliente_id, itens, forma_pagamento, desconto, observacoes, current_user.id)
         
         # Se a requisição é AJAX, retorna JSON com o ID da venda
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
@@ -3169,15 +2725,14 @@ def deletar_venda_route(venda_id):
     """
     try:
         # Verificar se o usuário tem permissão para vendas ou é admin
-        if not has_permission_cached('vendas') and not has_permission_cached('admin'):
+        if not verificar_permissao(current_user.id, 'vendas') and not current_user.is_admin:
             return jsonify({
                 'success': False,
                 'error': 'Você não tem permissão para deletar vendas.'
             }), 403
         
         # Verificar se a venda existe antes de tentar deletar
-        tenant_id = get_current_tenant_id()
-        venda = obter_venda_por_id(venda_id, tenant_id=tenant_id)
+        venda = obter_venda_por_id(venda_id)
         if not venda:
             return jsonify({
                 'success': False,
@@ -3185,7 +2740,7 @@ def deletar_venda_route(venda_id):
             }), 404
         
         # Executar a deleção
-        resultado = deletar_venda(venda_id, restaurar_estoque=True, tenant_id=tenant_id)
+        resultado = deletar_venda(venda_id, restaurar_estoque=True)
         
         if resultado['success']:
             # Log da operação
@@ -3227,14 +2782,13 @@ def deletar_venda_route(venda_id):
 @app.route('/contas-a-pagar-hoje')
 @required_permission('financeiro')
 def contas_a_pagar_hoje():
-    tenant_id = get_current_tenant_id()
     filtro = request.args.get('filtro', 'hoje')
     status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
-    fornecedores = obter_fornecedores_para_select(tenant_id=tenant_id)
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
+    fornecedores = obter_fornecedores_para_select()
     hoje = hoje_br()
     
     # Calcular estatísticas
@@ -3257,7 +2811,7 @@ def contas_a_pagar_hoje():
     }
     
     # Buscar configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    configuracoes_empresa = obter_configuracoes_empresa()
     
     return render_template('contas_a_pagar_hoje.html', 
                          contas=contas, 
@@ -3271,7 +2825,6 @@ def contas_a_pagar_hoje():
 @app.route('/contas-pagar/adicionar', methods=['POST'])
 @required_permission('financeiro')
 def adicionar_conta_pagar_route():
-    tenant_id = get_current_tenant_id()
     descricao = request.form['descricao']
     valor = float(request.form['valor'])
     data_vencimento = request.form['data_vencimento']
@@ -3286,15 +2839,7 @@ def adicionar_conta_pagar_route():
         fornecedor_id = None
     
     try:
-        sucesso, mensagem = adicionar_conta_pagar(
-            descricao,
-            valor,
-            data_vencimento,
-            categoria,
-            observacoes,
-            fornecedor_id,
-            tenant_id=tenant_id
-        )
+        sucesso, mensagem = adicionar_conta_pagar(descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3308,7 +2853,7 @@ def adicionar_conta_pagar_route():
 @required_permission('financeiro')
 def pagar_conta_route(id):
     try:
-        pagar_conta(id, tenant_id=get_current_tenant_id())
+        pagar_conta(id)
         flash('Conta marcada como paga!', 'success')
     except Exception as e:
         flash(f'Erro ao pagar conta: {str(e)}', 'error')
@@ -3319,7 +2864,7 @@ def pagar_conta_route(id):
 @required_permission('financeiro')
 def duplicar_conta_pagar_route(id):
     try:
-        sucesso, mensagem = duplicar_conta_pagar(id, tenant_id=get_current_tenant_id())
+        sucesso, mensagem = duplicar_conta_pagar(id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3333,7 +2878,7 @@ def duplicar_conta_pagar_route(id):
 @required_permission('financeiro')
 def excluir_conta_pagar_route(id):
     try:
-        sucesso, mensagem = excluir_conta_pagar(id, tenant_id=get_current_tenant_id())
+        sucesso, mensagem = excluir_conta_pagar(id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3347,7 +2892,7 @@ def excluir_conta_pagar_route(id):
 @required_permission('financeiro')
 def obter_conta_pagar_route(id):
     try:
-        sucesso, resultado = obter_conta_pagar(id, tenant_id=get_current_tenant_id())
+        sucesso, resultado = obter_conta_pagar(id)
         if sucesso:
             return jsonify({'success': True, 'conta': resultado})
         else:
@@ -3371,16 +2916,7 @@ def editar_conta_pagar_route(id):
         else:
             fornecedor_id = None
         
-        sucesso, mensagem = editar_conta_pagar(
-            id,
-            descricao,
-            valor,
-            data_vencimento,
-            categoria,
-            observacoes,
-            fornecedor_id,
-            tenant_id=get_current_tenant_id()
-        )
+        sucesso, mensagem = editar_conta_pagar(id, descricao, valor, data_vencimento, categoria, observacoes, fornecedor_id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3394,14 +2930,13 @@ def editar_conta_pagar_route(id):
 @app.route('/contas-a-receber-hoje')
 @required_permission('financeiro')
 def contas_a_receber_hoje():
-    tenant_id = get_current_tenant_id()
     filtro = request.args.get('filtro', 'hoje')
     status = request.args.get('status', 'pendente')
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
-    clientes = listar_clientes(tenant_id=tenant_id)
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
+    clientes = listar_clientes()
     hoje = hoje_br()
     
     # Calcular estatísticas
@@ -3424,7 +2959,7 @@ def contas_a_receber_hoje():
     }
     
     # Buscar configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    configuracoes_empresa = obter_configuracoes_empresa()
     
     return render_template('contas_a_receber_hoje.html', 
                          contas=contas, 
@@ -3439,7 +2974,7 @@ def contas_a_receber_hoje():
 @required_permission('financeiro')
 def receber_conta_route(id):
     try:
-        receber_conta(id, tenant_id=get_current_tenant_id())
+        receber_conta(id)
         flash('Conta marcada como recebida!', 'success')
     except Exception as e:
         flash(f'Erro ao receber conta: {str(e)}', 'error')
@@ -3449,7 +2984,6 @@ def receber_conta_route(id):
 @app.route('/contas-receber/adicionar', methods=['POST'])
 @required_permission('financeiro')
 def adicionar_conta_receber_route():
-    tenant_id = get_current_tenant_id()
     try:
         descricao = request.form.get('descricao')
         valor = float(request.form.get('valor'))
@@ -3457,14 +2991,7 @@ def adicionar_conta_receber_route():
         cliente_id = request.form.get('cliente_id') or None
         observacoes = request.form.get('observacoes')
         
-        sucesso, mensagem = adicionar_conta_receber(
-            descricao,
-            valor,
-            data_vencimento,
-            cliente_id,
-            observacoes,
-            tenant_id=tenant_id
-        )
+        sucesso, mensagem = adicionar_conta_receber(descricao, valor, data_vencimento, cliente_id, observacoes)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3478,7 +3005,7 @@ def adicionar_conta_receber_route():
 @required_permission('financeiro')
 def duplicar_conta_receber_route(id):
     try:
-        sucesso, mensagem = duplicar_conta_receber(id, tenant_id=get_current_tenant_id())
+        sucesso, mensagem = duplicar_conta_receber(id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3492,7 +3019,7 @@ def duplicar_conta_receber_route(id):
 @required_permission('financeiro')
 def excluir_conta_receber_route(id):
     try:
-        sucesso, mensagem = excluir_conta_receber(id, tenant_id=get_current_tenant_id())
+        sucesso, mensagem = excluir_conta_receber(id)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3506,7 +3033,7 @@ def excluir_conta_receber_route(id):
 @required_permission('financeiro')
 def obter_conta_receber_route(id):
     try:
-        sucesso, resultado = obter_conta_receber(id, tenant_id=get_current_tenant_id())
+        sucesso, resultado = obter_conta_receber(id)
         if sucesso:
             return jsonify({'success': True, 'conta': resultado})
         else:
@@ -3529,15 +3056,7 @@ def editar_conta_receber_route(id):
         else:
             cliente_id = None
         
-        sucesso, mensagem = editar_conta_receber(
-            id,
-            descricao,
-            valor,
-            data_vencimento,
-            cliente_id,
-            observacoes,
-            tenant_id=get_current_tenant_id()
-        )
+        sucesso, mensagem = editar_conta_receber(id, descricao, valor, data_vencimento, cliente_id, observacoes)
         if sucesso:
             flash(mensagem, 'success')
         else:
@@ -3551,11 +3070,10 @@ def editar_conta_receber_route(id):
 @app.route('/orcamentos')
 @login_required
 def orcamentos():
-    tenant_id = get_current_tenant_id()
-    orcamentos_lista = listar_orcamentos(tenant_id=tenant_id)
-    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
+    orcamentos_lista = listar_orcamentos()
+    produtos_data = listar_produtos(page=1, per_page=999999)
     produtos = produtos_data['produtos']
-    clientes = listar_clientes(tenant_id=tenant_id)
+    clientes = listar_clientes()
     return render_template('orcamentos.html', 
                          orcamentos=orcamentos_lista, 
                          produtos=produtos, 
@@ -3565,7 +3083,6 @@ def orcamentos():
 @login_required
 def criar_orcamento_route():
     try:
-        tenant_id = get_current_tenant_id()
         # Receber dados do formulário
         cliente_id = request.form.get('cliente_id') or None
         desconto = float(request.form.get('desconto', 0))
@@ -3595,8 +3112,7 @@ def criar_orcamento_route():
             cliente_id=int(cliente_id) if cliente_id else None,
             desconto=desconto,
             observacoes=observacoes,
-            usuario_id=current_user.id,
-            tenant_id=tenant_id
+            usuario_id=current_user.id
         )
         
         flash('Orçamento criado com sucesso!', 'success')
@@ -3609,19 +3125,18 @@ def criar_orcamento_route():
 @app.route('/orcamentos/<int:id>')
 @login_required
 def visualizar_orcamento(id):
-    orcamento = obter_orcamento(id, tenant_id=get_current_tenant_id())
+    orcamento = obter_orcamento(id)
     if not orcamento:
         flash('Orçamento não encontrado', 'error')
         return redirect(url_for('orcamentos'))
     
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
     return render_template('visualizar_orcamento.html', orcamento=orcamento, config_empresa=config_empresa)
 
 @app.route('/orcamentos/<int:id>/editar')
 @login_required
 def editar_orcamento_route(id):
-    tenant_id = get_current_tenant_id()
-    orcamento = obter_orcamento(id, tenant_id=tenant_id)
+    orcamento = obter_orcamento(id)
     if not orcamento:
         flash('Orçamento não encontrado!', 'error')
         return redirect(url_for('orcamentos'))
@@ -3632,9 +3147,9 @@ def editar_orcamento_route(id):
         return redirect(url_for('visualizar_orcamento', id=id))
     
     # Obter dados necessários
-    produtos_data = listar_produtos(page=1, per_page=999999, tenant_id=tenant_id)
+    produtos_data = listar_produtos(page=1, per_page=999999)
     produtos = produtos_data['produtos']
-    clientes = listar_clientes(tenant_id=tenant_id)
+    clientes = listar_clientes()
     
     return render_template('editar_orcamento.html', 
                          orcamento=orcamento, 
@@ -3645,7 +3160,6 @@ def editar_orcamento_route(id):
 @login_required
 def atualizar_orcamento_route(id):
     try:
-        tenant_id = get_current_tenant_id()
         # Obter dados do formulário
         cliente_id = request.form.get('cliente_id')
         if cliente_id == '':
@@ -3674,7 +3188,7 @@ def atualizar_orcamento_route(id):
             itens.append(item)
         
         # Atualizar orçamento
-        sucesso = atualizar_orcamento(id, itens, cliente_id, desconto, observacoes, tenant_id=tenant_id)
+        sucesso = atualizar_orcamento(id, itens, cliente_id, desconto, observacoes)
         
         if sucesso:
             flash('Orçamento atualizado com sucesso!', 'success')
@@ -3691,13 +3205,12 @@ def atualizar_orcamento_route(id):
 @login_required
 def converter_orcamento_route(id):
     try:
-        tenant_id = get_current_tenant_id()
         forma_pagamento = request.form.get('forma_pagamento')
         if not forma_pagamento:
             flash('Forma de pagamento é obrigatória', 'error')
             return redirect(url_for('visualizar_orcamento', id=id))
         
-        venda_id = converter_orcamento_em_venda(id, forma_pagamento, tenant_id=tenant_id)
+        venda_id = converter_orcamento_em_venda(id, forma_pagamento)
         flash('Orçamento convertido em venda com sucesso!', 'success')
         return redirect(url_for('vendas'))
         
@@ -3709,7 +3222,7 @@ def converter_orcamento_route(id):
 @login_required
 def excluir_orcamento_route(id):
     try:
-        sucesso = excluir_orcamento(id, tenant_id=get_current_tenant_id())
+        sucesso = excluir_orcamento(id)
         if sucesso:
             flash('Orçamento excluído com sucesso!', 'success')
         else:
@@ -3724,7 +3237,7 @@ def excluir_orcamento_route(id):
 @login_required
 def relatorios():
     # Verificar se o usuário tem permissão para acessar relatórios
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3734,7 +3247,7 @@ def relatorios():
 @login_required
 def relatorio_vendas():
     # Verificar permissão
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3743,13 +3256,11 @@ def relatorio_vendas():
     data_fim = request.args.get('data_fim')
     cliente_id = request.args.get('cliente_id')
     
-    tenant_id = get_current_tenant_id()
-
     # Gerar relatório
-    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id, tenant_id=tenant_id)
+    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id)
     
     # Buscar lista de clientes para o filtro
-    clientes = listar_clientes(tenant_id=tenant_id)
+    clientes = listar_clientes()
     
     return render_template('relatorios/vendas.html', 
                          relatorio=relatorio, 
@@ -3762,7 +3273,7 @@ def relatorio_vendas():
 @login_required
 def relatorio_produtos_mais_vendidos():
     # Verificar permissão
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3771,10 +3282,8 @@ def relatorio_produtos_mais_vendidos():
     data_fim = request.args.get('data_fim')
     limite = int(request.args.get('limite', 10))
     
-    tenant_id = get_current_tenant_id()
-
     # Gerar relatório
-    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite, tenant_id=tenant_id)
+    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite)
     
     return render_template('relatorios/produtos_mais_vendidos.html', 
                          relatorio=relatorio,
@@ -3786,17 +3295,15 @@ def relatorio_produtos_mais_vendidos():
 @login_required
 def relatorio_estoque():
     # Verificar permissão
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
-    tenant_id = get_current_tenant_id()
-
     # Gerar relatório
-    relatorio = gerar_relatorio_estoque(tenant_id=tenant_id)
+    relatorio = gerar_relatorio_estoque()
     
     # Obter configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa(tenant_id)
+    configuracoes_empresa = obter_configuracoes_empresa()
     
     return render_template('relatorios/estoque.html', 
                          relatorio=relatorio,
@@ -3806,7 +3313,7 @@ def relatorio_estoque():
 @login_required
 def relatorio_financeiro():
     # Verificar permissão
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3814,10 +3321,8 @@ def relatorio_financeiro():
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    tenant_id = get_current_tenant_id()
-
     # Gerar relatório
-    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim, tenant_id=tenant_id)
+    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim)
     
     return render_template('relatorios/financeiro.html', 
                          relatorio=relatorio,
@@ -3834,30 +3339,15 @@ def criar_cabecalho_empresa(doc, styles, config_empresa):
     logo_path = None
     if config_empresa.get('logo_path'):
         # Logo personalizada
-        logo_relativa = config_empresa['logo_path'].lstrip('/')
-        logo_full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', logo_relativa)
+        logo_full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', config_empresa['logo_path'].lstrip('/'))
         if os.path.exists(logo_full_path):
             logo_path = logo_full_path
-        elif '/' not in logo_relativa and logo_relativa != 'logo.jpg':
-            logo_legada = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                'static',
-                'images',
-                'empresa',
-                logo_relativa
-            )
-            if os.path.exists(logo_legada):
-                logo_path = logo_legada
     
     # Se não houver logo personalizada, tentar logo padrão
     if not logo_path:
         default_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images', 'empresa', 'logo.png')
         if os.path.exists(default_logo):
             logo_path = default_logo
-        else:
-            default_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'logo.jpg')
-            if os.path.exists(default_logo):
-                logo_path = default_logo
     
     # Se tiver logo, criar layout com logo e texto
     if logo_path:
@@ -3974,7 +3464,7 @@ def criar_pdf_vendas(relatorio, data_inicio=None, data_fim=None, cliente_selecio
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -4082,7 +3572,7 @@ def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, statu
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -4177,7 +3667,7 @@ def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, statu
 @app.route('/relatorios/contas-a-receber/pdf')
 @login_required
 def exportar_contas_a_receber_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4186,8 +3676,7 @@ def exportar_contas_a_receber_pdf():
     data_fim = request.args.get('data_fim')
     status = request.args.get('status', 'pendente')
     
-    tenant_id = get_current_tenant_id()
-    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
     estatisticas = {
         'total_contas': len(contas),
         'total_valor': sum(c['valor'] for c in contas),
@@ -4215,7 +3704,7 @@ def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -4311,7 +3800,7 @@ def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=
 @app.route('/relatorios/contas-a-pagar/pdf')
 @login_required
 def exportar_contas_a_pagar_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4320,8 +3809,7 @@ def exportar_contas_a_pagar_pdf():
     data_fim = request.args.get('data_fim')
     status = request.args.get('status', 'pendente')
     
-    tenant_id = get_current_tenant_id()
-    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
     estatisticas = {
         'total_contas': len(contas),
         'total_valor': sum(c['valor'] for c in contas),
@@ -4350,7 +3838,7 @@ def criar_pdf_produtos_mais_vendidos(relatorio, data_inicio=None, data_fim=None,
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
     
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -4461,7 +3949,7 @@ def criar_pdf_estoque(relatorio):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
 
     # Verificar se há erro no relatório
     if relatorio.get('erro'):
@@ -4591,7 +4079,7 @@ def criar_pdf_estoque(relatorio):
 @app.route('/relatorios/vendas/pdf')
 @login_required
 def exportar_vendas_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4599,13 +4087,12 @@ def exportar_vendas_pdf():
     data_fim = request.args.get('data_fim')
     cliente_id = request.args.get('cliente_id')
     
-    tenant_id = get_current_tenant_id()
-    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id, tenant_id=tenant_id)
+    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id)
     
     # Buscar nome do cliente se especificado
     cliente_nome = None
     if cliente_id:
-        clientes = listar_clientes(tenant_id=tenant_id)
+        clientes = listar_clientes()
         for cliente in clientes:
             if str(cliente.id) == str(cliente_id):
                 cliente_nome = cliente.nome
@@ -4622,7 +4109,7 @@ def exportar_vendas_pdf():
 @app.route('/relatorios/produtos-mais-vendidos/pdf')
 @login_required
 def exportar_produtos_mais_vendidos_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4630,12 +4117,7 @@ def exportar_produtos_mais_vendidos_pdf():
     data_fim = request.args.get('data_fim')
     limite = int(request.args.get('limite', 10))
     
-    relatorio = gerar_relatorio_produtos_mais_vendidos(
-        data_inicio,
-        data_fim,
-        limite,
-        tenant_id=get_current_tenant_id()
-    )
+    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite)
     pdf_buffer = criar_pdf_produtos_mais_vendidos(relatorio, data_inicio, data_fim, limite)
     
     response = make_response(pdf_buffer.getvalue())
@@ -4647,11 +4129,11 @@ def exportar_produtos_mais_vendidos_pdf():
 @app.route('/relatorios/estoque/pdf')
 @login_required
 def exportar_estoque_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
-    relatorio = gerar_relatorio_estoque(tenant_id=get_current_tenant_id())
+    relatorio = gerar_relatorio_estoque()
     pdf_buffer = criar_pdf_estoque(relatorio)
     
     response = make_response(pdf_buffer.getvalue())
@@ -4673,7 +4155,7 @@ def criar_pdf_caixa(status_caixa, movimentacoes, resumo_vendas, data):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
 
     # Formatar data
     data_formatada = datetime.strptime(data, '%Y-%m-%d').strftime('%d/%m/%Y')
@@ -4793,7 +4275,7 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=70, 
                            leftMargin=40, rightMargin=40)
     story = []
-    config_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    config_empresa = obter_configuracoes_empresa()
 
     # CABEÇALHO DA EMPRESA (Logo e informações)
     story.extend(criar_cabecalho_empresa_moderno(config_empresa))
@@ -4913,14 +4395,14 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
 @app.route('/relatorios/financeiro/pdf')
 @login_required
 def exportar_financeiro_pdf():
-    if not has_permission_cached('relatorios'):
+    if not verificar_permissao(current_user.id, 'relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim, tenant_id=get_current_tenant_id())
+    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim)
     pdf_buffer = criar_pdf_financeiro(relatorio, data_inicio, data_fim)
     
     response = make_response(pdf_buffer.getvalue())
@@ -4935,7 +4417,7 @@ def exportar_financeiro_pdf():
 def api_marcas():
     """Retorna todas as marcas cadastradas no sistema"""
     try:
-        marcas = obter_marcas_cadastradas(tenant_id=get_current_tenant_id())
+        marcas = obter_marcas_cadastradas()
         return jsonify(marcas)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
@@ -4945,7 +4427,7 @@ def api_marcas():
 def api_categorias():
     """Retorna todas as categorias cadastradas no sistema"""
     try:
-        categorias = obter_categorias_cadastradas(tenant_id=get_current_tenant_id())
+        categorias = obter_categorias_cadastradas()
         return jsonify(categorias)
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
@@ -4962,19 +4444,9 @@ def internal_error(error):
 # CONTEXTO GLOBAL DO TEMPLATE
 @app.context_processor
 def inject_globals():
-    tenant_nome = ''
-    if current_user.is_authenticated:
-        try:
-            tenant_id = get_current_tenant_id()
-            config_empresa = obter_configuracoes_empresa(tenant_id)
-            tenant_nome = (config_empresa or {}).get('nome_empresa', '') or ''
-        except Exception:
-            tenant_nome = ''
-
     return {
         'moment': datetime,
-        'today': hoje_br(),
-        'tenant_nome_autenticado': tenant_nome
+        'today': hoje_br()
     }
 
 if __name__ == '__main__':

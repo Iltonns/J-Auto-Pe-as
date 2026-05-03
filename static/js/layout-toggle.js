@@ -38,17 +38,18 @@ function updateToggleButton(isCompact) {
 // Carregar preferência salva
 function loadLayoutPreference() {
     const savedMode = localStorage.getItem('layout-mode');
-    // Por padrão, ativar o layout compacto se não houver preferência salva
-    if (savedMode === 'normal') {
-        document.body.classList.remove('layout-compacto');
-        updateToggleButton(false);
-    } else {
-        // Ativar compacto por padrão
+    // Por padrão, SEMPRE usar layout normal
+    // Remover classe compacta do body para garantir layout normal
+    document.body.classList.remove('layout-compacto');
+    updateToggleButton(false);
+    
+    // Se o usuário tiver ativado compacto antes, respeitar a preferência
+    if (savedMode === 'compact') {
         document.body.classList.add('layout-compacto');
         updateToggleButton(true);
-        if (!savedMode) {
-            localStorage.setItem('layout-mode', 'compact');
-        }
+    } else if (!savedMode) {
+        // Garantir que o padrão está salvo
+        localStorage.setItem('layout-mode', 'normal');
     }
 }
 
