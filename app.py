@@ -3409,11 +3409,13 @@ def relatorio_vendas():
     data_fim = request.args.get('data_fim')
     cliente_id = request.args.get('cliente_id')
     
+    tenant_id = get_current_tenant_id()
+
     # Gerar relatório
-    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id)
+    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id, tenant_id=tenant_id)
     
     # Buscar lista de clientes para o filtro
-    clientes = listar_clientes()
+    clientes = listar_clientes(tenant_id=tenant_id)
     
     return render_template('relatorios/vendas.html', 
                          relatorio=relatorio, 
@@ -3435,8 +3437,10 @@ def relatorio_produtos_mais_vendidos():
     data_fim = request.args.get('data_fim')
     limite = int(request.args.get('limite', 10))
     
+    tenant_id = get_current_tenant_id()
+
     # Gerar relatório
-    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite)
+    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite, tenant_id=tenant_id)
     
     return render_template('relatorios/produtos_mais_vendidos.html', 
                          relatorio=relatorio,
@@ -3452,11 +3456,13 @@ def relatorio_estoque():
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
+    tenant_id = get_current_tenant_id()
+
     # Gerar relatório
-    relatorio = gerar_relatorio_estoque()
+    relatorio = gerar_relatorio_estoque(tenant_id=tenant_id)
     
     # Obter configurações da empresa
-    configuracoes_empresa = obter_configuracoes_empresa(get_current_tenant_id())
+    configuracoes_empresa = obter_configuracoes_empresa(tenant_id)
     
     return render_template('relatorios/estoque.html', 
                          relatorio=relatorio,
@@ -3474,8 +3480,10 @@ def relatorio_financeiro():
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
+    tenant_id = get_current_tenant_id()
+
     # Gerar relatório
-    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim)
+    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim, tenant_id=tenant_id)
     
     return render_template('relatorios/financeiro.html', 
                          relatorio=relatorio,
@@ -3829,7 +3837,8 @@ def exportar_contas_a_receber_pdf():
     data_fim = request.args.get('data_fim')
     status = request.args.get('status', 'pendente')
     
-    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status)
+    tenant_id = get_current_tenant_id()
+    contas = listar_contas_receber_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
     estatisticas = {
         'total_contas': len(contas),
         'total_valor': sum(c['valor'] for c in contas),
@@ -3962,7 +3971,8 @@ def exportar_contas_a_pagar_pdf():
     data_fim = request.args.get('data_fim')
     status = request.args.get('status', 'pendente')
     
-    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status)
+    tenant_id = get_current_tenant_id()
+    contas = listar_contas_pagar_por_periodo(filtro, data_inicio, data_fim, status, tenant_id=tenant_id)
     estatisticas = {
         'total_contas': len(contas),
         'total_valor': sum(c['valor'] for c in contas),
@@ -4240,12 +4250,13 @@ def exportar_vendas_pdf():
     data_fim = request.args.get('data_fim')
     cliente_id = request.args.get('cliente_id')
     
-    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id)
+    tenant_id = get_current_tenant_id()
+    relatorio = gerar_relatorio_vendas(data_inicio, data_fim, cliente_id, tenant_id=tenant_id)
     
     # Buscar nome do cliente se especificado
     cliente_nome = None
     if cliente_id:
-        clientes = listar_clientes()
+        clientes = listar_clientes(tenant_id=tenant_id)
         for cliente in clientes:
             if str(cliente.id) == str(cliente_id):
                 cliente_nome = cliente.nome
@@ -4270,7 +4281,12 @@ def exportar_produtos_mais_vendidos_pdf():
     data_fim = request.args.get('data_fim')
     limite = int(request.args.get('limite', 10))
     
-    relatorio = gerar_relatorio_produtos_mais_vendidos(data_inicio, data_fim, limite)
+    relatorio = gerar_relatorio_produtos_mais_vendidos(
+        data_inicio,
+        data_fim,
+        limite,
+        tenant_id=get_current_tenant_id()
+    )
     pdf_buffer = criar_pdf_produtos_mais_vendidos(relatorio, data_inicio, data_fim, limite)
     
     response = make_response(pdf_buffer.getvalue())
@@ -4286,7 +4302,7 @@ def exportar_estoque_pdf():
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
-    relatorio = gerar_relatorio_estoque()
+    relatorio = gerar_relatorio_estoque(tenant_id=get_current_tenant_id())
     pdf_buffer = criar_pdf_estoque(relatorio)
     
     response = make_response(pdf_buffer.getvalue())
@@ -4555,7 +4571,7 @@ def exportar_financeiro_pdf():
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     
-    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim)
+    relatorio = gerar_relatorio_financeiro(data_inicio, data_fim, tenant_id=get_current_tenant_id())
     pdf_buffer = criar_pdf_financeiro(relatorio, data_inicio, data_fim)
     
     response = make_response(pdf_buffer.getvalue())
