@@ -345,7 +345,7 @@
     #tabelaProdutos th:nth-child(9) { min-width: 100px; max-width: 100px; }/* Código */
     #tabelaProdutos th:nth-child(10) { min-width: 110px; max-width: 110px; }/* Cód. Fornecedor */
     #tabelaProdutos th:nth-child(11) { min-width: 80px; max-width: 80px; }  /* Status */
-    #tabelaProdutos th:nth-child(12) { min-width: 180px; }                 /* Ações */
+    #tabelaProdutos th:nth-child(12) { min-width: 280px; }                 /* Ações - AUMENTADO */
     
     #tabelaProdutos td:nth-child(1) { min-width: 70px; max-width: 70px; }
     #tabelaProdutos td:nth-child(2) { min-width: 55px; max-width: 55px; }
@@ -358,7 +358,7 @@
     #tabelaProdutos td:nth-child(9) { min-width: 100px; max-width: 100px; }
     #tabelaProdutos td:nth-child(10) { min-width: 110px; max-width: 110px; }
     #tabelaProdutos td:nth-child(11) { min-width: 80px; max-width: 80px; }
-    #tabelaProdutos td:nth-child(12) { min-width: 180px; }
+    #tabelaProdutos td:nth-child(12) { min-width: 280px; }                 /* Aumentado */
     
     /* Hover nas linhas */
     #tabelaProdutos tbody tr:hover {
@@ -382,10 +382,20 @@
     
     /* Garantir que a coluna de ações fica visível */
     #tabelaProdutos td:nth-child(12) {
-        padding: 14px 5px !important;
+        padding: 14px 8px !important;
         display: table-cell !important;
-        min-width: 180px !important;
-        white-space: nowrap;
+        min-width: 280px !important;
+        white-space: normal;
+        word-break: break-word;
+    }
+    
+    /* Botões de ação precisam ficar visíveis */
+    #tabelaProdutos .btn-group {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        align-items: center;
     }
     
     .modal-product-photo {

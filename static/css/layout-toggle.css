@@ -77,6 +77,20 @@ body.layout-compacto .table th {
     font-size: 0.85rem !important;
 }
 
+/* IMPORTANTE: Manter coluna de ações visível mesmo em modo compacto */
+body.layout-compacto #tabelaProdutos td:nth-child(12) {
+    min-width: 280px !important;
+    padding: 10px 8px !important;
+    white-space: normal;
+    word-break: break-word;
+}
+
+body.layout-compacto #tabelaProdutos .btn-group .btn {
+    padding: 6px 10px !important;
+    font-size: 0.78rem !important;
+    margin: 2px 1px !important;
+}
+
 /* Espaçamentos reduzidos moderadamente */
 body.layout-compacto .container-fluid {
     padding: 8px !important;

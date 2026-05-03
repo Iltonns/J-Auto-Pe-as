@@ -25,6 +25,24 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/is-erp-theme.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/layout-toggle.css') }}" rel="stylesheet">
+    
+    <!-- Script de inicialização do layout (executar antes do conteúdo) -->
+    <script>
+        // Garantir que o layout normal seja o padrão antes de qualquer outra coisa
+        (function() {
+            // Remover classe compacta se estiver presente
+            document.documentElement.classList.remove('layout-compacto');
+            if (document.body) {
+                document.body.classList.remove('layout-compacto');
+            }
+            
+            // Forçar preferência normal se nenhuma tiver sido salva
+            if (!localStorage.getItem('layout-mode')) {
+                localStorage.setItem('layout-mode', 'normal');
+            }
+        })();
+    </script>
+    
     {% block extra_css %}{% endblock %}
 </head>
 <body>
