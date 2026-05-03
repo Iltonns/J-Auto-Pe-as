@@ -445,7 +445,7 @@ def check_user_active():
 @app.route('/favicon.ico')
 def favicon():
     """Serve o favicon no caminho padrão esperado pelos navegadores."""
-    return app.send_static_file('favicon.ico')
+    return app.send_static_file('favicon.ico', max_age=0)
 
 @app.route('/')
 def index():
