@@ -8,6 +8,8 @@ import uuid
 from werkzeug.utils import secure_filename
 from functools import wraps
 from io import BytesIO
+import re
+import unicodedata
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -30,6 +32,22 @@ def agora_br():
 def hoje_br():
     """Retorna a data atual no horário de Brasília"""
     return agora_br().date()
+
+def gerar_slug(nome_empresa):
+    """Gera slug URL-safe com base no nome da empresa."""
+    if nome_empresa is None:
+        return ''
+    texto = str(nome_empresa).strip().lower()
+    if not texto:
+        return ''
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
+    texto = re.sub(r'[^a-z0-9]+', '-', texto).strip('-')
+    return texto
+
+def email_valido(email):
+    """Validação simples de email para onboarding."""
+    valor = (str(email).strip() if email is not None else '')
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', valor))
 
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
@@ -79,7 +97,7 @@ from Minha_autopecas_web.logica_banco import (
     obter_marcas_cadastradas, obter_categorias_cadastradas,
     garantir_estrutura_fiscal, obter_nfe_por_venda,
     listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant,
-    obter_tenant_padrao_id, resolver_tenant_para_login
+    obter_tenant_padrao_id, resolver_tenant_para_login, criar_tenant_com_admin
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -172,6 +190,7 @@ DEFAULT_TENANT_ID = None
 _DEFAULT_TENANT_CACHE = None
 PUBLIC_ENDPOINTS = {
     'login',
+    'registro',
     'logout',
     'favicon',
     'recuperar_senha',
@@ -467,6 +486,76 @@ def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
+
+@app.route('/registro', methods=['GET', 'POST'])
+def registro():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    form_data = {
+        'nome_empresa': '',
+        'slug': '',
+        'cnpj': '',
+        'telefone': '',
+        'nome': '',
+        'email': ''
+    }
+
+    if request.method == 'POST':
+        form_data['nome_empresa'] = (request.form.get('nome_empresa') or '').strip()
+        form_data['slug'] = (request.form.get('slug') or '').strip()
+        form_data['cnpj'] = (request.form.get('cnpj') or '').strip()
+        form_data['telefone'] = (request.form.get('telefone') or '').strip()
+        form_data['nome'] = (request.form.get('nome') or '').strip()
+        form_data['email'] = (request.form.get('email') or '').strip().lower()
+
+        senha = request.form.get('senha') or ''
+        confirmar_senha = request.form.get('confirmar_senha') or ''
+
+        if not form_data['nome_empresa']:
+            flash('Informe o nome da empresa.', 'error')
+            return render_template('registro.html', form_data=form_data)
+
+        slug_final = gerar_slug(form_data['slug'] or form_data['nome_empresa'])
+        if not slug_final:
+            flash('Nao foi possivel gerar um slug valido para a empresa.', 'error')
+            return render_template('registro.html', form_data=form_data)
+        form_data['slug'] = slug_final
+
+        if not form_data['nome']:
+            flash('Informe o nome do administrador.', 'error')
+            return render_template('registro.html', form_data=form_data)
+
+        if not email_valido(form_data['email']):
+            flash('Informe um email valido.', 'error')
+            return render_template('registro.html', form_data=form_data)
+
+        if not senha or not confirmar_senha:
+            flash('Informe senha e confirmacao de senha.', 'error')
+            return render_template('registro.html', form_data=form_data)
+
+        if senha != confirmar_senha:
+            flash('As senhas nao coincidem.', 'error')
+            return render_template('registro.html', form_data=form_data)
+
+        sucesso, mensagem, _ = criar_tenant_com_admin({
+            'nome_empresa': form_data['nome_empresa'],
+            'slug': form_data['slug'],
+            'cnpj': form_data['cnpj'],
+            'telefone': form_data['telefone'],
+            'nome': form_data['nome'],
+            'email': form_data['email'],
+            'senha': senha,
+            'confirmar_senha': confirmar_senha
+        })
+
+        if sucesso:
+            flash('Empresa criada com sucesso. Acesse usando o nome da empresa, seu email e senha.', 'success')
+            return redirect(url_for('login', tenant_id=form_data['nome_empresa']))
+
+        flash(mensagem or 'Nao foi possivel concluir o cadastro da empresa.', 'error')
+
+    return render_template('registro.html', form_data=form_data)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -930,6 +1019,12 @@ def dashboard():
     config_empresa = obter_configuracoes_empresa(tenant_id)
     empresa_nome = (config_empresa or {}).get('nome_empresa') or f"Tenant {tenant_id}"
     usuario_nome = (getattr(current_user, 'username', '') or 'usuário').strip()
+    vendas_para_onboarding = listar_vendas(limit=1, tenant_id=tenant_id)
+    mostrar_primeiros_passos = (
+        int((estatisticas or {}).get('total_produtos') or 0) == 0 and
+        int((estatisticas or {}).get('total_clientes') or 0) == 0 and
+        len(vendas_para_onboarding) == 0
+    )
     
     return render_template('dashboard.html',
                          estatisticas=estatisticas,
@@ -939,7 +1034,8 @@ def dashboard():
                          contas_receber_hoje=contas_receber_hoje,
                          contas_atrasadas=contas_atrasadas,
                          usuario_nome=usuario_nome,
-                         empresa_nome=empresa_nome)
+                         empresa_nome=empresa_nome,
+                         mostrar_primeiros_passos=mostrar_primeiros_passos)
 
 # =====================================================
 # ROTAS DO CAIXA FINANCEIRO

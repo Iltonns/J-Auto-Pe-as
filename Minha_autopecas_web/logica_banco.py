@@ -2346,6 +2346,156 @@ def criar_tenant(slug, nome, status='active', config_inicial=None):
     finally:
         conn.close()
 
+def criar_tenant_com_admin(dados):
+    """
+    Onboarding SaaS: cria tenant + configuracoes_empresa + usuario admin em uma transacao.
+    Regras:
+    - tenant sempre ativo na criacao;
+    - tenant_id sempre obrigatorio internamente;
+    - usuario criado como admin do proprio tenant (nunca superadmin).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if not isinstance(dados, dict):
+            return False, "Dados de cadastro invalidos.", None
+
+        nome_empresa = (str(dados.get('nome_empresa') or '').strip())
+        slug_input = (str(dados.get('slug') or '').strip())
+        cnpj = (str(dados.get('cnpj') or '').strip())
+        telefone = (str(dados.get('telefone') or '').strip())
+
+        nome_admin = (str(dados.get('nome') or '').strip())
+        email_admin = (str(dados.get('email') or '').strip().lower())
+        senha = (dados.get('senha') or '')
+        confirmar_senha = (dados.get('confirmar_senha') or '')
+
+        if not nome_empresa:
+            return False, "Nome da empresa e obrigatorio.", None
+        if not nome_admin:
+            return False, "Nome do usuario administrador e obrigatorio.", None
+        if not email_admin:
+            return False, "Email e obrigatorio.", None
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_admin):
+            return False, "Informe um email valido.", None
+        if not senha or not confirmar_senha:
+            return False, "Senha e confirmacao de senha sao obrigatorias.", None
+        if senha != confirmar_senha:
+            return False, "As senhas nao coincidem.", None
+
+        valida_senha, mensagem_senha = validar_senha_segura(senha)
+        if not valida_senha:
+            return False, mensagem_senha, None
+
+        slug_normalizado = _slugify_tenant(slug_input or nome_empresa)
+        if not slug_normalizado:
+            return False, "Slug invalido para a empresa.", None
+
+        cursor.execute(
+            '''
+            SELECT id
+            FROM tenants
+            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(%s))
+            LIMIT 1
+            ''',
+            (nome_empresa,)
+        )
+        if cursor.fetchone():
+            return False, "Ja existe empresa cadastrada com este nome.", None
+
+        cursor.execute("SELECT id FROM tenants WHERE slug = %s LIMIT 1", (slug_normalizado,))
+        if cursor.fetchone():
+            return False, "Slug ja esta em uso. Escolha outro slug.", None
+
+        cursor.execute(
+            '''
+            INSERT INTO tenants (slug, nome, status, created_at, updated_at)
+            VALUES (%s, %s, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+            ''',
+            (slug_normalizado, nome_empresa)
+        )
+        tenant_id = _normalizar_tenant_id(cursor.fetchone()[0])
+        if tenant_id is None:
+            raise ValueError("Falha ao resolver tenant_id apos criacao do tenant.")
+
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'configuracoes_empresa'
+              AND column_name = 'tenant_id'
+            LIMIT 1
+            '''
+        )
+        if cursor.fetchone() is None:
+            raise ValueError("Tabela configuracoes_empresa sem coluna tenant_id. Onboarding cancelado por seguranca.")
+
+        cursor.execute(
+            '''
+            INSERT INTO configuracoes_empresa (
+                nome_empresa, cnpj, telefone, email, tenant_id, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ''',
+            (nome_empresa, cnpj, telefone, email_admin, tenant_id)
+        )
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE tenant_id = %s AND (username = %s OR email = %s)",
+            (tenant_id, email_admin, email_admin)
+        )
+        if cursor.fetchone()[0] > 0:
+            return False, "Ja existe usuario com este email neste tenant.", None
+
+        password_hash = generate_password_hash(senha)
+        possui_is_superadmin = _usuarios_tem_coluna_is_superadmin(cursor)
+
+        if possui_is_superadmin:
+            cursor.execute(
+                '''
+                INSERT INTO usuarios (
+                    username, password_hash, nome_completo, email,
+                    permissao_vendas, permissao_estoque, permissao_clientes,
+                    permissao_financeiro, permissao_caixa, permissao_relatorios,
+                    permissao_admin, permissao_contas_pagar, permissao_contas_receber,
+                    is_superadmin, created_by, tenant_id, ativo
+                )
+                VALUES (%s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, NULL, %s, TRUE)
+                ''',
+                (email_admin, password_hash, nome_admin, email_admin, tenant_id)
+            )
+        else:
+            cursor.execute(
+                '''
+                INSERT INTO usuarios (
+                    username, password_hash, nome_completo, email,
+                    permissao_vendas, permissao_estoque, permissao_clientes,
+                    permissao_financeiro, permissao_caixa, permissao_relatorios,
+                    permissao_admin, permissao_contas_pagar, permissao_contas_receber,
+                    created_by, tenant_id, ativo
+                )
+                VALUES (%s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, NULL, %s, TRUE)
+                ''',
+                (email_admin, password_hash, nome_admin, email_admin, tenant_id)
+            )
+
+        conn.commit()
+        return True, "Empresa criada com sucesso.", tenant_id
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return False, "Conflito de unicidade detectado (nome, slug ou email ja existente).", None
+    except ValueError as e:
+        conn.rollback()
+        return False, str(e), None
+    except Exception as e:
+        conn.rollback()
+        return False, f"Erro ao criar empresa: {str(e)}", None
+    finally:
+        conn.close()
+
 def editar_tenant(tenant_id, slug, nome):
     """Edita dados principais do tenant (slug e nome)."""
     conn = get_db_connection()

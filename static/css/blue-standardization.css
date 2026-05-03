@@ -1,0 +1,75 @@
+:root {
+    --erp-blue-900: #0f2742;
+    --erp-blue-700: #184b7a;
+    --erp-blue-600: #1d63c8;
+    --erp-blue-100: #dbeafe;
+    --erp-blue-050: #eff6ff;
+    --erp-blue-gradient: linear-gradient(135deg, var(--erp-blue-700) 0%, var(--erp-blue-900) 100%);
+}
+
+.top-navbar,
+.page-header,
+.card-header,
+.modal-header,
+.table thead,
+.table thead th,
+.table-header-professional,
+.table-header-professional th,
+.vendas-shell .card-header-vendas,
+.vendas-shell .historico-header,
+.vendas-shell .resultado-header,
+.vendas-shell .vendas-table thead,
+.vendas-shell .vendas-table thead th,
+.vendas-shell .tabela-vendas thead,
+.vendas-shell .tabela-vendas thead th,
+.relatorios-shell .card-header,
+.relatorios-shell .page-head,
+.modern-table thead,
+.modern-table thead th {
+    background: var(--erp-blue-gradient) !important;
+    color: #ffffff !important;
+    border-color: rgba(147, 197, 253, 0.45) !important;
+}
+
+.page-header h1,
+.page-header h2,
+.page-header h3,
+.page-header h4,
+.page-header h5,
+.page-header h6,
+.page-header p,
+.page-header small,
+.card-header h1,
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6,
+.card-header p,
+.card-header span,
+.top-navbar .navbar-brand,
+.top-navbar .navbar-text,
+.top-navbar .navbar-text span,
+.modal-header .modal-title {
+    color: #ffffff !important;
+}
+
+.top-navbar .text-success {
+    color: var(--erp-blue-100) !important;
+}
+
+.table thead th i,
+.table-header-professional th i {
+    color: var(--erp-blue-100) !important;
+}
+
+.modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(220%);
+}
+
+.modal-content,
+.card,
+.page-header,
+.login-shell {
+    border-color: rgba(29, 99, 200, 0.25) !important;
+}
