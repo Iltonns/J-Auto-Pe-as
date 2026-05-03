@@ -76,7 +76,8 @@ from Minha_autopecas_web.logica_banco import (
     vincular_produto_nfe,
     # Funções para autocomplete de marcas e categorias
     obter_marcas_cadastradas, obter_categorias_cadastradas,
-    garantir_estrutura_fiscal, obter_nfe_por_venda
+    garantir_estrutura_fiscal, obter_nfe_por_venda,
+    listar_tenants, criar_tenant, editar_tenant, alterar_status_tenant, criar_admin_tenant
 )
 from Minha_autopecas_web.fiscal_service import (
     emitir_nfe_para_venda, consultar_nfe_por_venda, processar_webhook_nfe
@@ -143,6 +144,7 @@ class User(UserMixin):
         self.id = str(user_data['id'])
         self.username = user_data['username']
         self.email = user_data.get('email', '')
+        self.is_superadmin = bool(user_data.get('is_superadmin', False))
         tenant_id = user_data.get('tenant_id', 1)
         try:
             self.tenant_id = int(tenant_id) if tenant_id is not None else 1
@@ -201,20 +203,28 @@ def _montar_mapa_permissoes(user_data):
         'caixa': bool(user_data.get('permissao_caixa', False)),
         'relatorios': bool(user_data.get('permissao_relatorios', False)),
         'admin': bool(user_data.get('permissao_admin', False)),
+        'superadmin': bool(user_data.get('is_superadmin', False)),
         'contas_pagar': bool(user_data.get('permissao_contas_pagar', False)),
         'contas_receber': bool(user_data.get('permissao_contas_receber', False))
     }
+
+def is_superadmin_current_user():
+    """Retorna True quando o usuário autenticado é superadmin global."""
+    return bool(current_user.is_authenticated and getattr(current_user, 'is_superadmin', False))
 
 def has_permission_cached(permission):
     """Verifica permissao usando cache em memoria da request."""
     if not current_user.is_authenticated:
         return False
 
+    if is_superadmin_current_user():
+        return True
+
     permissions = getattr(g, 'user_permissions', None)
     if permissions is None:
         return verificar_permissao(current_user.id, permission, get_current_tenant_id())
 
-    return permissions.get('admin', False) or permissions.get(permission, False)
+    return permissions.get('superadmin', False) or permissions.get('admin', False) or permissions.get(permission, False)
 
 # Middleware para verificar sessão única
 @app.before_request
@@ -310,6 +320,7 @@ def load_user_access_context():
     """
     g.user_permissions = {}
     g.user_is_active = True
+    g.user_is_superadmin = False
     if not hasattr(g, 'current_tenant_id'):
         g.current_tenant_id = get_current_tenant_id()
 
@@ -329,6 +340,8 @@ def load_user_access_context():
 
     g.user_is_active = bool(user_data.get('ativo', False))
     if g.user_is_active:
+        g.user_is_superadmin = bool(user_data.get('is_superadmin', False))
+        current_user.is_superadmin = g.user_is_superadmin
         g.user_permissions = _montar_mapa_permissoes(user_data)
 
 # Decorator para verificar permissões
@@ -343,6 +356,17 @@ def required_permission(permission):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+def superadmin_required(f):
+    """Decorator para rotas exclusivas do superadmin global."""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not is_superadmin_current_user():
+            flash('Acesso negado. Área restrita ao superadmin.', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Filtros do Jinja2
 @app.template_filter('format_currency')
@@ -367,7 +391,9 @@ def format_date(value):
 def utility_processor():
     def has_permission(permission):
         return has_permission_cached(permission)
-    return dict(has_permission=has_permission)
+    def is_superadmin():
+        return is_superadmin_current_user()
+    return dict(has_permission=has_permission, is_superadmin=is_superadmin)
 
 # Verificação de usuário ativo antes de cada requisição
 @app.before_request
@@ -399,7 +425,12 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        user_data = verificar_usuario(username, password, tenant_id=session.get('tenant_id'))
+        user_data = verificar_usuario(
+            username,
+            password,
+            tenant_id=session.get('tenant_id'),
+            permitir_escopo_global=True
+        )
         if user_data:
             user = User(user_data)
             login_user(user)
@@ -609,6 +640,73 @@ def deletar_usuario_route(user_id):
         flash(f'Erro ao desativar usuário: {str(e)}', 'error')
     
     return redirect(url_for('usuarios'))
+
+# PAINEL GLOBAL DE TENANTS (apenas superadmin)
+@app.route('/admin/tenants')
+@superadmin_required
+def admin_tenants():
+    tenants = listar_tenants()
+    return render_template('admin_tenants.html', tenants=tenants)
+
+@app.route('/admin/tenants/criar', methods=['POST'])
+@superadmin_required
+def admin_tenants_criar():
+    nome = request.form.get('nome', '').strip()
+    slug = request.form.get('slug', '').strip()
+    status = request.form.get('status', 'active')
+
+    sucesso, mensagem, tenant_id = criar_tenant(
+        slug=slug,
+        nome=nome,
+        status=status,
+        config_inicial={'nome_empresa': nome}
+    )
+    if sucesso:
+        flash(f'{mensagem} ID do tenant: {tenant_id}.', 'success')
+    else:
+        flash(mensagem, 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/editar', methods=['POST'])
+@superadmin_required
+def admin_tenants_editar(tenant_id):
+    nome = request.form.get('nome', '').strip()
+    slug = request.form.get('slug', '').strip()
+
+    sucesso, mensagem = editar_tenant(tenant_id=tenant_id, slug=slug, nome=nome)
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/status', methods=['POST'])
+@superadmin_required
+def admin_tenants_status(tenant_id):
+    status = request.form.get('status', '').strip().lower()
+    if status not in ('active', 'inactive'):
+        flash("Status inválido. Use 'active' ou 'inactive'.", 'error')
+        return redirect(url_for('admin_tenants'))
+
+    sucesso, mensagem = alterar_status_tenant(tenant_id=tenant_id, status=status)
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
+
+@app.route('/admin/tenants/<int:tenant_id>/criar-admin', methods=['POST'])
+@superadmin_required
+def admin_tenants_criar_admin(tenant_id):
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '')
+    nome_completo = request.form.get('nome_completo', '').strip()
+    email = request.form.get('email', '').strip()
+
+    sucesso, mensagem, _ = criar_admin_tenant(
+        tenant_id=tenant_id,
+        username=username,
+        password=password,
+        nome_completo=nome_completo,
+        email=email,
+        created_by=current_user.id
+    )
+    flash(mensagem, 'success' if sucesso else 'error')
+    return redirect(url_for('admin_tenants'))
 
 @app.route('/usuarios/trocar-senha/<int:user_id>', methods=['POST'])
 @login_required
