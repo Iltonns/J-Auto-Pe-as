@@ -78,7 +78,7 @@
 
                     <nav class="nav flex-column">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">
-                            <i class="fas fa-gauge-high"></i> Dashboard
+                            <i class="fas fa-gauge-high"></i> Painel
                         </a>
                         <a class="nav-link" href="{{ url_for('clientes') }}">
                             <i class="fas fa-users"></i> Clientes
@@ -144,7 +144,7 @@
 
                         {% if is_superadmin() %}
                         <a class="nav-link" href="{{ url_for('admin_tenants') }}">
-                            <i class="fas fa-city"></i> Tenants
+                            <i class="fas fa-city"></i> Empresas
                         </a>
                         {% endif %}
 

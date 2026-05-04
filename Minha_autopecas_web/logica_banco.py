@@ -1931,8 +1931,8 @@ def criar_usuario(username, password, nome_completo, email, permissoes=None, cre
     finally:
         conn.close()
 
-def listar_usuarios(tenant_id=None):
-    """Lista todos os usuários do sistema"""
+def listar_usuarios(tenant_id=None, somente_ativos=False, limit=None):
+    """Lista usuários do tenant com filtros opcionais."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1943,31 +1943,52 @@ def listar_usuarios(tenant_id=None):
         if tenant_resolvido is None:
             return []
 
+        where_clauses = ["tenant_id = %s"]
+        params = [tenant_resolvido]
+
+        if somente_ativos:
+            where_clauses.append("ativo = TRUE")
+
+        limit_value = None
+        try:
+            if limit is not None:
+                limit_value = max(1, int(limit))
+        except (TypeError, ValueError):
+            limit_value = None
+
+        where_sql = " AND ".join(where_clauses)
+        limit_sql = ""
+        if limit_value is not None:
+            limit_sql = " LIMIT %s"
+            params.append(limit_value)
+
         if possui_is_superadmin:
             cursor.execute(
-                '''
+                f'''
                 SELECT id, username, nome_completo, email, ativo,
                        permissao_vendas, permissao_estoque, permissao_clientes,
                        permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
                        permissao_contas_pagar, permissao_contas_receber, created_at, tenant_id, is_superadmin
                 FROM usuarios
-                WHERE tenant_id = %s
+                WHERE {where_sql}
                 ORDER BY nome_completo
+                {limit_sql}
                 ''',
-                (tenant_resolvido,)
+                tuple(params)
             )
         else:
             cursor.execute(
-                '''
+                f'''
                 SELECT id, username, nome_completo, email, ativo,
                        permissao_vendas, permissao_estoque, permissao_clientes,
                        permissao_financeiro, permissao_caixa, permissao_relatorios, permissao_admin,
                        permissao_contas_pagar, permissao_contas_receber, created_at, tenant_id
                 FROM usuarios
-                WHERE tenant_id = %s
+                WHERE {where_sql}
                 ORDER BY nome_completo
+                {limit_sql}
                 ''',
-                (tenant_resolvido,)
+                tuple(params)
             )
 
         usuarios = []
@@ -3885,8 +3906,8 @@ def listar_lancamentos_financeiros(tipo=None, status='pendente', tenant_id=None)
     return lancamentos
 
 # FUNÇÕES DE CLIENTES
-def listar_clientes(tenant_id=None):
-    """Lista todos os clientes"""
+def listar_clientes(tenant_id=None, limit=None, search=None):
+    """Lista clientes do tenant com filtros opcionais."""
     garantir_colunas_clientes()
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3897,7 +3918,35 @@ def listar_clientes(tenant_id=None):
         if tenant_resolvido is None:
             return []
 
-        cursor.execute('''
+        search_term = (str(search).strip() if search is not None else '')
+        params = [tenant_resolvido]
+        where_sql = "tenant_id = %s"
+
+        if search_term:
+            like = f"%{search_term}%"
+            where_sql += '''
+                AND (
+                    nome ILIKE %s
+                    OR COALESCE(telefone, '') ILIKE %s
+                    OR COALESCE(email, '') ILIKE %s
+                    OR COALESCE(cpf_cnpj, '') ILIKE %s
+                )
+            '''
+            params.extend([like, like, like, like])
+
+        limit_value = None
+        try:
+            if limit is not None:
+                limit_value = max(1, int(limit))
+        except (TypeError, ValueError):
+            limit_value = None
+
+        limit_sql = ""
+        if limit_value is not None:
+            limit_sql = " LIMIT %s"
+            params.append(limit_value)
+
+        cursor.execute(f'''
             SELECT id, nome, telefone, email, cpf_cnpj, endereco,
                    COALESCE(tipo_pessoa, 'F') as tipo_pessoa,
                    COALESCE(razao_social, '') as razao_social,
@@ -3910,9 +3959,10 @@ def listar_clientes(tenant_id=None):
                    COALESCE(estado, '') as estado,
                    COALESCE(cep, '') as cep
             FROM clientes
-            WHERE tenant_id = %s
+            WHERE {where_sql}
             ORDER BY nome
-        ''', (tenant_resolvido,))
+            {limit_sql}
+        ''', tuple(params))
 
         clientes = []
         for row in cursor.fetchall():
@@ -3936,6 +3986,103 @@ def listar_clientes(tenant_id=None):
             })
 
         return clientes
+    finally:
+        conn.close()
+
+
+def listar_clientes_paginado(page=1, per_page=50, search=None, tenant_id=None):
+    """Lista clientes com paginação server-side no escopo do tenant."""
+    garantir_colunas_clientes()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        tenant_resolvido = _resolver_tenant_id_clientes(tenant_id, permitir_global=True)
+        tenant_resolvido = _resolver_tenant_fallback(cursor, tenant_resolvido)
+        if tenant_resolvido is None:
+            return {
+                'clientes': [],
+                'total_pages': 0,
+                'current_page': 1,
+                'total_items': 0,
+                'per_page': 50
+            }
+
+        page = max(1, int(page or 1))
+        per_page = max(1, min(int(per_page or 50), 100))
+        offset = (page - 1) * per_page
+
+        search_term = (str(search).strip() if search is not None else '')
+        where_sql = "tenant_id = %s"
+        params = [tenant_resolvido]
+
+        if search_term:
+            like = f"%{search_term}%"
+            where_sql += '''
+                AND (
+                    nome ILIKE %s
+                    OR COALESCE(telefone, '') ILIKE %s
+                    OR COALESCE(email, '') ILIKE %s
+                    OR COALESCE(cpf_cnpj, '') ILIKE %s
+                )
+            '''
+            params.extend([like, like, like, like])
+
+        cursor.execute(f'''
+            SELECT COUNT(*)
+            FROM clientes
+            WHERE {where_sql}
+        ''', tuple(params))
+        total_clientes = cursor.fetchone()[0]
+        total_pages = ceil(total_clientes / per_page) if total_clientes > 0 else 0
+
+        query_params = list(params) + [per_page, offset]
+        cursor.execute(f'''
+            SELECT id, nome, telefone, email, cpf_cnpj, endereco,
+                   COALESCE(tipo_pessoa, 'F') as tipo_pessoa,
+                   COALESCE(razao_social, '') as razao_social,
+                   COALESCE(inscricao_estadual, '') as inscricao_estadual,
+                   COALESCE(rua, '') as rua,
+                   COALESCE(numero, '') as numero,
+                   COALESCE(complemento, '') as complemento,
+                   COALESCE(bairro, '') as bairro,
+                   COALESCE(cidade, '') as cidade,
+                   COALESCE(estado, '') as estado,
+                   COALESCE(cep, '') as cep
+            FROM clientes
+            WHERE {where_sql}
+            ORDER BY nome
+            LIMIT %s OFFSET %s
+        ''', tuple(query_params))
+
+        clientes = []
+        for row in cursor.fetchall():
+            clientes.append({
+                'id': row[0],
+                'nome': row[1],
+                'telefone': row[2],
+                'email': row[3],
+                'cpf_cnpj': row[4],
+                'endereco': row[5],
+                'tipo_pessoa': row[6],
+                'razao_social': row[7],
+                'inscricao_estadual': row[8],
+                'rua': row[9],
+                'numero': row[10],
+                'complemento': row[11],
+                'bairro': row[12],
+                'cidade': row[13],
+                'estado': row[14],
+                'cep': row[15]
+            })
+
+        return {
+            'clientes': clientes,
+            'total_pages': total_pages,
+            'current_page': page,
+            'total_items': total_clientes,
+            'per_page': per_page
+        }
     finally:
         conn.close()
 
@@ -4032,7 +4179,7 @@ def deletar_cliente(id, tenant_id=None):
         conn.close()
 
 # FUNÇÕES DE PRODUTOS
-def listar_produtos(page=1, per_page=10, tenant_id=None):
+def listar_produtos(page=1, per_page=50, tenant_id=None):
     """Lista produtos ativos com paginacao no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -4044,7 +4191,7 @@ def listar_produtos(page=1, per_page=10, tenant_id=None):
             return {'produtos': [], 'total_pages': 0, 'current_page': page}
 
         page = max(1, int(page or 1))
-        per_page = max(1, int(per_page or 10))
+        per_page = max(1, min(int(per_page or 50), 100))
 
         cursor.execute(
             'SELECT COUNT(*) FROM produtos WHERE ativo = TRUE AND tenant_id = %s',
@@ -4086,7 +4233,13 @@ def listar_produtos(page=1, per_page=10, tenant_id=None):
                 'tenant_id': row[17]
             })
 
-        return {'produtos': produtos, 'total_pages': total_pages, 'current_page': page}
+        return {
+            'produtos': produtos,
+            'total_pages': total_pages,
+            'current_page': page,
+            'total_items': total_produtos,
+            'per_page': per_page
+        }
     finally:
         conn.close()
 
@@ -5799,29 +5952,25 @@ def obter_vendas_do_dia(tenant_id=None):
     
     print(f"DEBUG VENDAS: Vendas encontradas para {hoje}:")
     for row in vendas_encontradas:
-        # Verificar se a data da venda realmente corresponde ao dia atual
-        # row[4] é um objeto datetime do PostgreSQL, converter para string
+        # A consulta SQL ja filtra pelo dia atual; evita filtro duplicado em Python
+        # para nao ocultar vendas validas por conversoes de timezone.
         data_venda_convertida = converter_utc_para_br(row[4])
-        data_venda = data_venda_convertida.strftime('%Y-%m-%d') if data_venda_convertida else ''
-        
-        if data_venda == hoje:
-            venda = {
-                'id': row[0],
-                'cliente': row[1] or 'Cliente Avulso',
-                'total': row[2],
-                'forma_pagamento': row[3],
-                'data_venda': data_venda_convertida,
-                'total_itens': row[5] or 0,
-                'funcionario_nome': row[6] or 'Sem funcionário',
-                'funcionario_username': row[7] or '',
-                'usuario_id': row[8]
-            }
-            vendas.append(venda)
-            total_valor += row[2]
-            total_itens += row[5] or 0
-            print(f"  [OK] Venda #{row[0]}: R$ {row[2]}, Data: {data_venda_convertida}, Itens: {row[5]}, Funcionario: {row[6] or 'N/A'}")
-        else:
-            print(f"  [IGNORADA] Venda #{row[0]} ignorada - Data: {data_venda} != {hoje}")
+
+        venda = {
+            'id': row[0],
+            'cliente': row[1] or 'Cliente Avulso',
+            'total': row[2],
+            'forma_pagamento': row[3],
+            'data_venda': data_venda_convertida,
+            'total_itens': row[5] or 0,
+            'funcionario_nome': row[6] or 'Sem funcionário',
+            'funcionario_username': row[7] or '',
+            'usuario_id': row[8]
+        }
+        vendas.append(venda)
+        total_valor += row[2]
+        total_itens += row[5] or 0
+        print(f"  [OK] Venda #{row[0]}: R$ {row[2]}, Data: {data_venda_convertida}, Itens: {row[5]}, Funcionario: {row[6] or 'N/A'}")
     
     resultado = {
         'vendas': vendas,
@@ -5836,7 +5985,7 @@ def obter_vendas_do_dia(tenant_id=None):
     return resultado
 
 # FUNÇÕES DE CONTAS A PAGAR
-def listar_contas_pagar_hoje(tenant_id=None):
+def listar_contas_pagar_hoje(tenant_id=None, limit=None):
     """Lista contas a pagar com vencimento hoje"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5849,7 +5998,14 @@ def listar_contas_pagar_hoje(tenant_id=None):
 
     hoje = hoje_br().strftime('%Y-%m-%d')
 
-    cursor.execute('''
+    limit_value = None
+    try:
+        if limit is not None:
+            limit_value = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit_value = None
+
+    query = '''
         SELECT cp.id, cp.descricao, cp.valor, cp.data_vencimento, cp.status, cp.categoria, cp.observacoes,
                f.nome as fornecedor_nome
         FROM contas_pagar cp
@@ -5858,7 +6014,12 @@ def listar_contas_pagar_hoje(tenant_id=None):
           AND cp.status = 'pendente'
           AND cp.tenant_id = %s
         ORDER BY cp.valor DESC
-    ''', (hoje, tenant_resolvido))
+    '''
+    params = [hoje, tenant_resolvido]
+    if limit_value is not None:
+        query += " LIMIT %s"
+        params.append(limit_value)
+    cursor.execute(query, tuple(params))
     
     contas = []
     for row in cursor.fetchall():
@@ -6210,7 +6371,7 @@ def editar_conta_pagar(conta_id, descricao, valor, data_vencimento, categoria=No
         return False, f"Erro ao editar conta: {str(e)}"
 
 # FUNÇÕES DE CONTAS A RECEBER
-def listar_contas_receber_hoje(tenant_id=None):
+def listar_contas_receber_hoje(tenant_id=None, limit=None):
     """Lista contas a receber com vencimento hoje"""
     garantir_colunas_contas_receber()
     conn = get_db_connection()
@@ -6224,7 +6385,14 @@ def listar_contas_receber_hoje(tenant_id=None):
 
     hoje = hoje_br().strftime('%Y-%m-%d')
 
-    cursor.execute('''
+    limit_value = None
+    try:
+        if limit is not None:
+            limit_value = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit_value = None
+
+    query = '''
         SELECT cr.id, cr.descricao, cr.valor, cr.data_vencimento, cr.status, c.nome
         FROM contas_receber cr
         LEFT JOIN clientes c ON cr.cliente_id = c.id AND c.tenant_id = cr.tenant_id
@@ -6232,7 +6400,12 @@ def listar_contas_receber_hoje(tenant_id=None):
           AND cr.status = 'pendente'
           AND cr.tenant_id = %s
         ORDER BY cr.valor DESC
-    ''', (hoje, tenant_resolvido))
+    '''
+    params = [hoje, tenant_resolvido]
+    if limit_value is not None:
+        query += " LIMIT %s"
+        params.append(limit_value)
+    cursor.execute(query, tuple(params))
     
     contas = []
     for row in cursor.fetchall():
@@ -6573,7 +6746,7 @@ def editar_conta_receber(conta_id, descricao, valor, data_vencimento, cliente_id
         conn.close()
         return False, f"Erro ao editar conta: {str(e)}"
 
-def listar_contas_atrasadas(tenant_id=None):
+def listar_contas_atrasadas(tenant_id=None, limit=None):
     """Lista contas a pagar/receber em atraso no tenant atual."""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -6585,8 +6758,16 @@ def listar_contas_atrasadas(tenant_id=None):
         if tenant_resolvido is None:
             return []
 
+        limit_value = None
+        try:
+            if limit is not None:
+                limit_value = max(1, int(limit))
+        except (TypeError, ValueError):
+            limit_value = None
+        limit_consulta = max(limit_value * 2, 20) if limit_value is not None else None
+
         # Contas a pagar atrasadas
-        cursor.execute('''
+        query_pagar = '''
             SELECT 'pagar' as tipo, cp.id, cp.descricao, cp.valor, cp.data_vencimento,
                    f.nome as entidade, (CURRENT_DATE - cp.data_vencimento::date) as dias_atraso
             FROM contas_pagar cp
@@ -6595,7 +6776,12 @@ def listar_contas_atrasadas(tenant_id=None):
               AND cp.status = 'pendente'
               AND cp.tenant_id = %s
             ORDER BY cp.data_vencimento ASC
-        ''', (tenant_resolvido,))
+        '''
+        params_pagar = [tenant_resolvido]
+        if limit_consulta is not None:
+            query_pagar += " LIMIT %s"
+            params_pagar.append(limit_consulta)
+        cursor.execute(query_pagar, tuple(params_pagar))
 
         for row in cursor.fetchall():
             contas_atrasadas.append({
@@ -6610,7 +6796,7 @@ def listar_contas_atrasadas(tenant_id=None):
             })
 
         # Contas a receber atrasadas
-        cursor.execute('''
+        query_receber = '''
             SELECT 'receber' as tipo, cr.id, cr.descricao, cr.valor, cr.data_vencimento,
                    c.nome as entidade, (CURRENT_DATE - cr.data_vencimento::date) as dias_atraso
             FROM contas_receber cr
@@ -6619,7 +6805,12 @@ def listar_contas_atrasadas(tenant_id=None):
               AND cr.status = 'pendente'
               AND cr.tenant_id = %s
             ORDER BY cr.data_vencimento ASC
-        ''', (tenant_resolvido,))
+        '''
+        params_receber = [tenant_resolvido]
+        if limit_consulta is not None:
+            query_receber += " LIMIT %s"
+            params_receber.append(limit_consulta)
+        cursor.execute(query_receber, tuple(params_receber))
 
         for row in cursor.fetchall():
             contas_atrasadas.append({
@@ -6635,6 +6826,8 @@ def listar_contas_atrasadas(tenant_id=None):
 
         # Ordenar por dias de atraso (maiores primeiro)
         contas_atrasadas.sort(key=lambda x: x['dias_atraso'], reverse=True)
+        if limit_value is not None:
+            return contas_atrasadas[:limit_value]
         return contas_atrasadas
     finally:
         conn.close()
