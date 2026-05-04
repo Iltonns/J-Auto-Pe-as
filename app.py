@@ -113,31 +113,6 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 # Formato: {user_id: session_id}
 active_sessions = {}
 
-STATUS_TENANT_PTBR = {
-    'active': 'Ativo',
-    'inactive': 'Inativo'
-}
-
-STATUS_ASSINATURA_PTBR = {
-    'trial': 'Período de Teste',
-    'active': 'Ativa',
-    'overdue': 'Em Atraso',
-    'canceled': 'Cancelada'
-}
-
-PLANO_SLUG_PTBR = {
-    'start': 'Start',
-    'gestao': 'Gestão',
-    'pro': 'Pro'
-}
-
-
-def _traduzir_chave_ptbr(valor, mapa):
-    if valor is None:
-        return '-'
-    chave = str(valor).strip().lower()
-    return mapa.get(chave, str(valor))
-
 
 def _normalizar_filtro_status_tenant(valor):
     filtro = (str(valor).strip().lower() if valor is not None else 'todos')
@@ -785,11 +760,27 @@ def minha_assinatura():
 @app.route('/admin/tenants')
 @superadmin_required
 def admin_tenants():
+    filtro_status = _normalizar_filtro_status_tenant(request.args.get('status', 'todos'))
     criar_planos_padrao()
     garantir_assinaturas_tenants_existentes(plan_slug='start', status='active')
     tenants = listar_tenants()
+    if filtro_status != 'todos':
+        tenants = [t for t in tenants if str(t.get('status', '')).strip().lower() == filtro_status]
     planos = listar_planos_ativos()
-    return render_template('admin_tenants.html', tenants=tenants, planos=planos)
+    return render_template(
+        'admin_tenants.html',
+        tenants=tenants,
+        planos=planos,
+        filtro_status=filtro_status
+    )
+
+
+def _redirect_admin_tenants_com_filtro():
+    status_filtro = request.form.get('status_filtro', request.args.get('status', 'todos'))
+    filtro_status = _normalizar_filtro_status_tenant(status_filtro)
+    if filtro_status != 'todos':
+        return redirect(url_for('admin_tenants', status=filtro_status))
+    return redirect(url_for('admin_tenants'))
 
 @app.route('/admin/tenants/criar', methods=['POST'])
 @superadmin_required
@@ -809,7 +800,7 @@ def admin_tenants_criar():
         flash(f'{mensagem} ID do tenant: {tenant_id}.', 'success')
     else:
         flash(mensagem, 'error')
-    return redirect(url_for('admin_tenants'))
+    return _redirect_admin_tenants_com_filtro()
 
 @app.route('/admin/tenants/<int:tenant_id>/editar', methods=['POST'])
 @superadmin_required
@@ -819,7 +810,7 @@ def admin_tenants_editar(tenant_id):
 
     sucesso, mensagem = editar_tenant(tenant_id=tenant_id, slug=slug, nome=nome)
     flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
+    return _redirect_admin_tenants_com_filtro()
 
 @app.route('/admin/tenants/<int:tenant_id>/status', methods=['POST'])
 @superadmin_required
@@ -827,11 +818,11 @@ def admin_tenants_status(tenant_id):
     status = request.form.get('status', '').strip().lower()
     if status not in ('active', 'inactive'):
         flash('Status de tenant inválido.', 'error')
-        return redirect(url_for('admin_tenants'))
+        return _redirect_admin_tenants_com_filtro()
 
     sucesso, mensagem = alterar_status_tenant(tenant_id=tenant_id, status=status)
     flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
+    return _redirect_admin_tenants_com_filtro()
 
 @app.route('/admin/tenants/<int:tenant_id>/criar-admin', methods=['POST'])
 @superadmin_required
@@ -850,7 +841,7 @@ def admin_tenants_criar_admin(tenant_id):
         created_by=int(current_user.id)
     )
     flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
+    return _redirect_admin_tenants_com_filtro()
 
 @app.route('/admin/tenants/<int:tenant_id>/assinatura', methods=['POST'])
 @superadmin_required
@@ -864,7 +855,7 @@ def admin_tenant_assinatura(tenant_id):
         status=status
     )
     flash(mensagem, 'success' if sucesso else 'error')
-    return redirect(url_for('admin_tenants'))
+    return _redirect_admin_tenants_com_filtro()
 
 @app.route('/usuarios/trocar-senha/<int:user_id>', methods=['POST'])
 @login_required
