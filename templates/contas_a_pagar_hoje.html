@@ -534,8 +534,9 @@
                 
                 {% if contas %}
                 <div class="card-body p-0">
+                    <div id="controlesPaginacaoContasPagar" class="px-3 pt-3"></div>
                     <div class="table-responsive">
-                        <table class="table table-hover table-striped mb-0">
+                        <table id="tabelaContasPagar" class="table table-hover table-striped mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th class="border-0">Status</th>
@@ -633,7 +634,7 @@
                                 </tr>
                                 {% endfor %}
                                 <!-- Linha de Totalização -->
-                                <tr style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #c89b3c;">
+                                <tr class="no-pagination" style="background-color: #f8f9fa; font-weight: bold; border-top: 3px solid #c89b3c;">
                                     <td colspan="4" class="text-end" style="padding: 12px;">
                                         <strong style="font-size: 14px;">TOTAL GERAL:</strong>
                                     </td>
@@ -1039,7 +1040,58 @@ function excluirConta(contaId) {
 // Definir data de hoje como padrão
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('data_vencimento').value = today;
+    const campoDataVencimento = document.getElementById('data_vencimento');
+    if (campoDataVencimento) {
+        campoDataVencimento.value = today;
+    }
+
+    const tabelaContasPagar = document.getElementById('tabelaContasPagar');
+    if (tabelaContasPagar && typeof TablePagination !== 'undefined' && typeof createPaginationControls !== 'undefined') {
+        createPaginationControls('controlesPaginacaoContasPagar', {
+            showSearch: true,
+            showItemsPerPage: true,
+            searchPlaceholder: 'Buscar por fornecedor, descrição, categoria ou prazo...',
+            itemsPerPageId: 'itensPorPaginaContasPagar',
+            searchId: 'buscaContasPagar',
+            visibleCountId: 'itensVisiveisContasPagar',
+            totalCountId: 'totalItensContasPagar',
+            prevBtnId: 'btnAnteriorContasPagar',
+            nextBtnId: 'btnProximoContasPagar',
+            paginationControlsId: 'controlesNavegacaoContasPagar',
+            pageInfoId: 'infoPaginacaoContasPagar'
+        });
+
+        const paginacaoContasPagar = new TablePagination({
+            tableId: 'tabelaContasPagar',
+            itemsPerPageId: 'itensPorPaginaContasPagar',
+            searchId: 'buscaContasPagar',
+            visibleCountId: 'itensVisiveisContasPagar',
+            totalCountId: 'totalItensContasPagar',
+            prevBtnId: 'btnAnteriorContasPagar',
+            nextBtnId: 'btnProximoContasPagar',
+            paginationControlsId: 'controlesNavegacaoContasPagar',
+            pageInfoId: 'infoPaginacaoContasPagar',
+            defaultItemsPerPage: 20
+        });
+
+        const linhasFixas = Array.from(tabelaContasPagar.querySelectorAll('tbody tr.no-pagination'));
+        if (linhasFixas.length > 0) {
+            paginacaoContasPagar.allRows = paginacaoContasPagar.allRows.filter(row => !row.classList.contains('no-pagination'));
+            paginacaoContasPagar.filteredRows = [...paginacaoContasPagar.allRows];
+
+            const updateOriginal = paginacaoContasPagar.updatePagination.bind(paginacaoContasPagar);
+            paginacaoContasPagar.updatePagination = function() {
+                updateOriginal();
+                linhasFixas.forEach((linha) => {
+                    linha.style.display = '';
+                });
+            };
+
+            paginacaoContasPagar.updatePagination();
+        }
+
+        window.paginacaoContasPagar = paginacaoContasPagar;
+    }
 });
 
 // Função para imprimir relatório
