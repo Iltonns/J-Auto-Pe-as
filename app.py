@@ -1,5 +1,5 @@
 # SISTEMA DE AUTOPEÇAS
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response, g, has_request_context
+from flask import Flask, render_template, request, redirect, url_for, flash as flask_flash, session, jsonify as flask_jsonify, make_response, g, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from datetime import datetime, date
 import json
@@ -49,12 +49,83 @@ def email_valido(email):
     valor = (str(email).strip() if email is not None else '')
     return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', valor))
 
+
+_PTBR_REGEX_SUBSTITUICOES = [
+    (
+        r"Could not build url for endpoint '([^']+)'\. Did you mean '([^']+)' instead\?",
+        r"Não foi possível montar a URL para o endpoint '\1'. Você quis dizer '\2'?"
+    ),
+    (r"Could not build url for endpoint '([^']+)'\.", r"Não foi possível montar a URL para o endpoint '\1'."),
+    (r"\bNot Found\b", "Não encontrado"),
+    (r"\bInternal Server Error\b", "Erro interno do servidor"),
+    (r"\bBad Request\b", "Requisição inválida"),
+    (r"\bUnauthorized\b", "Não autorizado"),
+    (r"\bForbidden\b", "Acesso negado"),
+    (r"\bMethod Not Allowed\b", "Método não permitido"),
+    (r"\btimeout\b", "tempo limite excedido"),
+    (r"\bconnection refused\b", "conexão recusada"),
+    (r"\binvalid literal for int\(\) with base 10\b", "valor inválido para número inteiro"),
+]
+
+_PTBR_JSON_CHAVES_MENSAGEM = {
+    'error', 'erro', 'message', 'mensagem', 'detail', 'detalhe'
+}
+
+
+def traduzir_mensagem_ptbr(mensagem):
+    """Padroniza mensagens técnicas para português do Brasil."""
+    if mensagem is None:
+        return ''
+
+    texto = str(mensagem).strip()
+    if not texto:
+        return texto
+
+    for pattern, replacement in _PTBR_REGEX_SUBSTITUICOES:
+        texto = re.sub(pattern, replacement, texto, flags=re.IGNORECASE)
+
+    return texto
+
+
+def _normalizar_payload_json_ptbr(payload):
+    """Traduz campos de erro/mensagem em payloads JSON."""
+    if isinstance(payload, dict):
+        convertido = {}
+        for chave, valor in payload.items():
+            if isinstance(chave, str) and chave.lower() in _PTBR_JSON_CHAVES_MENSAGEM and isinstance(valor, str):
+                convertido[chave] = traduzir_mensagem_ptbr(valor)
+            else:
+                convertido[chave] = _normalizar_payload_json_ptbr(valor)
+        return convertido
+
+    if isinstance(payload, list):
+        return [_normalizar_payload_json_ptbr(item) for item in payload]
+
+    if isinstance(payload, tuple):
+        return tuple(_normalizar_payload_json_ptbr(item) for item in payload)
+
+    return payload
+
+
+def flash(message, category='message'):
+    """Wrapper do flash com padronização de idioma pt-BR."""
+    return flask_flash(traduzir_mensagem_ptbr(message), category)
+
+
+def jsonify(*args, **kwargs):
+    """Wrapper do jsonify com tradução de mensagens e cabeçalho de idioma."""
+    args_normalizados = tuple(_normalizar_payload_json_ptbr(arg) for arg in args)
+    kwargs_normalizados = {chave: _normalizar_payload_json_ptbr(valor) for chave, valor in kwargs.items()}
+    response = flask_jsonify(*args_normalizados, **kwargs_normalizados)
+    response.headers['Content-Language'] = 'pt-BR'
+    return response
+
 # Importar funções do banco de dados
 from Minha_autopecas_web.logica_banco import (
     init_db, criar_usuario_admin, verificar_usuario, buscar_usuario_por_id,
     buscar_usuario_por_email, atualizar_senha_usuario, validar_senha_segura,
-    criar_usuario, listar_usuarios, editar_usuario, deletar_usuario, verificar_permissao,
-    listar_clientes, adicionar_cliente, editar_cliente, deletar_cliente,
+    criar_usuario, listar_usuarios, editar_usuario, deletar_usuario,
+    listar_clientes, listar_clientes_paginado, adicionar_cliente, editar_cliente, deletar_cliente,
     listar_produtos, buscar_produto, adicionar_produto, editar_produto, deletar_produto, obter_produto_por_id,
     deletar_todos_os_produtos, limpar_completamente_produtos,
     registrar_venda, listar_vendas, obter_vendas_do_dia, sincronizar_vendas_com_caixa, obter_venda_por_id, deletar_venda,
@@ -174,6 +245,16 @@ class User(UserMixin):
         self.username = user_data['username']
         self.email = user_data.get('email', '')
         self.is_superadmin = bool(user_data.get('is_superadmin', False))
+        self.ativo = bool(user_data.get('ativo', True))
+        self.permissao_vendas = bool(user_data.get('permissao_vendas', False))
+        self.permissao_estoque = bool(user_data.get('permissao_estoque', False))
+        self.permissao_clientes = bool(user_data.get('permissao_clientes', False))
+        self.permissao_financeiro = bool(user_data.get('permissao_financeiro', False))
+        self.permissao_caixa = bool(user_data.get('permissao_caixa', False))
+        self.permissao_relatorios = bool(user_data.get('permissao_relatorios', False))
+        self.permissao_admin = bool(user_data.get('permissao_admin', False))
+        self.permissao_contas_pagar = bool(user_data.get('permissao_contas_pagar', False))
+        self.permissao_contas_receber = bool(user_data.get('permissao_contas_receber', False))
         tenant_id = user_data.get('tenant_id')
         try:
             self.tenant_id = int(tenant_id) if tenant_id is not None else _default_tenant_id()
@@ -272,11 +353,125 @@ def has_permission_cached(permission):
     if is_superadmin_current_user():
         return True
 
-    permissions = getattr(g, 'user_permissions', None)
-    if permissions is None:
-        return verificar_permissao(current_user.id, permission, get_current_tenant_id())
+    permissao = (str(permission).strip().lower() if permission is not None else '')
+    if not permissao:
+        return False
 
-    return permissions.get('superadmin', False) or permissions.get('admin', False) or permissions.get(permission, False)
+    permissions = getattr(g, 'permissions_cache', None)
+    if permissions is None:
+        _load_user_access_context()
+        permissions = getattr(g, 'permissions_cache', {})
+
+    return permissions.get('superadmin', False) or permissions.get('admin', False) or permissions.get(permissao, False)
+
+
+def _parse_positive_int(value, default=1, max_value=None):
+    """Converte valor para inteiro positivo com limites seguros."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = int(default)
+    if parsed < 1:
+        parsed = int(default)
+    if max_value is not None:
+        parsed = min(parsed, int(max_value))
+    return parsed
+
+
+def _snapshot_user_context_from_current_user(tenant_id):
+    """Cria contexto do usuário a partir do objeto `current_user` (sem query)."""
+    if not current_user.is_authenticated:
+        return None
+
+    try:
+        user_id_int = int(current_user.id)
+    except (TypeError, ValueError):
+        return None
+
+    tenant_user = _normalize_tenant_id(getattr(current_user, 'tenant_id', None))
+    if tenant_user is None or tenant_user != tenant_id:
+        return None
+
+    return {
+        'id': user_id_int,
+        'username': getattr(current_user, 'username', ''),
+        'email': getattr(current_user, 'email', ''),
+        'ativo': bool(getattr(current_user, 'ativo', True)),
+        'permissao_vendas': bool(getattr(current_user, 'permissao_vendas', False)),
+        'permissao_estoque': bool(getattr(current_user, 'permissao_estoque', False)),
+        'permissao_clientes': bool(getattr(current_user, 'permissao_clientes', False)),
+        'permissao_financeiro': bool(getattr(current_user, 'permissao_financeiro', False)),
+        'permissao_caixa': bool(getattr(current_user, 'permissao_caixa', False)),
+        'permissao_relatorios': bool(getattr(current_user, 'permissao_relatorios', False)),
+        'permissao_admin': bool(getattr(current_user, 'permissao_admin', False)),
+        'permissao_contas_pagar': bool(getattr(current_user, 'permissao_contas_pagar', False)),
+        'permissao_contas_receber': bool(getattr(current_user, 'permissao_contas_receber', False)),
+        'tenant_id': tenant_id,
+        'is_superadmin': bool(getattr(current_user, 'is_superadmin', False))
+    }
+
+
+def _load_user_access_context(force_refresh=False, tenant_id=None):
+    """
+    Carrega contexto de acesso do usuário uma única vez por request.
+    Cache é por (user_id, tenant_id) dentro de `g`.
+    """
+    if not current_user.is_authenticated:
+        g.user_context = None
+        g.permissions_cache = {}
+        g.permissions_cache_key = None
+        g.user_permissions = {}
+        return None
+
+    tenant_resolvido = _normalize_tenant_id(tenant_id) or get_current_tenant_id()
+    if tenant_resolvido is None:
+        g.user_context = None
+        g.permissions_cache = {}
+        g.permissions_cache_key = None
+        g.user_permissions = {}
+        return None
+
+    try:
+        user_id_int = int(current_user.id)
+    except (TypeError, ValueError):
+        g.user_context = None
+        g.permissions_cache = {}
+        g.permissions_cache_key = None
+        g.user_permissions = {}
+        return None
+
+    cache_key = (user_id_int, tenant_resolvido)
+    if (
+        not force_refresh
+        and getattr(g, 'permissions_cache_key', None) == cache_key
+        and getattr(g, 'user_context', None) is not None
+    ):
+        return g.user_context
+
+    user_data = None
+    if not force_refresh:
+        user_data = _snapshot_user_context_from_current_user(tenant_resolvido)
+
+    if user_data is None:
+        user_data = buscar_usuario_por_id(user_id_int, tenant_id=tenant_resolvido)
+
+    g.user_context = user_data
+    g.permissions_cache_key = cache_key
+    g.permissions_cache = _montar_mapa_permissoes(user_data)
+    g.user_permissions = g.permissions_cache
+    return user_data
+
+# Padronização de locale por sessão/resposta
+@app.before_request
+def ensure_locale_ptbr():
+    session.setdefault('locale', 'pt-BR')
+
+
+@app.after_request
+def apply_ptbr_headers(response):
+    response.headers.setdefault('Content-Language', 'pt-BR')
+    return response
+
 
 # Middleware para verificar sessão única
 @app.before_request
@@ -318,9 +513,7 @@ def format_date(value):
 @app.context_processor
 def utility_processor():
     def has_permission(permission):
-        if current_user.is_authenticated:
-            return verificar_permissao(current_user.id, permission, get_current_tenant_id())
-        return False
+        return has_permission_cached(permission)
     return dict(has_permission=has_permission)
 
 # Verificação de usuário ativo antes de cada requisição
@@ -342,8 +535,10 @@ def check_user_active():
             flash('Sessão sem tenant válido. Faça login novamente.', 'error')
             return redirect(url_for('login'))
 
-        # Verificar se o usuário ainda existe e está ativo
-        user_data = buscar_usuario_por_id(int(current_user.id), tenant_id=tenant_id)
+        g.current_tenant_id = tenant_id
+
+        # Verificar se o usuário ainda existe e está ativo (cache por request)
+        user_data = _load_user_access_context(force_refresh=False, tenant_id=tenant_id)
         if not user_data or not user_data.get('ativo', False):
             # Usuário foi inativado, fazer logout automaticamente
             logout_user()
@@ -380,9 +575,11 @@ def ensure_tenant_context_runtime():
     session.setdefault('tenant_nome_autenticado', f"Tenant {tenant_resolvido}")
 
     try:
-        user_data = buscar_usuario_por_id(int(current_user.id), tenant_id=tenant_resolvido)
-        g.user_permissions = _montar_mapa_permissoes(user_data)
+        _load_user_access_context(force_refresh=False, tenant_id=tenant_resolvido)
     except Exception:
+        g.user_context = None
+        g.permissions_cache = {}
+        g.permissions_cache_key = None
         g.user_permissions = {}
 
 @login_manager.user_loader
@@ -408,7 +605,7 @@ def required_permission(permission):
         @wraps(f)
         @login_required
         def decorated_function(*args, **kwargs):
-            if not verificar_permissao(current_user.id, permission, get_current_tenant_id()):
+            if not has_permission_cached(permission):
                 flash('Acesso negado. Você não tem permissão para acessar esta área.', 'error')
                 return redirect(url_for('dashboard'))
             return f(*args, **kwargs)
@@ -671,7 +868,7 @@ def usuarios():
 def editar_usuario_route(user_id):
     tenant_id = get_current_tenant_id()
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin', tenant_id):
+    if not has_permission_cached('admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -711,7 +908,7 @@ def editar_usuario_route(user_id):
 def deletar_usuario_route(user_id):
     tenant_id = get_current_tenant_id()
     # Verificar se o usuário tem permissão de admin
-    if not verificar_permissao(current_user.id, 'admin', tenant_id):
+    if not has_permission_cached('admin'):
         flash('Acesso negado.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -865,7 +1062,7 @@ def trocar_senha_usuario_route(user_id):
         tenant_id = get_current_tenant_id()
         # Apenas admins podem trocar senha de outros usuários
         # Usuários podem trocar sua própria senha
-        if user_id != int(current_user.id) and not verificar_permissao(current_user.id, 'admin', tenant_id):
+        if user_id != int(current_user.id) and not has_permission_cached('admin'):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         nova_senha = request.form.get('nova_senha')
@@ -953,9 +1150,9 @@ def dashboard():
     estatisticas = obter_estatisticas_dashboard(tenant_id=tenant_id)
     produtos_baixo_estoque = produtos_estoque_baixo(tenant_id=tenant_id) if pode_estoque else []
     vendas_recentes = listar_vendas(limit=10, tenant_id=tenant_id) if pode_vendas else []
-    contas_pagar_hoje = listar_contas_pagar_hoje(tenant_id=tenant_id) if pode_contas_pagar else []
-    contas_receber_hoje = listar_contas_receber_hoje(tenant_id=tenant_id) if pode_contas_receber else []
-    contas_atrasadas = listar_contas_atrasadas(tenant_id=tenant_id) if pode_financeiro else []
+    contas_pagar_hoje = listar_contas_pagar_hoje(tenant_id=tenant_id, limit=10) if pode_contas_pagar else []
+    contas_receber_hoje = listar_contas_receber_hoje(tenant_id=tenant_id, limit=10) if pode_contas_receber else []
+    contas_atrasadas = listar_contas_atrasadas(tenant_id=tenant_id, limit=10) if pode_financeiro else []
     config_empresa = obter_configuracoes_empresa(tenant_id)
     empresa_nome = (config_empresa or {}).get('nome_empresa') or f"Tenant {tenant_id}"
     usuario_nome = (getattr(current_user, 'username', '') or 'usuário').strip()
@@ -1287,8 +1484,25 @@ def debug_vendas():
 @app.route('/clientes')
 @login_required
 def clientes():
-    clientes_lista = listar_clientes()
-    return render_template('clientes.html', clientes=clientes_lista)
+    page = _parse_positive_int(request.args.get('page', 1), default=1)
+    per_page = _parse_positive_int(request.args.get('per_page', 50), default=50, max_value=100)
+    search = (request.args.get('q', '') or '').strip()
+
+    clientes_data = listar_clientes_paginado(
+        page=page,
+        per_page=per_page,
+        search=search,
+        tenant_id=get_current_tenant_id()
+    )
+    return render_template(
+        'clientes.html',
+        clientes=clientes_data.get('clientes', []),
+        current_page=clientes_data.get('current_page', page),
+        total_pages=clientes_data.get('total_pages', 0),
+        total_clientes=clientes_data.get('total_items', 0),
+        per_page=per_page,
+        search_query=search
+    )
 
 @app.route('/clientes/adicionar', methods=['POST'], endpoint='adicionar_cliente')
 @login_required
@@ -1571,24 +1785,33 @@ def produtos_fornecedor(id):
 @login_required
 def produtos():
     """Exibe a página de gerenciamento de produtos"""
+    page = _parse_positive_int(request.args.get('page', 1), default=1)
+    per_page = _parse_positive_int(request.args.get('per_page', 50), default=50, max_value=100)
+    tenant_id = get_current_tenant_id()
     try:
-        # Carregar TODOS os produtos para paginação JavaScript
-        # Remover paginação server-side para usar paginação client-side
-        produtos_data = listar_produtos(page=1, per_page=999999)  # Carregar todos
+        produtos_data = listar_produtos(page=page, per_page=per_page, tenant_id=tenant_id)
         
         fornecedores_lista = obter_fornecedores_para_select()
-        estatisticas = obter_estatisticas_dashboard()
+        estatisticas = obter_estatisticas_dashboard(tenant_id=tenant_id)
         
         return render_template('produtos.html', 
                              produtos=produtos_data['produtos'], 
                              fornecedores=fornecedores_lista, 
-                             estatisticas=estatisticas)
+                             estatisticas=estatisticas,
+                             current_page=produtos_data.get('current_page', page),
+                             total_pages=produtos_data.get('total_pages', 0),
+                             total_produtos=produtos_data.get('total_items', 0),
+                             per_page=per_page)
     except Exception as e:
         flash(f'Erro ao carregar produtos: {str(e)}', 'error')
         return render_template('produtos.html', 
                              produtos=[], 
                              fornecedores=[], 
-                             estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0})
+                             estatisticas={'produtos_estoque_baixo': 0, 'produtos_sem_estoque': 0},
+                             current_page=1,
+                             total_pages=0,
+                             total_produtos=0,
+                             per_page=per_page)
     
     
 @app.route('/produtos/buscar')
@@ -1601,7 +1824,7 @@ def buscar_produto_route():
             return jsonify([])
         
         # Usar a função buscar_produto que é mais flexível
-        produtos = buscar_produto(termo)
+        produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
         
         # Renomear 'preco' para 'preco_venda' e converter tipos
         for produto in produtos:
@@ -1654,11 +1877,11 @@ def api_buscar_produtos():
         
         # Se não houver termo, retornar lista completa
         if not termo:
-            produtos_data = listar_produtos(page=1, per_page=999999)
+            produtos_data = listar_produtos(page=1, per_page=50, tenant_id=get_current_tenant_id())
             produtos = produtos_data['produtos']
         else:
             # Usar a função buscar_produto que já tem a lógica inteligente
-            produtos = buscar_produto(termo)
+            produtos = buscar_produto(termo, tenant_id=get_current_tenant_id())
         
         # Filtrar por categoria se especificada
         if categoria and categoria != 'todas':
@@ -1682,8 +1905,8 @@ def api_buscar_produtos():
 def api_buscar_produto_unico(termo):
     """Busca um produto específico pelo termo"""
     try:
-        # Carregar todos os produtos
-        produtos_data = listar_produtos(page=1, per_page=999999)
+        # Carregar apenas um lote seguro para busca imediata
+        produtos_data = listar_produtos(page=1, per_page=100, tenant_id=get_current_tenant_id())
         produtos = produtos_data['produtos']
         
         def converter_decimals(produto):
@@ -2590,13 +2813,14 @@ def importar_xml_movimentacoes_route():
 @app.route('/vendas')
 @login_required
 def vendas():
-    clientes_lista = listar_clientes()
+    tenant_id = get_current_tenant_id()
+    clientes_lista = listar_clientes(limit=50, tenant_id=tenant_id)
     # Buscar vendas do dia para exibir na lista
-    vendas_dados = obter_vendas_do_dia()
+    vendas_dados = obter_vendas_do_dia(tenant_id=tenant_id)
     vendas_hoje = vendas_dados.get('vendas', [])
-    produtos_data = listar_produtos(page=1, per_page=999999)
+    produtos_data = listar_produtos(page=1, per_page=50, tenant_id=tenant_id)
     produtos_lista = produtos_data['produtos']
-    usuarios_lista = listar_usuarios()
+    usuarios_lista = listar_usuarios(tenant_id=tenant_id, somente_ativos=True, limit=50)
     
     # Calcular estatísticas
     total_vendas_hoje = sum(venda.get('total', 0) for venda in vendas_hoje)
@@ -2755,7 +2979,7 @@ def api_venda(venda_id):
 @login_required
 def emitir_nfe_venda_route(venda_id):
     tenant_id = get_current_tenant_id()
-    if not verificar_permissao(current_user.id, 'vendas', tenant_id):
+    if not has_permission_cached('vendas'):
         mensagem = 'Acesso negado. Voce nao tem permissao para emitir NF-e.'
         if request.headers.get('Content-Type') == 'application/json' or request.args.get('ajax') == '1':
             return jsonify({'sucesso': False, 'mensagem': mensagem}), 403
@@ -2804,7 +3028,7 @@ def emitir_nfe_venda_route(venda_id):
 @login_required
 def api_nfe_por_venda(venda_id):
     tenant_id = get_current_tenant_id()
-    if not verificar_permissao(current_user.id, 'vendas', tenant_id):
+    if not has_permission_cached('vendas'):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso negado.'}), 403
 
     try:
@@ -2951,11 +3175,15 @@ def registrar_venda_route():
         imprimir_recibo = request.form.get('imprimir_recibo') == 'on'
         
         if imprimir_recibo:
-            flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
-            # Redireciona para o recibo em uma nova aba
-            return render_template('venda_sucesso.html', venda_id=venda_id, imprimir=True)
-        else:
-            flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
+            try:
+                # Redireciona para a tela de sucesso/impressão
+                return render_template('venda_sucesso.html', venda_id=venda_id, imprimir=True)
+            except Exception as erro_impressao:
+                app.logger.error(f"Venda #{venda_id} registrada, mas falhou ao abrir tela de impressão: {erro_impressao}")
+                flash(f'Venda #{venda_id} registrada com sucesso, mas houve erro ao abrir a tela de impressão.', 'warning')
+                return redirect(url_for('vendas'))
+
+        flash(f'Venda #{venda_id} registrada com sucesso!', 'success')
         
     except Exception as e:
         # Se a requisição é AJAX, retorna erro em JSON
@@ -2978,7 +3206,7 @@ def deletar_venda_route(venda_id):
     try:
         tenant_id = get_current_tenant_id()
         # Verificar se o usuário tem permissão para vendas ou é admin
-        if not verificar_permissao(current_user.id, 'vendas', tenant_id) and not has_permission_cached('admin'):
+        if not has_permission_cached('vendas') and not has_permission_cached('admin'):
             return jsonify({
                 'success': False,
                 'error': 'Você não tem permissão para deletar vendas.'
@@ -3490,7 +3718,7 @@ def excluir_orcamento_route(id):
 @login_required
 def relatorios():
     # Verificar se o usuário tem permissão para acessar relatórios
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3500,7 +3728,7 @@ def relatorios():
 @login_required
 def relatorio_vendas():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3526,7 +3754,7 @@ def relatorio_vendas():
 @login_required
 def relatorio_produtos_mais_vendidos():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3548,7 +3776,7 @@ def relatorio_produtos_mais_vendidos():
 @login_required
 def relatorio_estoque():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3566,7 +3794,7 @@ def relatorio_estoque():
 @login_required
 def relatorio_financeiro():
     # Verificar permissão
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -3920,7 +4148,7 @@ def criar_pdf_contas_a_receber(relatorio, data_inicio=None, data_fim=None, statu
 @app.route('/relatorios/contas-a-receber/pdf')
 @login_required
 def exportar_contas_a_receber_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4053,7 +4281,7 @@ def criar_pdf_contas_a_pagar(relatorio, data_inicio=None, data_fim=None, status=
 @app.route('/relatorios/contas-a-pagar/pdf')
 @login_required
 def exportar_contas_a_pagar_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4332,7 +4560,7 @@ def criar_pdf_estoque(relatorio):
 @app.route('/relatorios/vendas/pdf')
 @login_required
 def exportar_vendas_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4362,7 +4590,7 @@ def exportar_vendas_pdf():
 @app.route('/relatorios/produtos-mais-vendidos/pdf')
 @login_required
 def exportar_produtos_mais_vendidos_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4382,7 +4610,7 @@ def exportar_produtos_mais_vendidos_pdf():
 @app.route('/relatorios/estoque/pdf')
 @login_required
 def exportar_estoque_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4648,7 +4876,7 @@ def criar_pdf_financeiro(relatorio, data_inicio=None, data_fim=None):
 @app.route('/relatorios/financeiro/pdf')
 @login_required
 def exportar_financeiro_pdf():
-    if not verificar_permissao(current_user.id, 'relatorios'):
+    if not has_permission_cached('relatorios'):
         flash('Acesso negado. Você não tem permissão para acessar relatórios.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -4699,7 +4927,8 @@ def internal_error(error):
 def inject_globals():
     return {
         'moment': datetime,
-        'today': hoje_br()
+        'today': hoje_br(),
+        'locale': session.get('locale', 'pt-BR')
     }
 
 if __name__ == '__main__':
